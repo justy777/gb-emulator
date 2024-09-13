@@ -119,6 +119,10 @@ enum Instruction {
     ADD16(R16),
     INC16(R16),
     DEC16(R16),
+    BIT(u8, R8),
+    RES(u8, R8),
+    SET(u8, R8),
+    SWAP(R8),
     RL(R8),
     RLA,
     RLC(R8),
@@ -127,6 +131,9 @@ enum Instruction {
     RRA,
     RRC(R8),
     RRCA,
+    SLA(R8),
+    SRA(R8),
+    SRL(R8),
     SCF,
     CPL,
     CCF,
@@ -174,6 +181,230 @@ impl Instruction {
             0x1B => Some(Self::RR(R8::E)),
             0x1C => Some(Self::RR(R8::H)),
             0x1D => Some(Self::RR(R8::L)),
+
+            0x27 => Some(Self::SLA(R8::A)),
+            0x20 => Some(Self::SLA(R8::B)),
+            0x21 => Some(Self::SLA(R8::C)),
+            0x22 => Some(Self::SLA(R8::D)),
+            0x23 => Some(Self::SLA(R8::E)),
+            0x24 => Some(Self::SLA(R8::H)),
+            0x25 => Some(Self::SLA(R8::L)),
+
+            0x2F => Some(Self::SRA(R8::A)),
+            0x28 => Some(Self::SRA(R8::B)),
+            0x29 => Some(Self::SRA(R8::C)),
+            0x2A => Some(Self::SRA(R8::D)),
+            0x2B => Some(Self::SRA(R8::E)),
+            0x2C => Some(Self::SRA(R8::H)),
+            0x2D => Some(Self::SRA(R8::L)),
+
+            0x37 => Some(Self::SWAP(R8::A)),
+            0x30 => Some(Self::SWAP(R8::B)),
+            0x31 => Some(Self::SWAP(R8::C)),
+            0x32 => Some(Self::SWAP(R8::D)),
+            0x33 => Some(Self::SWAP(R8::E)),
+            0x34 => Some(Self::SWAP(R8::H)),
+            0x35 => Some(Self::SWAP(R8::L)),
+
+            0x3F => Some(Self::SRL(R8::A)),
+            0x38 => Some(Self::SRL(R8::B)),
+            0x39 => Some(Self::SRL(R8::C)),
+            0x3A => Some(Self::SRL(R8::D)),
+            0x3B => Some(Self::SRL(R8::E)),
+            0x3C => Some(Self::SRL(R8::H)),
+            0x3D => Some(Self::SRL(R8::L)),
+
+            0x47 => Some(Self::BIT(0, R8::A)),
+            0x40 => Some(Self::BIT(0, R8::B)),
+            0x41 => Some(Self::BIT(0, R8::C)),
+            0x42 => Some(Self::BIT(0, R8::D)),
+            0x43 => Some(Self::BIT(0, R8::E)),
+            0x44 => Some(Self::BIT(0, R8::H)),
+            0x45 => Some(Self::BIT(0, R8::L)),
+
+            0x4F => Some(Self::BIT(1, R8::A)),
+            0x48 => Some(Self::BIT(1, R8::B)),
+            0x49 => Some(Self::BIT(1, R8::C)),
+            0x4A => Some(Self::BIT(1, R8::D)),
+            0x4B => Some(Self::BIT(1, R8::E)),
+            0x4C => Some(Self::BIT(1, R8::H)),
+            0x4D => Some(Self::BIT(1, R8::L)),
+
+            0x57 => Some(Self::BIT(2, R8::A)),
+            0x50 => Some(Self::BIT(2, R8::B)),
+            0x51 => Some(Self::BIT(2, R8::C)),
+            0x52 => Some(Self::BIT(2, R8::D)),
+            0x53 => Some(Self::BIT(2, R8::E)),
+            0x54 => Some(Self::BIT(2, R8::H)),
+            0x55 => Some(Self::BIT(2, R8::L)),
+
+            0x5F => Some(Self::BIT(3, R8::A)),
+            0x58 => Some(Self::BIT(3, R8::B)),
+            0x59 => Some(Self::BIT(3, R8::C)),
+            0x5A => Some(Self::BIT(3, R8::D)),
+            0x5B => Some(Self::BIT(3, R8::E)),
+            0x5C => Some(Self::BIT(3, R8::H)),
+            0x5D => Some(Self::BIT(3, R8::L)),
+
+            0x67 => Some(Self::BIT(4, R8::A)),
+            0x60 => Some(Self::BIT(4, R8::B)),
+            0x61 => Some(Self::BIT(4, R8::C)),
+            0x62 => Some(Self::BIT(4, R8::D)),
+            0x63 => Some(Self::BIT(4, R8::E)),
+            0x64 => Some(Self::BIT(4, R8::H)),
+            0x65 => Some(Self::BIT(4, R8::L)),
+
+            0x6F => Some(Self::BIT(5, R8::A)),
+            0x68 => Some(Self::BIT(5, R8::B)),
+            0x69 => Some(Self::BIT(5, R8::C)),
+            0x6A => Some(Self::BIT(5, R8::D)),
+            0x6B => Some(Self::BIT(5, R8::E)),
+            0x6C => Some(Self::BIT(5, R8::H)),
+            0x6D => Some(Self::BIT(5, R8::L)),
+
+            0x77 => Some(Self::BIT(6, R8::A)),
+            0x70 => Some(Self::BIT(6, R8::B)),
+            0x71 => Some(Self::BIT(6, R8::C)),
+            0x72 => Some(Self::BIT(6, R8::D)),
+            0x73 => Some(Self::BIT(6, R8::E)),
+            0x74 => Some(Self::BIT(6, R8::H)),
+            0x75 => Some(Self::BIT(6, R8::L)),
+
+            0x7F => Some(Self::BIT(7, R8::A)),
+            0x78 => Some(Self::BIT(7, R8::B)),
+            0x79 => Some(Self::BIT(7, R8::C)),
+            0x7A => Some(Self::BIT(7, R8::D)),
+            0x7B => Some(Self::BIT(7, R8::E)),
+            0x7C => Some(Self::BIT(7, R8::H)),
+            0x7D => Some(Self::BIT(7, R8::L)),
+
+            0x87 => Some(Self::RES(0, R8::A)),
+            0x80 => Some(Self::RES(0, R8::B)),
+            0x81 => Some(Self::RES(0, R8::C)),
+            0x82 => Some(Self::RES(0, R8::D)),
+            0x83 => Some(Self::RES(0, R8::E)),
+            0x84 => Some(Self::RES(0, R8::H)),
+            0x85 => Some(Self::RES(0, R8::L)),
+
+            0x8F => Some(Self::RES(1, R8::A)),
+            0x88 => Some(Self::RES(1, R8::B)),
+            0x89 => Some(Self::RES(1, R8::C)),
+            0x8A => Some(Self::RES(1, R8::D)),
+            0x8B => Some(Self::RES(1, R8::E)),
+            0x8C => Some(Self::RES(1, R8::H)),
+            0x8D => Some(Self::RES(1, R8::L)),
+
+            0x97 => Some(Self::RES(2, R8::A)),
+            0x90 => Some(Self::RES(2, R8::B)),
+            0x91 => Some(Self::RES(2, R8::C)),
+            0x92 => Some(Self::RES(2, R8::D)),
+            0x93 => Some(Self::RES(2, R8::E)),
+            0x94 => Some(Self::RES(2, R8::H)),
+            0x95 => Some(Self::RES(2, R8::L)),
+
+            0x9F => Some(Self::RES(3, R8::A)),
+            0x98 => Some(Self::RES(3, R8::B)),
+            0x99 => Some(Self::RES(3, R8::C)),
+            0x9A => Some(Self::RES(3, R8::D)),
+            0x9B => Some(Self::RES(3, R8::E)),
+            0x9C => Some(Self::RES(3, R8::H)),
+            0x9D => Some(Self::RES(3, R8::L)),
+
+            0xA7 => Some(Self::RES(4, R8::A)),
+            0xA0 => Some(Self::RES(4, R8::B)),
+            0xA1 => Some(Self::RES(4, R8::C)),
+            0xA2 => Some(Self::RES(4, R8::D)),
+            0xA3 => Some(Self::RES(4, R8::E)),
+            0xA4 => Some(Self::RES(4, R8::H)),
+            0xA5 => Some(Self::RES(4, R8::L)),
+
+            0xAF => Some(Self::RES(5, R8::A)),
+            0xA8 => Some(Self::RES(5, R8::B)),
+            0xA9 => Some(Self::RES(5, R8::C)),
+            0xAA => Some(Self::RES(5, R8::D)),
+            0xAB => Some(Self::RES(5, R8::E)),
+            0xAC => Some(Self::RES(5, R8::H)),
+            0xAD => Some(Self::RES(5, R8::L)),
+
+            0xB7 => Some(Self::RES(6, R8::A)),
+            0xB0 => Some(Self::RES(6, R8::B)),
+            0xB1 => Some(Self::RES(6, R8::C)),
+            0xB2 => Some(Self::RES(6, R8::D)),
+            0xB3 => Some(Self::RES(6, R8::E)),
+            0xB4 => Some(Self::RES(6, R8::H)),
+            0xB5 => Some(Self::RES(6, R8::L)),
+
+            0xBF => Some(Self::RES(7, R8::A)),
+            0xB8 => Some(Self::RES(7, R8::B)),
+            0xB9 => Some(Self::RES(7, R8::C)),
+            0xBA => Some(Self::RES(7, R8::D)),
+            0xBB => Some(Self::RES(7, R8::E)),
+            0xBC => Some(Self::RES(7, R8::H)),
+            0xBD => Some(Self::RES(7, R8::L)),
+
+            0xC7 => Some(Self::SET(0, R8::A)),
+            0xC0 => Some(Self::SET(0, R8::B)),
+            0xC1 => Some(Self::SET(0, R8::C)),
+            0xC2 => Some(Self::SET(0, R8::D)),
+            0xC3 => Some(Self::SET(0, R8::E)),
+            0xC4 => Some(Self::SET(0, R8::H)),
+            0xC5 => Some(Self::SET(0, R8::L)),
+
+            0xCF => Some(Self::SET(1, R8::A)),
+            0xC8 => Some(Self::SET(1, R8::B)),
+            0xC9 => Some(Self::SET(1, R8::C)),
+            0xCA => Some(Self::SET(1, R8::D)),
+            0xCB => Some(Self::SET(1, R8::E)),
+            0xCC => Some(Self::SET(1, R8::H)),
+            0xCD => Some(Self::SET(1, R8::L)),
+
+            0xD7 => Some(Self::SET(2, R8::A)),
+            0xD0 => Some(Self::SET(2, R8::B)),
+            0xD1 => Some(Self::SET(2, R8::C)),
+            0xD2 => Some(Self::SET(2, R8::D)),
+            0xD3 => Some(Self::SET(2, R8::E)),
+            0xD4 => Some(Self::SET(2, R8::H)),
+            0xD5 => Some(Self::SET(2, R8::L)),
+
+            0xDF => Some(Self::SET(3, R8::A)),
+            0xD8 => Some(Self::SET(3, R8::B)),
+            0xD9 => Some(Self::SET(3, R8::C)),
+            0xDA => Some(Self::SET(3, R8::D)),
+            0xDB => Some(Self::SET(3, R8::E)),
+            0xDC => Some(Self::SET(3, R8::H)),
+            0xDD => Some(Self::SET(3, R8::L)),
+
+            0xE7 => Some(Self::SET(4, R8::A)),
+            0xE0 => Some(Self::SET(4, R8::B)),
+            0xE1 => Some(Self::SET(4, R8::C)),
+            0xE2 => Some(Self::SET(4, R8::D)),
+            0xE3 => Some(Self::SET(4, R8::E)),
+            0xE4 => Some(Self::SET(4, R8::H)),
+            0xE5 => Some(Self::SET(4, R8::L)),
+
+            0xEF => Some(Self::SET(5, R8::A)),
+            0xE8 => Some(Self::SET(5, R8::B)),
+            0xE9 => Some(Self::SET(5, R8::C)),
+            0xEA => Some(Self::SET(5, R8::D)),
+            0xEB => Some(Self::SET(5, R8::E)),
+            0xEC => Some(Self::SET(5, R8::H)),
+            0xED => Some(Self::SET(5, R8::L)),
+
+            0xF7 => Some(Self::SET(6, R8::A)),
+            0xF0 => Some(Self::SET(6, R8::B)),
+            0xF1 => Some(Self::SET(6, R8::C)),
+            0xF2 => Some(Self::SET(6, R8::D)),
+            0xF3 => Some(Self::SET(6, R8::E)),
+            0xF4 => Some(Self::SET(6, R8::H)),
+            0xF5 => Some(Self::SET(6, R8::L)),
+
+            0xFF => Some(Self::SET(7, R8::A)),
+            0xF8 => Some(Self::SET(7, R8::B)),
+            0xF9 => Some(Self::SET(7, R8::C)),
+            0xFA => Some(Self::SET(7, R8::D)),
+            0xFB => Some(Self::SET(7, R8::E)),
+            0xFC => Some(Self::SET(7, R8::H)),
+            0xFD => Some(Self::SET(7, R8::L)),
 
             // TODO: add mapping for the rest of instructions
             _ => None,
@@ -448,6 +679,29 @@ impl Cpu {
                 self.registers.write16(target, new_value);
                 self.registers.pc.wrapping_add(1)
             }
+            Instruction::BIT(bit, target) => {
+                let value = self.registers.read(target);
+                self.bit(bit, value);
+                self.registers.pc.wrapping_add(2)
+            }
+            Instruction::RES(bit, target) => {
+                let value = self.registers.read(target);
+                let new_value = self.res(bit, value);
+                self.registers.write(target, new_value);
+                self.registers.pc.wrapping_add(2)
+            }
+            Instruction::SET(bit, target) => {
+                let value = self.registers.read(target);
+                let new_value = self.set(bit, value);
+                self.registers.write(target, new_value);
+                self.registers.pc.wrapping_add(2)
+            }
+            Instruction::SWAP(target) => {
+                let value = self.registers.read(target);
+                let new_value = self.swap(value);
+                self.registers.write(target, new_value);
+                self.registers.pc.wrapping_add(2)
+            }
             Instruction::RL(target) => {
                 let value = self.registers.read(target);
                 let new_value = self.rl(value);
@@ -491,6 +745,24 @@ impl Cpu {
                 let new_value = self.rra();
                 self.registers.a = new_value;
                 self.registers.pc.wrapping_add(1)
+            }
+            Instruction::SLA(target) => {
+                let value = self.registers.read(target);
+                let new_value = self.sla(value);
+                self.registers.write(target, new_value);
+                self.registers.pc.wrapping_add(2)
+            }
+            Instruction::SRA(target) => {
+                let value = self.registers.read(target);
+                let new_value = self.sra(value);
+                self.registers.write(target, new_value);
+                self.registers.pc.wrapping_add(2)
+            }
+            Instruction::SRL(target) => {
+                let value = self.registers.read(target);
+                let new_value = self.srl(value);
+                self.registers.write(target, new_value);
+                self.registers.pc.wrapping_add(2)
             }
             Instruction::SCF => {
                 self.scf();
@@ -869,6 +1141,100 @@ impl Cpu {
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(Flags::CARRY, carry);
+        new_value
+    }
+
+    /// SLA r8
+    /// 2 8
+    /// Z 0 0 C
+    ///
+    /// Shift Left Arithmetically register r8.
+    fn sla(&mut self, value: u8) -> u8 {
+        let new_value = value << 1;
+        self.registers.f.set(Flags::ZERO, new_value == 0);
+        self.registers.f.set(Flags::SUBTRACT, false);
+        self.registers.f.set(Flags::HALF_CARRY, false);
+        let carry = value & 0x80 != 0;
+        self.registers.f.set(Flags::CARRY, carry);
+        new_value
+    }
+
+    /// SRA r8
+    /// 2 8
+    /// Z 0 0 C
+    ///
+    /// Shift Right Arithmetically register r8 (bit 7 of r8 is unchanged).
+    fn sra(&mut self, value: u8) -> u8 {
+        let new_value = (value >> 1) | (value & 0x80);
+        self.registers.f.set(Flags::ZERO, new_value == 0);
+        self.registers.f.set(Flags::SUBTRACT, false);
+        self.registers.f.set(Flags::HALF_CARRY, false);
+        let carry = value & 0x01 != 0;
+        self.registers.f.set(Flags::CARRY, carry);
+        new_value
+    }
+
+    /// SWAP r8
+    /// 2 8
+    /// Z 0 0 0
+    ///
+    /// Swap the upper 4 bits in register r8 and the lower 4 ones.
+    fn swap(&mut self, value: u8) -> u8 {
+        let new_value = (value >> 4) | (value << 4);
+        self.registers.f.set(Flags::ZERO, new_value == 0);
+        self.registers.f.set(Flags::SUBTRACT, false);
+        self.registers.f.set(Flags::HALF_CARRY, false);
+        self.registers.f.set(Flags::CARRY, false);
+        new_value
+    }
+
+    /// SRL r8
+    /// 2 8
+    /// Z 0 0 C
+    ///
+    /// Shift Right Logically register r8.
+    fn srl(&mut self, value: u8) -> u8 {
+        let new_value = value >> 1;
+        self.registers.f.set(Flags::ZERO, new_value == 0);
+        self.registers.f.set(Flags::SUBTRACT, false);
+        self.registers.f.set(Flags::HALF_CARRY, false);
+        let carry = value & 0x01 != 0;
+        self.registers.f.set(Flags::CARRY, carry);
+        new_value
+    }
+
+    /// BIT u3, r8
+    /// 2 8
+    /// Z 0 1 -
+    ///
+    /// Test bit u3 in register r8, set the zero flag if bit not set.
+    fn bit(&mut self, bit: u8, value: u8) {
+        let new_value = value & (1 << bit);
+        self.registers.f.set(Flags::ZERO, new_value == 0);
+        self.registers.f.set(Flags::SUBTRACT, false);
+        self.registers.f.set(Flags::HALF_CARRY, true);
+        // CARRY left untouched
+    }
+
+    /// RES u3, r8
+    /// 2 8
+    /// - - - -
+    ///
+    /// Set bit u3 in register r8 to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
+    fn res(&mut self, bit: u8, value: u8) -> u8 {
+        let new_value = value & !(1 << bit);
+        // Flags left untouched
+        new_value
+    }
+
+    /// SET u3, r8
+    /// 2 8
+    /// - - - -
+    ///
+    /// Set bit u3 in register r8 to 1. Bit 0 is the rightmost one, bit 7 the leftmost one.
+    fn set(&mut self, bit: u8, value: u8) -> u8 {
+        let new_value = value | (1 << bit);
+        // Flags left untouched
         new_value
     }
 }
