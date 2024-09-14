@@ -105,13 +105,13 @@ bitflags! {
 }
 
 impl Flags {
-    fn test(&self, condition: JumpTest) -> bool{
+    fn test(&self, condition: JumpCondition) -> bool{
         match condition {
-            JumpTest::NotZero => !self.contains(Flags::ZERO),
-            JumpTest::Zero => self.contains(Flags::ZERO),
-            JumpTest::NotCarry => !self.contains(Flags::CARRY),
-            JumpTest::Carry => self.contains(Flags::CARRY),
-            JumpTest::Always => true,
+            JumpCondition::NotZero => !self.contains(Flags::ZERO),
+            JumpCondition::Zero => self.contains(Flags::ZERO),
+            JumpCondition::NotCarry => !self.contains(Flags::CARRY),
+            JumpCondition::Carry => self.contains(Flags::CARRY),
+            JumpCondition::Always => true,
         }
     }
 }
@@ -147,8 +147,10 @@ enum Instruction {
     SRA(R8),
     SRL(R8),
     JP_HL,
-    JP(JumpTest),
-    JR(JumpTest),
+    JP(JumpCondition),
+    JR(JumpCondition),
+    POP(R16),
+    PUSH(R16),
     SCF,
     CPL,
     CCF,
@@ -534,17 +536,28 @@ impl Instruction {
             // Jumps
             0xE9 => Some(Self::JP_HL),
 
-            0xC3 => Some(Self::JP(JumpTest::Always)),
-            0xC2 => Some(Self::JP(JumpTest::NotZero)),
-            0xCA => Some(Self::JP(JumpTest::Zero)),
-            0xD2 => Some(Self::JP(JumpTest::NotCarry)),
-            0xDA => Some(Self::JP(JumpTest::Carry)),
+            0xC3 => Some(Self::JP(JumpCondition::Always)),
+            0xC2 => Some(Self::JP(JumpCondition::NotZero)),
+            0xCA => Some(Self::JP(JumpCondition::Zero)),
+            0xD2 => Some(Self::JP(JumpCondition::NotCarry)),
+            0xDA => Some(Self::JP(JumpCondition::Carry)),
 
-            0x18 => Some(Self::JR(JumpTest::Always)),
-            0x20 => Some(Self::JR(JumpTest::NotZero)),
-            0x28 => Some(Self::JR(JumpTest::Zero)),
-            0x30 => Some(Self::JR(JumpTest::NotCarry)),
-            0x38 => Some(Self::JR(JumpTest::Carry)),
+            0x18 => Some(Self::JR(JumpCondition::Always)),
+            0x20 => Some(Self::JR(JumpCondition::NotZero)),
+            0x28 => Some(Self::JR(JumpCondition::Zero)),
+            0x30 => Some(Self::JR(JumpCondition::NotCarry)),
+            0x38 => Some(Self::JR(JumpCondition::Carry)),
+
+            // Stack
+            0xC1 => Some(Self::POP(R16::BC)),
+            0xD1 => Some(Self::POP(R16::DE)),
+            0xE1 => Some(Self::POP(R16::HL)),
+            0xF1 => Some(Self::POP(R16::AF)),
+
+            0xC5 => Some(Self::PUSH(R16::BC)),
+            0xD5 => Some(Self::PUSH(R16::DE)),
+            0xE5 => Some(Self::PUSH(R16::HL)),
+            0xF5 => Some(Self::PUSH(R16::AF)),
 
             // Misc
             0x37 => Some(Self::SCF),
@@ -581,7 +594,7 @@ enum R16 {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum JumpTest {
+enum JumpCondition {
     NotZero,
     Zero,
     NotCarry,
@@ -603,6 +616,10 @@ impl MemoryBus {
 
     const fn read_byte(&self, address: u16) -> u8 {
         self.memory[address as usize]
+    }
+
+    fn write_byte(&mut self, address: u16, value: u8) {
+        self.memory[address as usize] = value;
     }
 }
 
@@ -814,6 +831,16 @@ impl Cpu {
             Instruction::JR(test) => {
                 let jump_condition = self.registers.f.test(test);
                 self.jump_relative(jump_condition)
+            }
+            Instruction::POP(target) => {
+                let value = self.pop();
+                self.registers.write16(target, value);
+                self.registers.pc.wrapping_add(1)
+            }
+            Instruction::PUSH(target) => {
+                let value = self.registers.read16(target);
+                self.push(value);
+                self.registers.pc.wrapping_add(1)
             }
             Instruction::SCF => {
                 self.scf();
@@ -1307,9 +1334,9 @@ impl Cpu {
         if should_jump {
             // Gameboy is little endian, so read the second byte as the most significant byte
             // and the first as the least significant
-            let lo_byte = self.bus.read_byte(self.registers.pc + 1);
-            let hi_byte = self.bus.read_byte(self.registers.pc + 2);
-            u16::from_le_bytes([lo_byte, hi_byte])
+            let lsb = self.bus.read_byte(self.registers.pc + 1);
+            let msb = self.bus.read_byte(self.registers.pc + 2);
+            u16::from_le_bytes([lsb, msb])
         } else {
             // If it's not jumping we still need to move the program counter forward by 3 since the
             // jump instruction is 3 bytes wide (1 byte for the opcode and 2 bytes for the address)
@@ -1329,5 +1356,35 @@ impl Cpu {
         } else {
             self.registers.pc.wrapping_add(2)
         }
+    }
+
+    /// PUSH r16
+    /// 1 16
+    /// - - - -
+    ///
+    /// Push register r16 into the stack.
+    fn push(&mut self, value: u16) {
+        self.registers.sp = self.registers.sp.wrapping_sub(1);
+        self.bus.write_byte(self.registers.sp, ((value & 0xFF00) >> 8) as u8);
+
+        self.registers.sp = self.registers.sp.wrapping_sub(1);
+        self.bus.write_byte(self.registers.sp, (value & 0xFF) as u8);
+    }
+
+    /// POP r16
+    /// 1 12
+    /// - - - -
+    ///
+    /// Pop register r16 from the stack.
+    ///
+    /// NOTE: POP AF affects all flags.
+    fn pop(&mut self) -> u16 {
+        let lsb = self.bus.read_byte(self.registers.sp) as u16;
+        self.registers.sp = self.registers.sp.wrapping_add(1);
+
+        let msb = self.bus.read_byte(self.registers.sp) as u16;
+        self.registers.sp = self.registers.sp.wrapping_add(1);
+
+        (msb << 8) | lsb
     }
 }
