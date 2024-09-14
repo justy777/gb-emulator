@@ -104,6 +104,18 @@ bitflags! {
     }
 }
 
+impl Flags {
+    fn test(&self, condition: JumpTest) -> bool{
+        match condition {
+            JumpTest::NotZero => !self.contains(Flags::ZERO),
+            JumpTest::Zero => self.contains(Flags::ZERO),
+            JumpTest::NotCarry => !self.contains(Flags::CARRY),
+            JumpTest::Carry => self.contains(Flags::CARRY),
+            JumpTest::Always => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Instruction {
     ADD(R8),
@@ -134,6 +146,9 @@ enum Instruction {
     SLA(R8),
     SRA(R8),
     SRL(R8),
+    JP_HL,
+    JP(JumpTest),
+    JR(JumpTest),
     SCF,
     CPL,
     CCF,
@@ -516,6 +531,21 @@ impl Instruction {
             0x0F => Some(Self::RRCA),
             0x1F => Some(Self::RRA),
 
+            // Jumps
+            0xE9 => Some(Self::JP_HL),
+
+            0xC3 => Some(Self::JP(JumpTest::Always)),
+            0xC2 => Some(Self::JP(JumpTest::NotZero)),
+            0xCA => Some(Self::JP(JumpTest::Zero)),
+            0xD2 => Some(Self::JP(JumpTest::NotCarry)),
+            0xDA => Some(Self::JP(JumpTest::Carry)),
+
+            0x18 => Some(Self::JR(JumpTest::Always)),
+            0x20 => Some(Self::JR(JumpTest::NotZero)),
+            0x28 => Some(Self::JR(JumpTest::Zero)),
+            0x30 => Some(Self::JR(JumpTest::NotCarry)),
+            0x38 => Some(Self::JR(JumpTest::Carry)),
+
             // Misc
             0x37 => Some(Self::SCF),
             0x2F => Some(Self::CPL),
@@ -548,6 +578,15 @@ enum R16 {
     DE,
     HL,
     SP,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum JumpTest {
+    NotZero,
+    Zero,
+    NotCarry,
+    Carry,
+    Always,
 }
 
 #[derive(Clone)]
@@ -763,6 +802,18 @@ impl Cpu {
                 let new_value = self.srl(value);
                 self.registers.write(target, new_value);
                 self.registers.pc.wrapping_add(2)
+            }
+            Instruction::JP_HL => {
+                let value = self.registers.read16(R16::HL);
+                self.jump_hl(value)
+            }
+            Instruction::JP(test) => {
+                let jump_condition = self.registers.f.test(test);
+                self.jump(jump_condition)
+            }
+            Instruction::JR(test) => {
+                let jump_condition = self.registers.f.test(test);
+                self.jump_relative(jump_condition)
             }
             Instruction::SCF => {
                 self.scf();
@@ -1073,7 +1124,7 @@ impl Cpu {
     /// 1 4
     /// - 0 0 C
     ///
-    /// Toggle the carry flag.
+    /// Complement the carry flag.
     fn ccf(&mut self) {
         let cf = self.registers.f.contains(Flags::CARRY);
         // ZERO left untouched
@@ -1236,5 +1287,47 @@ impl Cpu {
         let new_value = value | (1 << bit);
         // Flags left untouched
         new_value
+    }
+
+    /// JP HL
+    /// 1 4
+    /// - - - -
+    ///
+    /// Jump to address in HL; effectively, load PC with value in register HL.
+    fn jump_hl(&mut self, address: u16) -> u16 {
+        address
+    }
+
+    /// JP cc, n16
+    /// 3 16/12
+    /// - - - -
+    ///
+    /// Jump to address n16 if condition cc is met.
+    fn jump(&self, should_jump: bool) -> u16 {
+        if should_jump {
+            // Gameboy is little endian, so read the second byte as the most significant byte
+            // and the first as the least significant
+            let lo_byte = self.bus.read_byte(self.registers.pc + 1);
+            let hi_byte = self.bus.read_byte(self.registers.pc + 2);
+            u16::from_le_bytes([lo_byte, hi_byte])
+        } else {
+            // If it's not jumping we still need to move the program counter forward by 3 since the
+            // jump instruction is 3 bytes wide (1 byte for the opcode and 2 bytes for the address)
+            self.registers.pc.wrapping_add(3)
+        }
+    }
+
+    /// JR cc, e8
+    /// 2 12/8
+    /// - - - -
+    ///
+    /// Relative Jump to current address plus e8 offset if condition cc is met.
+    fn jump_relative(&self, should_jump: bool) -> u16 {
+        if should_jump {
+            let offset = self.bus.read_byte(self.registers.pc + 1) as i16;
+            self.registers.pc.wrapping_add_signed(offset)
+        } else {
+            self.registers.pc.wrapping_add(2)
+        }
     }
 }
