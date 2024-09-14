@@ -146,9 +146,11 @@ enum Instruction {
     SLA(R8),
     SRA(R8),
     SRL(R8),
+    CALL(JumpCondition),
     JP_HL,
     JP(JumpCondition),
     JR(JumpCondition),
+    RET(JumpCondition),
     POP(R16),
     PUSH(R16),
     SCF,
@@ -534,6 +536,12 @@ impl Instruction {
             0x1F => Some(Self::RRA),
 
             // Jumps
+            0xCD => Some(Self::CALL(JumpCondition::Always)),
+            0xC4 => Some(Self::CALL(JumpCondition::NotZero)),
+            0xCC => Some(Self::CALL(JumpCondition::Zero)),
+            0xD4 => Some(Self::CALL(JumpCondition::NotCarry)),
+            0xDC => Some(Self::CALL(JumpCondition::Carry)),
+
             0xE9 => Some(Self::JP_HL),
 
             0xC3 => Some(Self::JP(JumpCondition::Always)),
@@ -547,6 +555,12 @@ impl Instruction {
             0x28 => Some(Self::JR(JumpCondition::Zero)),
             0x30 => Some(Self::JR(JumpCondition::NotCarry)),
             0x38 => Some(Self::JR(JumpCondition::Carry)),
+
+            0xC9 => Some(Self::RET(JumpCondition::Always)),
+            0xC0 => Some(Self::RET(JumpCondition::NotZero)),
+            0xC8 => Some(Self::RET(JumpCondition::Zero)),
+            0xD0 => Some(Self::RET(JumpCondition::NotCarry)),
+            0xD8 => Some(Self::RET(JumpCondition::Carry)),
 
             // Stack
             0xC1 => Some(Self::POP(R16::BC)),
@@ -820,6 +834,10 @@ impl Cpu {
                 self.registers.write(target, new_value);
                 self.registers.pc.wrapping_add(2)
             }
+            Instruction::CALL(test) => {
+                let jump_condition = self.registers.f.test(test);
+                self.call(jump_condition)
+            }
             Instruction::JP_HL => {
                 let value = self.registers.read16(R16::HL);
                 self.jump_hl(value)
@@ -831,6 +849,10 @@ impl Cpu {
             Instruction::JR(test) => {
                 let jump_condition = self.registers.f.test(test);
                 self.jump_relative(jump_condition)
+            }
+            Instruction::RET(test) => {
+                let jump_condition = self.registers.f.test(test);
+                self.returns(jump_condition)
             }
             Instruction::POP(target) => {
                 let value = self.pop();
@@ -1386,5 +1408,33 @@ impl Cpu {
         self.registers.sp = self.registers.sp.wrapping_add(1);
 
         (msb << 8) | lsb
+    }
+
+    /// CALL cc, n16
+    /// 3 24/12
+    /// - - - -
+    ///
+    /// Call address n16 if condition cc is met.
+    fn call(&mut self, should_jump: bool) -> u16 {
+        let next = self.registers.pc.wrapping_add(3);
+        if should_jump {
+            self.push(next);
+            self.jump(should_jump)
+        } else {
+            next
+        }
+    }
+
+    /// RET cc
+    /// 1 20/8
+    /// - - - -
+    ///
+    /// Return from subroutine if condition cc is met.
+    fn returns(&mut self, should_jump: bool) -> u16 {
+        if should_jump {
+            self.pop()
+        } else {
+            self.registers.pc.wrapping_add(1)
+        }
     }
 }
