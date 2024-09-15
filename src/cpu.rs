@@ -105,7 +105,7 @@ bitflags! {
 }
 
 impl Flags {
-    fn test(&self, condition: JumpCondition) -> bool{
+    fn test(&self, condition: JumpCondition) -> bool {
         match condition {
             JumpCondition::NotZero => !self.contains(Flags::ZERO),
             JumpCondition::Zero => self.contains(Flags::ZERO),
@@ -151,11 +151,14 @@ enum Instruction {
     Jump(JumpCondition),
     JumpRelative(JumpCondition),
     Return(JumpCondition),
+    ReturnFromInterruptHandler,
     Pop(R16),
     Push(R16),
     SetCarryFlag,
     Complement,
     ComplimentCarryFlag,
+    DisableInterrupt,
+    EnableInterrupt,
 }
 
 impl Instruction {
@@ -562,6 +565,8 @@ impl Instruction {
             0xD0 => Some(Self::Return(JumpCondition::NotCarry)),
             0xD8 => Some(Self::Return(JumpCondition::Carry)),
 
+            0xD9 => Some(Self::ReturnFromInterruptHandler),
+
             // Stack
             0xC1 => Some(Self::Pop(R16::BC)),
             0xD1 => Some(Self::Pop(R16::DE)),
@@ -577,6 +582,8 @@ impl Instruction {
             0x37 => Some(Self::SetCarryFlag),
             0x2F => Some(Self::Complement),
             0x3F => Some(Self::ComplimentCarryFlag),
+            0xF3 => Some(Self::DisableInterrupt),
+            0xFB => Some(Self::EnableInterrupt),
 
             // Undefined
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => None,
@@ -641,6 +648,7 @@ impl MemoryBus {
 pub struct Cpu {
     registers: Registers,
     bus: MemoryBus,
+    ime: bool,
 }
 
 impl Cpu {
@@ -648,6 +656,7 @@ impl Cpu {
         Self {
             registers: Registers::new(),
             bus: MemoryBus::new(),
+            ime: false,
         }
     }
 
@@ -854,6 +863,7 @@ impl Cpu {
                 let should_jump = self.registers.f.test(condition);
                 self.returns(should_jump)
             }
+            Instruction::ReturnFromInterruptHandler => self.return_from_interrupt_handler(),
             Instruction::Pop(target) => {
                 let value = self.pop();
                 self.registers.write16(target, value);
@@ -875,6 +885,14 @@ impl Cpu {
             }
             Instruction::ComplimentCarryFlag => {
                 self.complement_carry_flag();
+                self.registers.pc.wrapping_add(1)
+            }
+            Instruction::DisableInterrupt => {
+                self.disable_interrupts();
+                self.registers.pc.wrapping_add(1)
+            }
+            Instruction::EnableInterrupt => {
+                self.enable_interrupts();
                 self.registers.pc.wrapping_add(1)
             }
         }
@@ -1387,7 +1405,8 @@ impl Cpu {
     /// Push register r16 into the stack.
     fn push(&mut self, value: u16) {
         self.registers.sp = self.registers.sp.wrapping_sub(1);
-        self.bus.write_byte(self.registers.sp, ((value & 0xFF00) >> 8) as u8);
+        self.bus
+            .write_byte(self.registers.sp, ((value & 0xFF00) >> 8) as u8);
 
         self.registers.sp = self.registers.sp.wrapping_sub(1);
         self.bus.write_byte(self.registers.sp, (value & 0xFF) as u8);
@@ -1436,5 +1455,37 @@ impl Cpu {
         } else {
             self.registers.pc.wrapping_add(1)
         }
+    }
+
+    /// RETI
+    /// 1 16
+    /// - - - -
+    ///
+    /// Return from subroutine and enable interrupts.
+    /// This is basically equivalent to executing EI then RET, meaning that IME is set right after this instruction.
+    fn return_from_interrupt_handler(&mut self) -> u16 {
+        let value = self.returns(true);
+        self.ime = true;
+        value
+    }
+
+    /// DI
+    /// 1 4
+    /// - - - -
+    ///
+    /// Disable Interrupts by clearing the IME flag.
+    fn disable_interrupts(&mut self) {
+        self.ime = false;
+    }
+
+    /// EI
+    /// 1 4
+    /// - - - -
+    ///
+    /// Enable Interrupts by setting the IME flag.
+    /// The flag is only set after the instruction following EI.
+    fn enable_interrupts(&mut self) {
+        self.step();
+        self.ime = true;
     }
 }
