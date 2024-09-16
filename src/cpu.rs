@@ -65,6 +65,7 @@ impl Registers {
             R16::DE => (self.d as u16) << 8 | self.e as u16,
             R16::HL => (self.h as u16) << 8 | self.l as u16,
             R16::SP => self.sp,
+            R16::PC => self.pc,
         }
     }
 
@@ -89,6 +90,9 @@ impl Registers {
             R16::SP => {
                 self.sp = value;
             }
+            R16::PC => {
+                self.pc = value;
+            }
         }
     }
 }
@@ -105,12 +109,12 @@ bitflags! {
 }
 
 impl Flags {
-    fn test(&self, condition: JumpCondition) -> bool {
+    const fn test(self, condition: JumpCondition) -> bool {
         match condition {
-            JumpCondition::NotZero => !self.contains(Flags::ZERO),
-            JumpCondition::Zero => self.contains(Flags::ZERO),
-            JumpCondition::NotCarry => !self.contains(Flags::CARRY),
-            JumpCondition::Carry => self.contains(Flags::CARRY),
+            JumpCondition::NotZero => !self.contains(Self::ZERO),
+            JumpCondition::Zero => self.contains(Self::ZERO),
+            JumpCondition::NotCarry => !self.contains(Self::CARRY),
+            JumpCondition::Carry => self.contains(Self::CARRY),
             JumpCondition::Always => true,
         }
     }
@@ -594,6 +598,7 @@ impl Instruction {
     }
 }
 
+/// 8-bit registers
 #[derive(Debug, Clone, Copy)]
 enum R8 {
     A,
@@ -605,6 +610,7 @@ enum R8 {
     L,
 }
 
+/// 16-bit registers
 #[derive(Debug, Clone, Copy)]
 enum R16 {
     AF,
@@ -612,6 +618,53 @@ enum R16 {
     DE,
     HL,
     SP,
+    PC,
+}
+
+enum Addr {
+    HL,
+}
+
+trait ReadByte<T> {
+    fn read_byte(&self, src: T) -> u8;
+}
+
+impl ReadByte<R8> for Cpu {
+    fn read_byte(&self, src: R8) -> u8 {
+        self.registers.read(src)
+    }
+}
+
+impl ReadByte<Addr> for Cpu {
+    fn read_byte(&self, src: Addr) -> u8 {
+        match src {
+            Addr::HL => {
+                let address = self.registers.read16(R16::HL);
+                self.bus.read_byte(address)
+            }
+        }
+    }
+}
+
+trait WriteByte<T> {
+    fn write_byte(&mut self, src: T, value: u8);
+}
+
+impl WriteByte<R8> for Cpu {
+    fn write_byte(&mut self, src: R8, value: u8) {
+        self.registers.write(src, value);
+    }
+}
+
+impl WriteByte<Addr> for Cpu {
+    fn write_byte(&mut self, src: Addr, value: u8) {
+        match src {
+            Addr::HL => {
+                let address = self.registers.read16(R16::HL);
+                self.bus.write_byte(address, value);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -660,240 +713,150 @@ impl Cpu {
         }
     }
 
+    fn read_next_byte(&mut self) -> u8 {
+        let byte = self.bus.read_byte(self.registers.pc);
+        self.registers.pc = self.registers.pc.wrapping_add(1);
+        byte
+    }
+
+    fn read_next_word(&mut self) -> u16 {
+        // Gameboy is little endian, so read the second byte as the most significant byte
+        // and the first as the least significant
+        let lsb = self.bus.read_byte(self.registers.pc);
+        self.registers.pc = self.registers.pc.wrapping_add(1);
+        let msb = self.bus.read_byte(self.registers.pc);
+        self.registers.pc = self.registers.pc.wrapping_add(1);
+        u16::from_le_bytes([lsb, msb])
+    }
+
     fn step(&mut self) {
-        let mut instruction_byte = self.bus.read_byte(self.registers.pc);
+        let mut instruction_byte = self.read_next_byte();
 
         let prefixed = instruction_byte == 0xCB;
         if prefixed {
-            instruction_byte = self.bus.read_byte(self.registers.pc + 1);
+            instruction_byte = self.read_next_byte();
         }
 
-        let next_pc = if let Some(instruction) = Instruction::from_byte(instruction_byte, prefixed)
-        {
-            self.execute(instruction)
+        if let Some(instruction) = Instruction::from_byte(instruction_byte, prefixed) {
+            self.execute(instruction);
         } else {
             let description = format!("0x{}{instruction_byte:x}", if prefixed { "CB" } else { "" });
             panic!("Unknown instruction found for: {description}");
         };
-
-        self.registers.pc = next_pc;
     }
 
-    fn execute(&mut self, instruction: Instruction) -> u16 {
+    fn execute(&mut self, instruction: Instruction) {
         match instruction {
             Instruction::Add(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.add(value);
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.add(target);
             }
             Instruction::AddWithCarry(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.add_with_carry(value);
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.add_with_carry(target);
             }
             Instruction::Subtract(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.subtract(value);
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.subtract(target);
             }
             Instruction::SubtractWithCarry(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.subtract_with_carry(value);
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.subtract_with_carry(target);
             }
             Instruction::And(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.and(value);
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.and(target);
             }
             Instruction::Xor(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.xor(value);
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.xor(target);
             }
             Instruction::Or(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.or(value);
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.or(target);
             }
             Instruction::Compare(target) => {
-                let value = self.registers.read(target);
-                self.compare(value);
-                self.registers.pc.wrapping_add(1)
+                self.compare(target);
             }
             Instruction::Increment(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.increment(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(1)
+                self.increment(target);
             }
             Instruction::Decrement(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.decrement(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(1)
+                self.decrement(target);
             }
             Instruction::Add16(target) => {
-                let value = self.registers.read16(target);
-                let new_value = self.add16(value);
-                self.registers.write16(R16::HL, new_value);
-                self.registers.pc.wrapping_add(1)
+                self.add16(target);
             }
             Instruction::Increment16(target) => {
-                let value = self.registers.read16(target);
-                let new_value = self.increment16(value);
-                self.registers.write16(target, new_value);
-                self.registers.pc.wrapping_add(1)
+                self.increment16(target);
             }
             Instruction::Decrement16(target) => {
-                let value = self.registers.read16(target);
-                let new_value = self.decrement16(value);
-                self.registers.write16(target, new_value);
-                self.registers.pc.wrapping_add(1)
+                self.decrement16(target);
             }
             Instruction::BitTest(bit, target) => {
-                let value = self.registers.read(target);
-                self.bit_test(bit, value);
-                self.registers.pc.wrapping_add(2)
+                self.bit_test(bit, target);
             }
             Instruction::BitReset(bit, target) => {
-                let value = self.registers.read(target);
-                let new_value = self.bit_reset(bit, value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.bit_reset(bit, target);
             }
             Instruction::BitSet(bit, target) => {
-                let value = self.registers.read(target);
-                let new_value = self.bit_set(bit, value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.bit_set(bit, target);
             }
             Instruction::Swap(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.swap(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.swap(target);
             }
             Instruction::RotateLeft(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.rotate_left(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.rotate_left(target);
             }
             Instruction::RotateLeftCircular(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.rotate_left_circular(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.rotate_left_circular(target);
             }
             Instruction::RotateLeftCircularAccumulator => {
-                let new_value = self.rotate_left_circular_accumulator();
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.rotate_left_circular_accumulator();
             }
             Instruction::RotateLeftAccumulator => {
-                let new_value = self.rotate_left_accumulator();
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.rotate_left_accumulator();
             }
             Instruction::RotateRight(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.rotate_right(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.rotate_right(target);
             }
             Instruction::RotateRightCircular(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.rotate_right_circular(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.rotate_right_circular(target);
             }
             Instruction::RotateRightCircularAccumulator => {
-                let new_value = self.rotate_right_circular_accumulator();
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.rotate_right_circular_accumulator();
             }
             Instruction::RotateRightAccumulator => {
-                let new_value = self.rotate_right_accumulator();
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.rotate_right_accumulator();
             }
             Instruction::ShiftLeftArithmetic(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.shift_left_arithmetic(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.shift_left_arithmetic(target);
             }
             Instruction::ShiftRightArithmetic(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.shift_right_arithmetic(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.shift_right_arithmetic(target);
             }
             Instruction::ShiftRightLogical(target) => {
-                let value = self.registers.read(target);
-                let new_value = self.shift_right_logical(value);
-                self.registers.write(target, new_value);
-                self.registers.pc.wrapping_add(2)
+                self.shift_right_logical(target);
             }
-            Instruction::Call(condition) => {
-                let should_jump = self.registers.f.test(condition);
-                self.call(should_jump)
-            }
-            Instruction::JumpToHL => {
-                let value = self.registers.read16(R16::HL);
-                self.jump_to_hl(value)
-            }
-            Instruction::Jump(condition) => {
-                let should_jump = self.registers.f.test(condition);
-                self.jump(should_jump)
-            }
-            Instruction::JumpRelative(condition) => {
-                let should_jump = self.registers.f.test(condition);
-                self.jump_relative(should_jump)
-            }
-            Instruction::Return(condition) => {
-                let should_jump = self.registers.f.test(condition);
-                self.returns(should_jump)
-            }
+            Instruction::Call(condition) => self.call(condition),
+            Instruction::JumpToHL => self.jump_to_hl(),
+            Instruction::Jump(condition) => self.jump(condition),
+            Instruction::JumpRelative(condition) => self.jump_relative(condition),
+            Instruction::Return(condition) => self.returns(condition),
             Instruction::ReturnFromInterruptHandler => self.return_from_interrupt_handler(),
             Instruction::Pop(target) => {
-                let value = self.pop();
-                self.registers.write16(target, value);
-                self.registers.pc.wrapping_add(1)
+                self.pop(target);
             }
             Instruction::Push(target) => {
-                let value = self.registers.read16(target);
-                self.push(value);
-                self.registers.pc.wrapping_add(1)
+                self.push(target);
             }
             Instruction::SetCarryFlag => {
                 self.set_carry_flag();
-                self.registers.pc.wrapping_add(1)
             }
             Instruction::Complement => {
-                let new_value = self.complement();
-                self.registers.a = new_value;
-                self.registers.pc.wrapping_add(1)
+                self.complement();
             }
             Instruction::ComplimentCarryFlag => {
                 self.complement_carry_flag();
-                self.registers.pc.wrapping_add(1)
             }
             Instruction::DisableInterrupt => {
                 self.disable_interrupts();
-                self.registers.pc.wrapping_add(1)
             }
             Instruction::EnableInterrupt => {
                 self.enable_interrupts();
-                self.registers.pc.wrapping_add(1)
             }
         }
     }
@@ -903,7 +866,11 @@ impl Cpu {
     /// Z 0 H C
     ///
     /// Add the value in r8 to register A.
-    fn add(&mut self, value: u8) -> u8 {
+    fn add<T>(&mut self, operand: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(operand);
         let a = self.registers.a;
         let (new_value, did_overflow) = a.overflowing_add(value);
         self.registers.f.set(Flags::ZERO, new_value == 0);
@@ -914,7 +881,7 @@ impl Cpu {
         // than the addition caused a carry from bit 3 to bit 4.
         let half_carry = (a & 0xF) + (value & 0xF) > 0xF;
         self.registers.f.set(Flags::HALF_CARRY, half_carry);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// ADC A, r8
@@ -922,7 +889,11 @@ impl Cpu {
     /// Z 0 H C
     ///
     /// Add the value in r8 plus the carry flag to register A.
-    fn add_with_carry(&mut self, value: u8) -> u8 {
+    fn add_with_carry<T>(&mut self, operand: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(operand);
         let a = self.registers.a;
         let cf = self.registers.f.contains(Flags::CARRY) as u8;
         let new_value = a.wrapping_add(value).wrapping_add(cf);
@@ -932,7 +903,7 @@ impl Cpu {
         self.registers.f.set(Flags::CARRY, carry);
         let half_carry = (a & 0xF) + (value & 0xF) + cf > 0xF;
         self.registers.f.set(Flags::HALF_CARRY, half_carry);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// SUB A, r8
@@ -940,7 +911,11 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 from register A.
-    fn subtract(&mut self, value: u8) -> u8 {
+    fn subtract<T>(&mut self, subtrahend: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(subtrahend);
         let a = self.registers.a;
         let (new_value, did_overflow) = a.overflowing_sub(value);
         self.registers.f.set(Flags::ZERO, new_value == 0);
@@ -948,7 +923,7 @@ impl Cpu {
         self.registers.f.set(Flags::CARRY, did_overflow);
         let half_carry = (a & 0xF) < (value & 0xF);
         self.registers.f.set(Flags::HALF_CARRY, half_carry);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// SBC A, r8
@@ -956,7 +931,11 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 and the carry flag from register A.
-    fn subtract_with_carry(&mut self, value: u8) -> u8 {
+    fn subtract_with_carry<T>(&mut self, subtrahend: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(subtrahend);
         let a = self.registers.a;
         let cf = self.registers.f.contains(Flags::CARRY) as u8;
         let new_value = a.wrapping_sub(value).wrapping_sub(cf);
@@ -966,7 +945,7 @@ impl Cpu {
         self.registers.f.set(Flags::CARRY, carry);
         let half_carry = (a & 0xF) < (value & 0xF) + cf;
         self.registers.f.set(Flags::HALF_CARRY, half_carry);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// AND A, r8
@@ -974,13 +953,17 @@ impl Cpu {
     /// Z 0 1 0
     ///
     /// Bitwise AND between the value in r8 and register A.
-    fn and(&mut self, value: u8) -> u8 {
+    fn and<T>(&mut self, operand: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(operand);
         let new_value = self.registers.a & value;
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         self.registers.f.set(Flags::HALF_CARRY, true);
         self.registers.f.set(Flags::CARRY, false);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// XOR A, r8
@@ -988,13 +971,17 @@ impl Cpu {
     /// Z 0 0 0
     ///
     /// Bitwise XOR between the value in r8 and register A.
-    fn xor(&mut self, value: u8) -> u8 {
+    fn xor<T>(&mut self, operand: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(operand);
         let new_value = self.registers.a ^ value;
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         self.registers.f.set(Flags::HALF_CARRY, false);
         self.registers.f.set(Flags::CARRY, false);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// OR A, r8
@@ -1002,13 +989,17 @@ impl Cpu {
     /// Z 0 0 0
     ///
     /// Bitwise OR between the value in r8 and register A.
-    fn or(&mut self, value: u8) -> u8 {
+    fn or<T>(&mut self, operand: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(operand);
         let new_value = self.registers.a | value;
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, true);
         self.registers.f.set(Flags::HALF_CARRY, false);
         self.registers.f.set(Flags::CARRY, false);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// CP A, r8
@@ -1016,7 +1007,11 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 from register A and set flags accordingly, but don't store the result.
-    fn compare(&mut self, value: u8) {
+    fn compare<T>(&mut self, subtrahend: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(subtrahend);
         let a = self.registers.a;
         let (new_value, did_overflow) = a.overflowing_sub(value);
         self.registers.f.set(Flags::ZERO, new_value == 0);
@@ -1031,14 +1026,19 @@ impl Cpu {
     /// Z 0 H -
     ///
     /// Increment value in register r8 by 1.
-    fn increment(&mut self, value: u8) -> u8 {
+    fn increment<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value.wrapping_add(1);
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         let half_carry = (value & 0xF) == 0xF;
         self.registers.f.set(Flags::HALF_CARRY, half_carry);
         // CARRY is left untouched
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// DEC r8
@@ -1046,14 +1046,19 @@ impl Cpu {
     /// Z 1 H -
     ///
     /// Decrement value in register r8 by 1.
-    fn decrement(&mut self, value: u8) -> u8 {
+    fn decrement<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value.wrapping_sub(1);
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, true);
         let half_carry = (value & 0xF) == 0;
         self.registers.f.set(Flags::HALF_CARRY, half_carry);
         // CARRY is left untouched
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// ADD HL, r16
@@ -1061,7 +1066,8 @@ impl Cpu {
     /// - 0 H C
     ///
     /// Add the value in r16 to register HL.
-    fn add16(&mut self, value: u16) -> u16 {
+    fn add16(&mut self, operand: R16) {
+        let value = self.registers.read16(operand);
         let hl = self.registers.read16(R16::HL);
         let (new_value, did_overflow) = hl.overflowing_add(value);
         // ZERO is left untouched
@@ -1072,7 +1078,7 @@ impl Cpu {
         // Bits are labeled from 0-15 from least to most significant.
         let half_carry = (hl & 0xFFF) + (value & 0xFFF) > 0xFFF;
         self.registers.f.set(Flags::HALF_CARRY, half_carry);
-        new_value
+        self.registers.write16(R16::HL, new_value);
     }
 
     /// INC r16
@@ -1080,9 +1086,10 @@ impl Cpu {
     /// - - - -
     ///
     /// Increment value in register r16 by 1.
-    fn increment16(&mut self, value: u16) -> u16 {
+    fn increment16(&mut self, src: R16) {
+        let value = self.registers.read16(src);
         let new_value = value.wrapping_add(1);
-        new_value
+        self.registers.write16(src, new_value);
     }
 
     /// DEC r16
@@ -1090,9 +1097,10 @@ impl Cpu {
     /// - - - -
     ///
     /// Decrement value in register r16 by 1.
-    fn decrement16(&mut self, value: u16) -> u16 {
+    fn decrement16(&mut self, src: R16) {
+        let value = self.registers.read16(src);
         let new_value = value.wrapping_sub(1);
-        new_value
+        self.registers.write16(src, new_value);
     }
 
     /// RLCA
@@ -1100,7 +1108,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A left.
-    fn rotate_left_circular_accumulator(&mut self) -> u8 {
+    fn rotate_left_circular_accumulator(&mut self) {
         let value = self.registers.a;
         let new_value = self.registers.a.rotate_left(1);
         self.registers.f.set(Flags::ZERO, false);
@@ -1108,7 +1116,7 @@ impl Cpu {
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// RLA
@@ -1116,7 +1124,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A left, through the carry flag.
-    fn rotate_left_accumulator(&mut self) -> u8 {
+    fn rotate_left_accumulator(&mut self) {
         let value = self.registers.a;
         let cf = self.registers.f.contains(Flags::CARRY) as u8;
         let new_value = (value << 1) | cf;
@@ -1125,7 +1133,7 @@ impl Cpu {
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// RRCA
@@ -1133,7 +1141,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A right.
-    fn rotate_right_circular_accumulator(&mut self) -> u8 {
+    fn rotate_right_circular_accumulator(&mut self) {
         let value = self.registers.a;
         let new_value = self.registers.a.rotate_right(1);
         self.registers.f.set(Flags::ZERO, false);
@@ -1141,7 +1149,7 @@ impl Cpu {
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// RRA
@@ -1149,7 +1157,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A right, through the carry flag.
-    fn rotate_right_accumulator(&mut self) -> u8 {
+    fn rotate_right_accumulator(&mut self) {
         let value = self.registers.a;
         let cf = self.registers.f.contains(Flags::CARRY) as u8;
         let new_value = (value >> 1) | (cf << 7);
@@ -1158,7 +1166,7 @@ impl Cpu {
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.registers.a = new_value;
     }
 
     /// SCF
@@ -1178,13 +1186,13 @@ impl Cpu {
     /// - 1 1 -
     ///
     /// Flip the bits in register A.
-    fn complement(&mut self) -> u8 {
+    fn complement(&mut self) {
         let value = self.registers.a;
         // ZERO left untouched
         self.registers.f.set(Flags::SUBTRACT, true);
         self.registers.f.set(Flags::HALF_CARRY, true);
         // CARRY left untouched
-        !value
+        self.registers.a = !value;
     }
 
     /// CCF
@@ -1205,14 +1213,19 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Rotate register r8 left.
-    fn rotate_left_circular(&mut self, value: u8) -> u8 {
+    fn rotate_left_circular<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value.rotate_left(1);
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// RRC r8
@@ -1220,14 +1233,19 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Rotate register r8 right.
-    fn rotate_right_circular(&mut self, value: u8) -> u8 {
+    fn rotate_right_circular<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value.rotate_right(1);
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// RL r8
@@ -1235,7 +1253,12 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Rotate bits in register r8 left, through the carry flag.
-    fn rotate_left(&mut self, value: u8) -> u8 {
+    fn rotate_left<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let cf = self.registers.f.contains(Flags::CARRY) as u8;
         let new_value = (value << 1) | cf;
         self.registers.f.set(Flags::ZERO, new_value == 0);
@@ -1243,7 +1266,7 @@ impl Cpu {
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// RR r8
@@ -1251,7 +1274,12 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Rotate register r8 right, through the carry flag.
-    fn rotate_right(&mut self, value: u8) -> u8 {
+    fn rotate_right<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let cf = self.registers.f.contains(Flags::CARRY) as u8;
         let new_value = (value >> 1) | (cf << 7);
         self.registers.f.set(Flags::ZERO, new_value == 0);
@@ -1259,7 +1287,7 @@ impl Cpu {
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// SLA r8
@@ -1267,14 +1295,19 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Shift Left Arithmetically register r8.
-    fn shift_left_arithmetic(&mut self, value: u8) -> u8 {
+    fn shift_left_arithmetic<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value << 1;
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// SRA r8
@@ -1282,14 +1315,19 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Shift Right Arithmetically register r8 (bit 7 of r8 is unchanged).
-    fn shift_right_arithmetic(&mut self, value: u8) -> u8 {
+    fn shift_right_arithmetic<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = (value >> 1) | (value & 0x80);
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// SWAP r8
@@ -1297,13 +1335,19 @@ impl Cpu {
     /// Z 0 0 0
     ///
     /// Swap the upper 4 bits in register r8 and the lower 4 ones.
-    fn swap(&mut self, value: u8) -> u8 {
-        let new_value = (value >> 4) | (value << 4);
+    fn swap<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
+        // Rotating by 4 swaps the upper bits with the lower bits
+        let new_value = value.rotate_left(4);
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         self.registers.f.set(Flags::HALF_CARRY, false);
         self.registers.f.set(Flags::CARRY, false);
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// SRL r8
@@ -1311,14 +1355,19 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Shift Right Logically register r8.
-    fn shift_right_logical(&mut self, value: u8) -> u8 {
+    fn shift_right_logical<T>(&mut self, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value >> 1;
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
         self.registers.f.set(Flags::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(Flags::CARRY, carry);
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// BIT u3, r8
@@ -1326,7 +1375,11 @@ impl Cpu {
     /// Z 0 1 -
     ///
     /// Test bit u3 in register r8, set the zero flag if bit not set.
-    fn bit_test(&mut self, bit: u8, value: u8) {
+    fn bit_test<T>(&mut self, bit: u8, src: T)
+    where
+        Self: ReadByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value & (1 << bit);
         self.registers.f.set(Flags::ZERO, new_value == 0);
         self.registers.f.set(Flags::SUBTRACT, false);
@@ -1339,10 +1392,15 @@ impl Cpu {
     /// - - - -
     ///
     /// Set bit u3 in register r8 to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
-    fn bit_reset(&mut self, bit: u8, value: u8) -> u8 {
+    fn bit_reset<T>(&mut self, bit: u8, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value & !(1 << bit);
         // Flags left untouched
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// SET u3, r8
@@ -1350,10 +1408,15 @@ impl Cpu {
     /// - - - -
     ///
     /// Set bit u3 in register r8 to 1. Bit 0 is the rightmost one, bit 7 the leftmost one.
-    fn bit_set(&mut self, bit: u8, value: u8) -> u8 {
+    fn bit_set<T>(&mut self, bit: u8, src: T)
+    where
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
+    {
+        let value = self.read_byte(src);
         let new_value = value | (1 << bit);
         // Flags left untouched
-        new_value
+        self.write_byte(src, new_value);
     }
 
     /// JP HL
@@ -1361,8 +1424,8 @@ impl Cpu {
     /// - - - -
     ///
     /// Jump to address in HL; effectively, load PC with value in register HL.
-    fn jump_to_hl(&mut self, address: u16) -> u16 {
-        address
+    fn jump_to_hl(&mut self) {
+        self.registers.pc = self.registers.read16(R16::HL);
     }
 
     /// JP cc, n16
@@ -1370,17 +1433,11 @@ impl Cpu {
     /// - - - -
     ///
     /// Jump to address n16 if condition cc is met.
-    fn jump(&self, should_jump: bool) -> u16 {
+    fn jump(&mut self, condition: JumpCondition) {
+        let should_jump = self.registers.f.test(condition);
+        let address = self.read_next_word();
         if should_jump {
-            // Gameboy is little endian, so read the second byte as the most significant byte
-            // and the first as the least significant
-            let lsb = self.bus.read_byte(self.registers.pc + 1);
-            let msb = self.bus.read_byte(self.registers.pc + 2);
-            u16::from_le_bytes([lsb, msb])
-        } else {
-            // If it's not jumping we still need to move the program counter forward by 3 since the
-            // jump instruction is 3 bytes wide (1 byte for the opcode and 2 bytes for the address)
-            self.registers.pc.wrapping_add(3)
+            self.registers.pc = address;
         }
     }
 
@@ -1389,12 +1446,11 @@ impl Cpu {
     /// - - - -
     ///
     /// Relative Jump to current address plus e8 offset if condition cc is met.
-    fn jump_relative(&self, should_jump: bool) -> u16 {
+    fn jump_relative(&mut self, condition: JumpCondition) {
+        let should_jump = self.registers.f.test(condition);
+        let offset = self.read_next_byte() as i16;
         if should_jump {
-            let offset = self.bus.read_byte(self.registers.pc + 1) as i16;
-            self.registers.pc.wrapping_add_signed(offset)
-        } else {
-            self.registers.pc.wrapping_add(2)
+            self.registers.pc = self.registers.pc.wrapping_add_signed(offset);
         }
     }
 
@@ -1403,7 +1459,8 @@ impl Cpu {
     /// - - - -
     ///
     /// Push register r16 into the stack.
-    fn push(&mut self, value: u16) {
+    fn push(&mut self, register: R16) {
+        let value = self.registers.read16(register);
         self.registers.sp = self.registers.sp.wrapping_sub(1);
         self.bus
             .write_byte(self.registers.sp, ((value & 0xFF00) >> 8) as u8);
@@ -1419,14 +1476,15 @@ impl Cpu {
     /// Pop register r16 from the stack.
     ///
     /// NOTE: POP AF affects all flags.
-    fn pop(&mut self) -> u16 {
+    fn pop(&mut self, register: R16) {
         let lsb = self.bus.read_byte(self.registers.sp) as u16;
         self.registers.sp = self.registers.sp.wrapping_add(1);
 
         let msb = self.bus.read_byte(self.registers.sp) as u16;
         self.registers.sp = self.registers.sp.wrapping_add(1);
 
-        (msb << 8) | lsb
+        let value = (msb << 8) | lsb;
+        self.registers.write16(register, value);
     }
 
     /// CALL cc, n16
@@ -1434,13 +1492,12 @@ impl Cpu {
     /// - - - -
     ///
     /// Call address n16 if condition cc is met.
-    fn call(&mut self, should_jump: bool) -> u16 {
-        let next = self.registers.pc.wrapping_add(3);
+    fn call(&mut self, condition: JumpCondition) {
+        let should_jump = self.registers.f.test(condition);
+        let address = self.read_next_word();
         if should_jump {
-            self.push(next);
-            self.jump(should_jump)
-        } else {
-            next
+            self.push(R16::PC);
+            self.registers.pc = address;
         }
     }
 
@@ -1449,11 +1506,10 @@ impl Cpu {
     /// - - - -
     ///
     /// Return from subroutine if condition cc is met.
-    fn returns(&mut self, should_jump: bool) -> u16 {
+    fn returns(&mut self, condition: JumpCondition) {
+        let should_jump = self.registers.f.test(condition);
         if should_jump {
-            self.pop()
-        } else {
-            self.registers.pc.wrapping_add(1)
+            self.pop(R16::PC);
         }
     }
 
@@ -1463,10 +1519,9 @@ impl Cpu {
     ///
     /// Return from subroutine and enable interrupts.
     /// This is basically equivalent to executing EI then RET, meaning that IME is set right after this instruction.
-    fn return_from_interrupt_handler(&mut self) -> u16 {
-        let value = self.returns(true);
+    fn return_from_interrupt_handler(&mut self) {
+        self.returns(JumpCondition::Always);
         self.ime = true;
-        value
     }
 
     /// DI
