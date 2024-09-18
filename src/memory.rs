@@ -1,12 +1,13 @@
 #[derive(Clone)]
 pub struct MemoryBus {
-    memory: [u8; 0xFFFF],
+    memory: [u8; 0xFFFF + 1],
 }
 
 impl MemoryBus {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
-            memory: [0; 0xFFFF],
+            memory: [0; 0xFFFF + 1],
         }
     }
 

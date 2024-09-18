@@ -64,7 +64,7 @@ impl Cpu {
     pub(crate) fn load16_a16_sp(&mut self) {
         let value = self.registers.sp;
         let addr = self.read_next_word();
-        self.bus.write_byte(addr, value as u8);
+        self.bus.write_byte(addr, (value & 0xFF) as u8);
         self.bus
             .write_byte(addr.wrapping_add(1), (value >> 8) as u8);
     }
@@ -86,7 +86,7 @@ impl Cpu {
         let carry = (sp & 0xFF).wrapping_add_signed(offset as i16 & 0xFF) > 0xFF;
         self.registers.f.set(Flags::CARRY, carry);
         let new_value = sp.wrapping_add_signed(offset as i16);
-        self.registers.write16(R16::HL, new_value);
+        self.registers.write_word(R16::HL, new_value);
     }
 
     /// ADD A, r8
@@ -295,8 +295,8 @@ impl Cpu {
     ///
     /// Add the value in r16 to register HL.
     pub(crate) fn add16_hl(&mut self, src: R16) {
-        let value = self.registers.read16(src);
-        let hl = self.registers.read16(R16::HL);
+        let value = self.registers.read_word(src);
+        let hl = self.registers.read_word(R16::HL);
         let (new_value, did_overflow) = hl.overflowing_add(value);
         // ZERO is left untouched
         self.registers.f.set(Flags::SUBTRACT, false);
@@ -305,7 +305,7 @@ impl Cpu {
         // Bits are labeled from 0-15 from least to most significant.
         let half_carry = (hl & 0xFFF) + (value & 0xFFF) > 0xFFF;
         self.registers.f.set(Flags::HALF_CARRY, half_carry);
-        self.registers.write16(R16::HL, new_value);
+        self.registers.write_word(R16::HL, new_value);
     }
 
     /// ADD SP, e8
@@ -334,9 +334,9 @@ impl Cpu {
     ///
     /// Increment value in register r16 by 1.
     pub(crate) fn increment16(&mut self, src: R16) {
-        let value = self.registers.read16(src);
+        let value = self.registers.read_word(src);
         let new_value = value.wrapping_add(1);
-        self.registers.write16(src, new_value);
+        self.registers.write_word(src, new_value);
     }
 
     /// DEC r16
@@ -345,9 +345,9 @@ impl Cpu {
     ///
     /// Decrement value in register r16 by 1.
     pub(crate) fn decrement16(&mut self, src: R16) {
-        let value = self.registers.read16(src);
+        let value = self.registers.read_word(src);
         let new_value = value.wrapping_sub(1);
-        self.registers.write16(src, new_value);
+        self.registers.write_word(src, new_value);
     }
 
     /// RLCA
@@ -467,21 +467,21 @@ impl Cpu {
         let hf = self.registers.f.contains(Flags::HALF_CARRY);
         let mut cf = self.registers.f.contains(Flags::CARRY);
 
-        if !nf {
+        if nf {
+            // After a subtraction, only adjust if (half-)carry occurred
+            if cf {
+                value = value.wrapping_sub(0x60);
+            }
+            if hf {
+                value = value.wrapping_sub(0x06);
+            }
+        } else {
             // After an addition, adjust if (half-)carry occurred or if out of bounds
             if cf || value > 0x99 {
                 value = value.wrapping_add(0x60);
                 cf = true;
             }
             if hf || (value & 0x0F) > 0x09 {
-                value = value.wrapping_sub(0x06);
-            }
-        } else {
-            // After a subtraction, only adjust if (half-)carry occurred
-            if cf {
-                value = value.wrapping_sub(0x60);
-            }
-            if hf {
                 value = value.wrapping_sub(0x06);
             }
         }
@@ -709,7 +709,7 @@ impl Cpu {
     ///
     /// Jump to address in HL; effectively, load PC with value in register HL.
     pub(crate) fn jump_to_hl(&mut self) {
-        self.registers.pc = self.registers.read16(R16::HL);
+        self.registers.pc = self.registers.read_word(R16::HL);
     }
 
     /// JP cc, n16
@@ -744,7 +744,7 @@ impl Cpu {
     ///
     /// Push register r16 into the stack.
     pub(crate) fn push(&mut self, register: R16) {
-        let value = self.registers.read16(register);
+        let value = self.registers.read_word(register);
         self.registers.sp = self.registers.sp.wrapping_sub(1);
         self.bus
             .write_byte(self.registers.sp, ((value & 0xFF00) >> 8) as u8);
@@ -768,7 +768,7 @@ impl Cpu {
         self.registers.sp = self.registers.sp.wrapping_add(1);
 
         let value = (msb << 8) | lsb;
-        self.registers.write16(register, value);
+        self.registers.write_word(register, value);
     }
 
     /// CALL cc, n16

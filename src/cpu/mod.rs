@@ -1,4 +1,5 @@
 mod instructions;
+#[allow(clippy::too_many_lines)]
 mod optables;
 
 use crate::memory::MemoryBus;
@@ -38,7 +39,7 @@ impl Registers {
         }
     }
 
-    const fn read(&self, register: R8) -> u8 {
+    const fn read_byte(&self, register: R8) -> u8 {
         match register {
             R8::A => self.a,
             R8::B => self.b,
@@ -50,7 +51,7 @@ impl Registers {
         }
     }
 
-    fn write(&mut self, register: R8, value: u8) {
+    fn write_byte(&mut self, register: R8, value: u8) {
         match register {
             R8::A => self.a = value,
             R8::B => self.b = value,
@@ -62,7 +63,7 @@ impl Registers {
         }
     }
 
-    const fn read16(&self, register: R16) -> u16 {
+    const fn read_word(&self, register: R16) -> u16 {
         match register {
             R16::AF => (self.a as u16) << 8 | self.f.bits() as u16,
             R16::BC => (self.b as u16) << 8 | self.c as u16,
@@ -73,11 +74,11 @@ impl Registers {
         }
     }
 
-    fn write16(&mut self, register: R16, value: u16) {
+    fn write_word(&mut self, register: R16, value: u16) {
         match register {
             R16::AF => {
                 self.a = (value >> 8) as u8;
-                self.f = Flags::from_bits_truncate(value as u8);
+                self.f = Flags::from_bits_truncate((value & 0xFF) as u8);
             }
             R16::BC => {
                 self.b = (value >> 8) as u8;
@@ -177,7 +178,7 @@ pub(crate) trait ReadByte<S> {
 
 impl ReadByte<R8> for Cpu {
     fn read_byte(&mut self, src: R8) -> u8 {
-        self.registers.read(src)
+        self.registers.read_byte(src)
     }
 }
 
@@ -185,27 +186,27 @@ impl ReadByte<Addr> for Cpu {
     fn read_byte(&mut self, src: Addr) -> u8 {
         match src {
             Addr::BC => {
-                let address = self.registers.read16(R16::BC);
+                let address = self.registers.read_word(R16::BC);
                 self.bus.read_byte(address)
             }
             Addr::DE => {
-                let address = self.registers.read16(R16::DE);
+                let address = self.registers.read_word(R16::DE);
                 self.bus.read_byte(address)
             }
             Addr::HL => {
-                let address = self.registers.read16(R16::HL);
+                let address = self.registers.read_word(R16::HL);
                 self.bus.read_byte(address)
             }
             Addr::HLi => {
-                let address = self.registers.read16(R16::HL);
+                let address = self.registers.read_word(R16::HL);
                 let new_address = address.wrapping_add(1);
-                self.registers.write16(R16::HL, new_address);
+                self.registers.write_word(R16::HL, new_address);
                 self.bus.read_byte(address)
             }
             Addr::HLd => {
-                let address = self.registers.read16(R16::HL);
+                let address = self.registers.read_word(R16::HL);
                 let new_address = address.wrapping_sub(1);
-                self.registers.write16(R16::HL, new_address);
+                self.registers.write_word(R16::HL, new_address);
                 self.bus.read_byte(address)
             }
             Addr::N16 => {
@@ -220,7 +221,7 @@ impl ReadByte<HighAddr> for Cpu {
     fn read_byte(&mut self, src: HighAddr) -> u8 {
         match src {
             HighAddr::C => {
-                let address = self.registers.read(R8::C) as u16;
+                let address = self.registers.read_byte(R8::C) as u16;
                 self.bus.read_byte(0xFF00 + address)
             }
             HighAddr::N8 => {
@@ -243,7 +244,7 @@ pub(crate) trait WriteByte<T> {
 
 impl WriteByte<R8> for Cpu {
     fn write_byte(&mut self, target: R8, value: u8) {
-        self.registers.write(target, value);
+        self.registers.write_byte(target, value);
     }
 }
 
@@ -251,27 +252,27 @@ impl WriteByte<Addr> for Cpu {
     fn write_byte(&mut self, target: Addr, value: u8) {
         match target {
             Addr::BC => {
-                let address = self.registers.read16(R16::BC);
+                let address = self.registers.read_word(R16::BC);
                 self.bus.write_byte(address, value);
             }
             Addr::DE => {
-                let address = self.registers.read16(R16::DE);
+                let address = self.registers.read_word(R16::DE);
                 self.bus.write_byte(address, value);
             }
             Addr::HL => {
-                let address = self.registers.read16(R16::HL);
+                let address = self.registers.read_word(R16::HL);
                 self.bus.write_byte(address, value);
             }
             Addr::HLi => {
-                let address = self.registers.read16(R16::HL);
+                let address = self.registers.read_word(R16::HL);
                 let new_address = address.wrapping_add(1);
-                self.registers.write16(R16::HL, new_address);
+                self.registers.write_word(R16::HL, new_address);
                 self.bus.write_byte(address, value);
             }
             Addr::HLd => {
-                let address = self.registers.read16(R16::HL);
+                let address = self.registers.read_word(R16::HL);
                 let new_address = address.wrapping_sub(1);
-                self.registers.write16(R16::HL, new_address);
+                self.registers.write_word(R16::HL, new_address);
                 self.bus.write_byte(address, value);
             }
             Addr::N16 => {
@@ -286,7 +287,7 @@ impl WriteByte<HighAddr> for Cpu {
     fn write_byte(&mut self, target: HighAddr, value: u8) {
         match target {
             HighAddr::C => {
-                let address = self.registers.read(R8::C) as u16;
+                let address = self.registers.read_byte(R8::C) as u16;
                 self.bus.write_byte(0xFF00 + address, value);
             }
             HighAddr::N8 => {
@@ -303,7 +304,7 @@ pub(crate) trait ReadWord<S> {
 
 impl ReadWord<R16> for Cpu {
     fn read_word(&mut self, src: R16) -> u16 {
-        self.registers.read16(src)
+        self.registers.read_word(src)
     }
 }
 
@@ -319,7 +320,7 @@ pub(crate) trait WriteWord<T> {
 
 impl WriteWord<R16> for Cpu {
     fn write_word(&mut self, target: R16, value: u16) {
-        self.registers.write16(target, value);
+        self.registers.write_word(target, value);
     }
 }
 
@@ -340,6 +341,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             registers: Registers::new(),
