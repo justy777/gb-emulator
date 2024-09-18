@@ -14,7 +14,7 @@ pub struct Registers {
     d: u8,
     e: u8,
     /// Flags Register
-    f: Flags,
+    f: RegisterFlags,
     h: u8,
     l: u8,
     /// Stack Pointer
@@ -31,7 +31,7 @@ impl Registers {
             c: 0,
             d: 0,
             e: 0,
-            f: Flags::empty(),
+            f: RegisterFlags::empty(),
             h: 0,
             l: 0,
             sp: 0,
@@ -78,7 +78,7 @@ impl Registers {
         match register {
             R16::AF => {
                 self.a = (value >> 8) as u8;
-                self.f = Flags::from_bits_truncate((value & 0xFF) as u8);
+                self.f = RegisterFlags::from_bits_truncate((value & 0xFF) as u8);
             }
             R16::BC => {
                 self.b = (value >> 8) as u8;
@@ -105,7 +105,7 @@ impl Registers {
 bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy)]
-    struct Flags: u8 {
+    struct RegisterFlags: u8 {
         const ZERO = 0b1000_0000;
         const SUBTRACT = 0b0100_0000;
         const HALF_CARRY = 0b0010_0000;
@@ -113,7 +113,7 @@ bitflags! {
     }
 }
 
-impl Flags {
+impl RegisterFlags {
     const fn test(self, condition: JumpCondition) -> bool {
         match condition {
             JumpCondition::NotZero => !self.contains(Self::ZERO),
