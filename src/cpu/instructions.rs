@@ -105,12 +105,12 @@ impl Cpu {
         let (new_value, did_overflow) = a.overflowing_add(value);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
-        self.registers.f.set(RegisterFlags::CARRY, did_overflow);
         // Half carry is set if adding the lower bits (0-3) of the value and register A
         // together result in overflowing to bit 4. If the result is larger than 0xF
         // than the addition caused a carry from bit 3 to bit 4.
         let half_carry = (a & 0xF) + (value & 0xF) > 0xF;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
+        self.registers.f.set(RegisterFlags::CARRY, did_overflow);
         self.registers.a = new_value;
     }
 
@@ -129,10 +129,10 @@ impl Cpu {
         let new_value = a.wrapping_add(value).wrapping_add(cf);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
-        let carry = a as u16 + value as u16 + cf as u16 > 0xFF;
-        self.registers.f.set(RegisterFlags::CARRY, carry);
         let half_carry = (a & 0xF) + (value & 0xF) + cf > 0xF;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
+        let carry = a as u16 + value as u16 + cf as u16 > 0xFF;
+        self.registers.f.set(RegisterFlags::CARRY, carry);
         self.registers.a = new_value;
     }
 
@@ -150,9 +150,9 @@ impl Cpu {
         let (new_value, did_overflow) = a.overflowing_sub(value);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, true);
-        self.registers.f.set(RegisterFlags::CARRY, did_overflow);
         let half_carry = (a & 0xF) < (value & 0xF);
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
+        self.registers.f.set(RegisterFlags::CARRY, did_overflow);
         self.registers.a = new_value;
     }
 
@@ -171,10 +171,10 @@ impl Cpu {
         let new_value = a.wrapping_sub(value).wrapping_sub(cf);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, true);
-        let carry = (a as u16) < (value as u16) + (cf as u16);
-        self.registers.f.set(RegisterFlags::CARRY, carry);
         let half_carry = (a & 0xF) < (value & 0xF) + cf;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
+        let carry = (a as u16) < (value as u16) + (cf as u16);
+        self.registers.f.set(RegisterFlags::CARRY, carry);
         self.registers.a = new_value;
     }
 
@@ -246,9 +246,9 @@ impl Cpu {
         let (new_value, did_overflow) = a.overflowing_sub(value);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, true);
-        self.registers.f.set(RegisterFlags::CARRY, did_overflow);
         let half_carry = (a & 0xF) < (value & 0xF);
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
+        self.registers.f.set(RegisterFlags::CARRY, did_overflow);
     }
 
     /// INC r8
@@ -302,11 +302,11 @@ impl Cpu {
         let (new_value, did_overflow) = hl.overflowing_add(value);
         // ZERO is left untouched
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
-        self.registers.f.set(RegisterFlags::CARRY, did_overflow);
         // Half-carry from bit 11, carry from bit 15
         // Bits are labeled from 0-15 from least to most significant.
         let half_carry = (hl & 0xFFF) + (value & 0xFFF) > 0xFFF;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
+        self.registers.f.set(RegisterFlags::CARRY, did_overflow);
         self.registers.write_word(R16::HL, new_value);
     }
 
