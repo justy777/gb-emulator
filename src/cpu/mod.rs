@@ -361,6 +361,11 @@ impl Cpu {
         byte
     }
 
+    #[allow(clippy::cast_possible_wrap)]
+    fn read_next_byte_signed(&mut self) -> i8 {
+        self.read_next_byte() as i8
+    }
+
     fn read_next_word(&mut self) -> u16 {
         // Game Boy is little endian, so read the second byte as the most significant byte
         // and the first as the least significant

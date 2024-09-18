@@ -78,7 +78,7 @@ impl Cpu {
     /// Add the signed value e8 to SP and store the result in HL.
     pub(crate) fn load16_hl_sp(&mut self) {
         let sp = self.registers.sp;
-        let offset = self.read_next_byte() as i8;
+        let offset = self.read_next_byte_signed();
         self.registers.f.set(RegisterFlags::ZERO, false);
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
         // Half-carry from bit 3, carry from bit 7
@@ -316,7 +316,7 @@ impl Cpu {
     ///
     /// Add the signed value e8 to SP.
     pub(crate) fn add16_sp(&mut self) {
-        let offset = self.read_next_byte() as i8;
+        let offset = self.read_next_byte_signed();
         let sp = self.registers.sp;
         self.registers.f.set(RegisterFlags::ZERO, false);
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
@@ -734,7 +734,7 @@ impl Cpu {
     /// Relative Jump to current address plus e8 offset if condition cc is met.
     pub(crate) fn jump_relative(&mut self, condition: JumpCondition) {
         let should_jump = self.registers.f.test(condition);
-        let offset = self.read_next_byte() as i8;
+        let offset = self.read_next_byte_signed();
         if should_jump {
             self.registers.pc = self.registers.pc.wrapping_add_signed(offset as i16);
         }
