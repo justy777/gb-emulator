@@ -65,10 +65,10 @@ impl Registers {
 
     const fn read_word(&self, register: R16) -> u16 {
         match register {
-            R16::AF => (self.a as u16) << 8 | self.f.bits() as u16,
-            R16::BC => (self.b as u16) << 8 | self.c as u16,
-            R16::DE => (self.d as u16) << 8 | self.e as u16,
-            R16::HL => (self.h as u16) << 8 | self.l as u16,
+            R16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
+            R16::BC => u16::from_le_bytes([self.c, self.b]),
+            R16::DE => u16::from_le_bytes([self.e, self.d]),
+            R16::HL => u16::from_le_bytes([self.l, self.h]),
             R16::SP => self.sp,
             R16::PC => self.pc,
         }
@@ -77,20 +77,24 @@ impl Registers {
     fn write_word(&mut self, register: R16, value: u16) {
         match register {
             R16::AF => {
-                self.a = (value >> 8) as u8;
-                self.f = RegisterFlags::from_bits_truncate((value & 0xFF) as u8);
+                let [low, high] = value.to_le_bytes();
+                self.a = high;
+                self.f = RegisterFlags::from_bits_truncate(low);
             }
             R16::BC => {
-                self.b = (value >> 8) as u8;
-                self.c = (value & 0xFF) as u8;
+                let [low, high] = value.to_le_bytes();
+                self.b = high;
+                self.c = low;
             }
             R16::DE => {
-                self.d = (value >> 8) as u8;
-                self.e = (value & 0xFF) as u8;
+                let [low, high] = value.to_le_bytes();
+                self.d = high;
+                self.e = low;
             }
             R16::HL => {
-                self.h = (value >> 8) as u8;
-                self.l = (value & 0xFF) as u8;
+                let [low, high] = value.to_le_bytes();
+                self.h = high;
+                self.l = low;
             }
             R16::SP => {
                 self.sp = value;
@@ -369,11 +373,11 @@ impl Cpu {
     fn read_next_word(&mut self) -> u16 {
         // Game Boy is little endian, so read the second byte as the most significant byte
         // and the first as the least significant
-        let lsb = self.bus.read_byte(self.registers.pc);
+        let low = self.bus.read_byte(self.registers.pc);
         self.registers.pc = self.registers.pc.wrapping_add(1);
-        let msb = self.bus.read_byte(self.registers.pc);
+        let high = self.bus.read_byte(self.registers.pc);
         self.registers.pc = self.registers.pc.wrapping_add(1);
-        u16::from_le_bytes([lsb, msb])
+        u16::from_le_bytes([low, high])
     }
 }
 

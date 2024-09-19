@@ -65,10 +65,10 @@ impl Cpu {
     /// Load SP at address a16.
     pub(crate) fn load16_a16_sp(&mut self) {
         let value = self.registers.sp;
+        let [low, high] = value.to_le_bytes();
         let addr = self.read_next_word();
-        self.bus.write_byte(addr, (value & 0xFF) as u8);
-        self.bus
-            .write_byte(addr.wrapping_add(1), (value >> 8) as u8);
+        self.bus.write_byte(addr, low);
+        self.bus.write_byte(addr.wrapping_add(1), high);
     }
 
     /// LD HL, SP + e8
@@ -265,7 +265,7 @@ impl Cpu {
         let new_value = value.wrapping_add(1);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
-        let half_carry = (value & 0xF) == 0xF;
+        let half_carry = value.trailing_ones() >= 4;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
         // CARRY is left untouched
         self.write_byte(src, new_value);
@@ -285,7 +285,7 @@ impl Cpu {
         let new_value = value.wrapping_sub(1);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, true);
-        let half_carry = (value & 0xF) == 0;
+        let half_carry = value.trailing_zeros() >= 4;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
         // CARRY is left untouched
         self.write_byte(src, new_value);
@@ -747,12 +747,12 @@ impl Cpu {
     /// Push register r16 into the stack.
     pub(crate) fn push(&mut self, register: R16) {
         let value = self.registers.read_word(register);
+        let [low, high] = value.to_le_bytes();
         self.registers.sp = self.registers.sp.wrapping_sub(1);
-        self.bus
-            .write_byte(self.registers.sp, ((value & 0xFF00) >> 8) as u8);
+        self.bus.write_byte(self.registers.sp, high);
 
         self.registers.sp = self.registers.sp.wrapping_sub(1);
-        self.bus.write_byte(self.registers.sp, (value & 0xFF) as u8);
+        self.bus.write_byte(self.registers.sp, low);
     }
 
     /// POP r16
@@ -763,13 +763,13 @@ impl Cpu {
     ///
     /// NOTE: POP AF affects all flags.
     pub(crate) fn pop(&mut self, register: R16) {
-        let lsb = self.bus.read_byte(self.registers.sp) as u16;
+        let low = self.bus.read_byte(self.registers.sp);
         self.registers.sp = self.registers.sp.wrapping_add(1);
 
-        let msb = self.bus.read_byte(self.registers.sp) as u16;
+        let high = self.bus.read_byte(self.registers.sp);
         self.registers.sp = self.registers.sp.wrapping_add(1);
 
-        let value = (msb << 8) | lsb;
+        let value = u16::from_le_bytes([low, high]);
         self.registers.write_word(register, value);
     }
 
