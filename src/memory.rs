@@ -1,9 +1,9 @@
 #[derive(Clone)]
-pub struct MemoryBus {
+pub struct AddressBus {
     memory: [u8; 0xFFFF + 1],
 }
 
-impl MemoryBus {
+impl AddressBus {
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -20,7 +20,7 @@ impl MemoryBus {
     }
 }
 
-impl Default for MemoryBus {
+impl Default for AddressBus {
     fn default() -> Self {
         Self::new()
     }
