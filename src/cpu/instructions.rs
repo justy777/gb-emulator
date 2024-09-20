@@ -19,7 +19,8 @@ impl Cpu {
     /// - - - -
     ///
     /// Stop CPU & LCD display until button pressed.
-    pub(crate) fn stop(&self) {
+    pub(crate) fn stop(&mut self) {
+        let _ = self.read_next_byte();
         // TODO: implement stop method
     }
 
@@ -826,6 +827,7 @@ impl Cpu {
     ///
     /// Disable Interrupts by clearing the IME flag.
     pub(crate) fn disable_interrupt(&mut self) {
+        self.enable_irq = None;
         self.ime = false;
     }
 
@@ -836,7 +838,6 @@ impl Cpu {
     /// Enable Interrupts by setting the IME flag.
     /// The flag is only set after the instruction following EI.
     pub(crate) fn enable_interrupt(&mut self) {
-        self.step();
-        self.ime = true;
+        self.enable_irq = Some(2);
     }
 }

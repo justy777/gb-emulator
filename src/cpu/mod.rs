@@ -341,7 +341,10 @@ pub(crate) enum JumpCondition {
 pub struct Cpu {
     registers: Registers,
     bus: MemoryBus,
+    /// IME: Interrupt Master Enable
     ime: bool,
+    // Used to delay setting IME after calling EI
+    enable_irq: Option<i8>,
 }
 
 impl Cpu {
@@ -351,12 +354,20 @@ impl Cpu {
             registers: Registers::new(),
             bus: MemoryBus::new(),
             ime: false,
+            enable_irq: None,
         }
     }
 
     fn step(&mut self) {
         let instruction_byte = self.read_next_byte();
         self.execute(instruction_byte);
+
+        // Checks for next command after EI is called
+        self.enable_irq = self.enable_irq.map(|n| n - 1);
+        if self.enable_irq.is_some_and(|n| n == 0) {
+            self.ime = true;
+            self.enable_irq = None;
+        }
     }
 
     fn read_next_byte(&mut self) -> u8 {
