@@ -283,11 +283,11 @@ impl Cpu {
             0xFF => self.restart(memory, 0x38),
             // ---- Control
             //NOP
-            0x00 => self.no_operation(),
+            0x00 => Self::no_operation(),
             // STOP
             0x10 => self.stop(memory),
             // HALT
-            0x76 => self.halt(),
+            0x76 => Self::halt(memory),
             // PREFIX
             0xCB => {
                 let next_byte = self.read_next_byte(memory);

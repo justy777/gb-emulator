@@ -13,7 +13,7 @@ impl Cpu {
     /// - - - -
     ///
     /// Nothing happens.
-    pub(crate) fn no_operation(&self) {}
+    pub(crate) const fn no_operation() {}
 
     /// STOP n8
     /// 2 4
@@ -22,7 +22,14 @@ impl Cpu {
     /// Stop CPU & LCD display until button pressed.
     pub(crate) fn stop(&mut self, memory: &AddressBus) {
         let _ = self.read_next_byte(memory);
-        // TODO: implement stop method
+        loop {
+            // TODO: Add sleeping to save CPU usage
+            let joypad = memory.read_joypad();
+            if joypad & 0xF != 0xF {
+                break;
+            }
+        }
+        // TODO: look into strange stop behavior
     }
 
     /// HALT
@@ -30,8 +37,18 @@ impl Cpu {
     /// - - - -
     ///
     /// Halt CPU until an interrupt occurs.
-    pub(crate) fn halt(&self) {
-        // TODO: implement halt method
+    pub(crate) fn halt(memory: &AddressBus) {
+        loop {
+            // TODO: Add sleeping to save CPU usage
+            let interrupt_flag = memory.read_interrupt_flag();
+            let interrupt_enable = memory.read_interrupt_enable();
+            let interrupt_pending = interrupt_enable & interrupt_flag;
+
+            if !interrupt_pending.is_empty() {
+                break;
+            }
+        }
+        // TODO: Look into halt bug
     }
 
     /// LD r8, r8
