@@ -26,16 +26,17 @@ pub struct Registers {
 impl Registers {
     const fn new() -> Self {
         Self {
-            a: 0,
-            b: 0,
-            c: 0,
-            d: 0,
-            e: 0,
-            f: RegisterFlags::empty(),
-            h: 0,
-            l: 0,
-            sp: 0,
-            pc: 0,
+            a: 0x01,
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
+            // TODO: write checksum to set half-carry and carry
+            f: RegisterFlags::ZERO,
+            h: 0x01,
+            l: 0x4D,
+            sp: 0xFFFE,
+            pc: 0x100,
         }
     }
 
