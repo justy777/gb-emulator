@@ -356,7 +356,7 @@ impl Cpu {
         }
     }
 
-    fn step(&mut self, memory: &mut AddressBus) {
+    pub fn step(&mut self, memory: &mut AddressBus) {
         let instruction_byte = self.read_next_byte(memory);
         self.execute(memory, instruction_byte);
 
