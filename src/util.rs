@@ -46,20 +46,6 @@ impl Size {
     }
 }
 
-pub(crate) struct Bit {
-    val: usize,
-}
-
-impl Bit {
-    #[inline]
-    #[must_use]
-    pub(crate) const fn new(bit: usize) -> Self {
-        let val = 1 << bit;
-        Self { val }
-    }
-
-    #[allow(clippy::cast_possible_truncation)]
-    pub(crate) const fn as_u8(&self) -> u8 {
-        self.val as u8
-    }
+pub(crate) const fn bit(n: usize) -> u8 {
+    1 << n
 }

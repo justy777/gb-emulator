@@ -1,5 +1,5 @@
 use crate::cartridge::Cartridge;
-use crate::util::{Bit, Size};
+use crate::util::{bit, Size};
 use bitflags::bitflags;
 
 const MEM_JOYPAD: u16 = 0xFF00;
@@ -47,11 +47,11 @@ bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy)]
     pub(crate) struct InterruptFlags: u8 {
-        const VBLANK = Bit::new(0).as_u8();
-        const LCD = Bit::new(1).as_u8();
-        const TIMER = Bit::new(2).as_u8();
-        const SERIAL = Bit::new(3).as_u8();
-        const JOYPAD = Bit::new(4).as_u8();
+        const VBLANK = bit(0);
+        const LCD = bit(1);
+        const TIMER = bit(2);
+        const SERIAL = bit(3);
+        const JOYPAD = bit(4);
     }
 }
 
@@ -105,15 +105,15 @@ impl AddressBus {
                 let offset = (address - 0xFE00) as usize;
                 self.object_attribute_memory[offset]
             }
-            0xFF00..=0xFF7F => {
-                self.io_registers.read_byte(address)
-            }
+            0xFF00..=0xFF7F => self.io_registers.read_byte(address),
             0xFF80..=0xFFFE => {
                 let offset = (address - 0xFF80) as usize;
                 self.high_ram[offset]
             }
             MEM_IRQ_ENABLE => self.interrupt_enable.bits(),
-            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => panic!("Use of this area is prohibited {address:#X}"),
+            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
+                panic!("Use of this area is prohibited {address:#X}")
+            }
         }
     }
 
@@ -144,7 +144,9 @@ impl AddressBus {
                 self.high_ram[offset] = value;
             }
             MEM_IRQ_ENABLE => self.interrupt_enable = InterruptFlags::from_bits_truncate(value),
-            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => panic!("Use of this area is prohibited {address:#X}"),
+            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
+                panic!("Use of this area is prohibited {address:#X}")
+            }
         }
     }
 

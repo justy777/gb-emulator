@@ -3,15 +3,14 @@ mod instructions;
 mod optables;
 
 use crate::memory::{AddressBus, InterruptFlags};
+use crate::util::bit;
 use bitflags::bitflags;
-use crate::util::Bit;
 
 const PC_VBLANK_HANDLER: u16 = 0x40;
 const PC_LCD_HANDLER: u16 = 0x48;
 const PC_TIMER_HANDLER: u16 = 0x50;
 const PC_SERIAL_HANDLER: u16 = 0x58;
 const PC_JOYPAD_HANDLER: u16 = 0x60;
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct Registers {
@@ -119,10 +118,10 @@ bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy)]
     struct RegisterFlags: u8 {
-        const ZERO = Bit::new(7).as_u8();
-        const SUBTRACT = Bit::new(6).as_u8();
-        const HALF_CARRY = Bit::new(5).as_u8();
-        const CARRY = Bit::new(4).as_u8();
+        const ZERO = bit(7);
+        const SUBTRACT = bit(6);
+        const HALF_CARRY = bit(5);
+        const CARRY = bit(4);
     }
 }
 
