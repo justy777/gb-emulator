@@ -85,9 +85,9 @@ impl Cpu {
     pub(crate) fn load16_a16_sp(&mut self, memory: &mut AddressBus) {
         let value = self.registers.sp;
         let [low, high] = value.to_le_bytes();
-        let addr = self.read_next_word(memory);
-        memory.write_byte(addr, low);
-        memory.write_byte(addr.wrapping_add(1), high);
+        let address = self.read_next_word(memory);
+        memory.write_byte(address, low);
+        memory.write_byte(address.wrapping_add(1), high);
     }
 
     /// LD HL, SP + e8
@@ -834,9 +834,9 @@ impl Cpu {
     /// - - - -
     ///
     /// Push current address onto stack, and jump to address u8.
-    pub(crate) fn restart(&mut self, memory: &mut AddressBus, addr: u8) {
+    pub(crate) fn restart(&mut self, memory: &mut AddressBus, address: u16) {
         self.push(memory, R16::PC);
-        self.registers.sp = addr as u16;
+        self.registers.sp = address;
     }
 
     /// DI
