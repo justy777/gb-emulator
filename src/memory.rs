@@ -1,13 +1,13 @@
 use crate::cartridge::Cartridge;
-use crate::util::{bit, Size};
+use crate::util::{bit, DataSize};
 use bitflags::bitflags;
 
 const MEM_JOYPAD: u16 = 0xFF00;
-const MEM_IRQ_FLAG: u16 = 0xFF0F;
-const MEM_IRQ_ENABLE: u16 = 0xFFFF;
+const MEM_INTERRUPT_FLAG: u16 = 0xFF0F;
+const MEM_INTERRUPT_ENABLE: u16 = 0xFFFF;
 
-const VIDEO_RAM_SIZE: Size = Size::from_kilobytes(8);
-const WORK_RAM_SIZE: Size = Size::from_kilobytes(8);
+const VIDEO_RAM_SIZE: DataSize = DataSize::from_kilobytes(8);
+const WORK_RAM_SIZE: DataSize = DataSize::from_kilobytes(8);
 const OBJECT_ATTRIBUTE_MEMORY_SIZE: usize = 0xFE9F - 0xFE00 + 1;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 
@@ -29,16 +29,16 @@ impl IORegisters {
     fn read_byte(&self, address: u16) -> u8 {
         match address {
             MEM_JOYPAD => self.joypad,
-            MEM_IRQ_FLAG => self.interrupt_flag.bits(),
-            _ => panic!("Register is not mapped {address:X}"),
+            MEM_INTERRUPT_FLAG => self.interrupt_flag.bits(),
+            _ => panic!("IO register is not mapped {address:#X}"),
         }
     }
 
     fn write_byte(&mut self, address: u16, value: u8) {
         match address {
             MEM_JOYPAD => self.joypad = value,
-            MEM_IRQ_FLAG => self.interrupt_flag = InterruptFlags::from_bits_truncate(value),
-            _ => panic!("Register is not mapped {address:X}"),
+            MEM_INTERRUPT_FLAG => self.interrupt_flag = InterruptFlags::from_bits_truncate(value),
+            _ => panic!("IO register is not mapped {address:#X}"),
         }
     }
 }
@@ -110,7 +110,7 @@ impl AddressBus {
                 let offset = (address - 0xFF80) as usize;
                 self.high_ram[offset]
             }
-            MEM_IRQ_ENABLE => self.interrupt_enable.bits(),
+            MEM_INTERRUPT_ENABLE => self.interrupt_enable.bits(),
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
                 panic!("Use of this area is prohibited {address:#X}")
             }
@@ -143,7 +143,9 @@ impl AddressBus {
                 let offset = (address - 0xFF80) as usize;
                 self.high_ram[offset] = value;
             }
-            MEM_IRQ_ENABLE => self.interrupt_enable = InterruptFlags::from_bits_truncate(value),
+            MEM_INTERRUPT_ENABLE => {
+                self.interrupt_enable = InterruptFlags::from_bits_truncate(value);
+            }
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
                 panic!("Use of this area is prohibited {address:#X}")
             }
@@ -155,12 +157,12 @@ impl AddressBus {
     }
 
     pub(crate) fn read_interrupt_flag(&self) -> InterruptFlags {
-        let byte = self.read_byte(MEM_IRQ_FLAG);
+        let byte = self.read_byte(MEM_INTERRUPT_FLAG);
         InterruptFlags::from_bits_truncate(byte)
     }
 
     pub(crate) fn write_interrupt_flag(&mut self, value: InterruptFlags) {
-        self.write_byte(MEM_IRQ_FLAG, value.bits());
+        self.write_byte(MEM_INTERRUPT_FLAG, value.bits());
     }
 
     pub(crate) const fn read_interrupt_enable(&self) -> InterruptFlags {

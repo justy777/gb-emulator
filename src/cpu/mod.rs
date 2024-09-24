@@ -13,7 +13,7 @@ const PC_SERIAL_HANDLER: u16 = 0x58;
 const PC_JOYPAD_HANDLER: u16 = 0x60;
 
 #[derive(Debug, Clone, Copy)]
-pub struct Registers {
+pub(crate) struct Registers {
     /// Accumulator
     a: u8,
     b: u8,
