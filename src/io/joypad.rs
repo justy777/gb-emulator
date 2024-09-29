@@ -83,7 +83,7 @@ impl Joypad {
 
 #[cfg(test)]
 mod tests {
-    use crate::joypad::{Button, Joypad};
+    use crate::io::joypad::{Button, Joypad};
 
     #[test]
     fn press_buttons() {

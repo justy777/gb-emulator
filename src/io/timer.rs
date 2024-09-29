@@ -3,6 +3,11 @@ use crate::error::TryFromUintError;
 use crate::util::bit;
 use bitflags::bitflags;
 
+const MEM_DIVIDER_REGISTER: u16 = 0xFF04;
+const MEM_TIMER_COUNTER: u16 = 0xFF05;
+const MEM_TIMER_MODULO: u16 = 0xFF06;
+const MEM_TIMER_CONTROL: u16 = 0xFF07;
+
 // Measured in Hz
 const CLOCK_SPEED: u32 = 4_194_304;
 
@@ -18,13 +23,13 @@ bitflags! {
 #[derive(Debug, Clone, Copy)]
 pub struct Timer {
     // DIV
-    pub divider: u8,
+    divider: u8,
     // TIMA
-    pub counter: u8,
+    counter: u8,
     // TMA
-    pub modulo: u8,
+    modulo: u8,
     // TAC
-    pub control: TimerControl,
+    control: TimerControl,
     // TODO: implement cycles and ticks
 }
 
@@ -35,6 +40,26 @@ impl Timer {
             counter: 0,
             modulo: 0,
             control: TimerControl::empty(),
+        }
+    }
+
+    pub const fn read_byte(self, address: u16) -> u8 {
+        match address {
+            MEM_DIVIDER_REGISTER => self.divider,
+            MEM_TIMER_COUNTER => self.counter,
+            MEM_TIMER_MODULO => self.modulo,
+            MEM_TIMER_CONTROL => self.control.bits(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn write_byte(&mut self, address: u16, value: u8) {
+        match address {
+            MEM_DIVIDER_REGISTER => self.divider = value,
+            MEM_TIMER_COUNTER => self.counter = value,
+            MEM_TIMER_MODULO => self.modulo = value,
+            MEM_TIMER_CONTROL => self.control = TimerControl::from_bits_truncate(value),
+            _ => unreachable!(),
         }
     }
 }

@@ -2,7 +2,8 @@ mod instructions;
 #[allow(clippy::too_many_lines)]
 mod optables;
 
-use crate::memory::{AddressBus, InterruptFlags};
+use crate::io::interrupts::InterruptFlags;
+use crate::memory::AddressBus;
 use crate::util::bit;
 use bitflags::bitflags;
 
