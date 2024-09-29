@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt::Display;
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone, Copy)]
 pub struct TryFromUintError(pub(crate) ());
 
