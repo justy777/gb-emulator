@@ -247,6 +247,19 @@ pub const fn bit(n: usize) -> u8 {
     1 << n
 }
 
+#[macro_export]
+macro_rules! bits {
+    ($( $n:expr),* ) => {
+        {
+            let mut val = 0;
+            $(
+                val ^= 1 << $n;
+            )*
+            val
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use crate::util::{bit, DataSize};
@@ -514,5 +527,13 @@ mod tests {
         assert_eq!(0b0010_0000, bit(5));
         assert_eq!(0b0100_0000, bit(6));
         assert_eq!(0b1000_0000, bit(7));
+    }
+
+    #[test]
+    fn bits() {
+        let n: u8 = bits!(0);
+        assert_eq!(n, 0b0000_0001);
+        let n: u8 = bits!(0, 1);
+        assert_eq!(n, 0b0000_0011);
     }
 }
