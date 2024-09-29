@@ -257,7 +257,10 @@ mod tests {
         assert_eq!(DataSize::from_bytes(4), DataSize::new(4));
         assert_eq!(DataSize::from_bytes(0), DataSize::ZERO);
 
-        assert_eq!(DataSize::from_megabytes(1), DataSize::from_bytes(1 * 1024 * 1024));
+        assert_eq!(
+            DataSize::from_megabytes(1),
+            DataSize::from_bytes(1 * 1024 * 1024)
+        );
         assert_eq!(DataSize::from_megabytes(0), DataSize::ZERO);
 
         assert_eq!(DataSize::from_kilobytes(1), DataSize::from_bytes(1 * 1024));
@@ -320,16 +323,34 @@ mod tests {
 
     #[test]
     fn checked_add() {
-        assert_eq!(DataSize::new(0).checked_add(DataSize::new(1)), Some(DataSize::new(1)));
-        assert_eq!(DataSize::new(1).checked_add(DataSize::new(2)), Some(DataSize::new(3)));
-        assert_eq!(DataSize::new(1).checked_add(DataSize::new(usize::MAX)), None);
+        assert_eq!(
+            DataSize::new(0).checked_add(DataSize::new(1)),
+            Some(DataSize::new(1))
+        );
+        assert_eq!(
+            DataSize::new(1).checked_add(DataSize::new(2)),
+            Some(DataSize::new(3))
+        );
+        assert_eq!(
+            DataSize::new(1).checked_add(DataSize::new(usize::MAX)),
+            None
+        );
     }
 
     #[test]
     fn saturating_add() {
-        assert_eq!(DataSize::new(0).saturating_add(DataSize::new(1)), DataSize::new(1));
-        assert_eq!(DataSize::new(1).saturating_add(DataSize::new(2)), DataSize::new(3));
-        assert_eq!(DataSize::new(1).saturating_add(DataSize::new(usize::MAX)), DataSize::MAX);
+        assert_eq!(
+            DataSize::new(0).saturating_add(DataSize::new(1)),
+            DataSize::new(1)
+        );
+        assert_eq!(
+            DataSize::new(1).saturating_add(DataSize::new(2)),
+            DataSize::new(3)
+        );
+        assert_eq!(
+            DataSize::new(1).saturating_add(DataSize::new(usize::MAX)),
+            DataSize::MAX
+        );
     }
 
     #[test]
@@ -346,16 +367,31 @@ mod tests {
 
     #[test]
     fn checked_sub() {
-        assert_eq!(DataSize::new(1).checked_sub(DataSize::ZERO), Some(DataSize::new(1)));
-        assert_eq!(DataSize::new(4).checked_sub(DataSize::new(2)), Some(DataSize::new(2)));
+        assert_eq!(
+            DataSize::new(1).checked_sub(DataSize::ZERO),
+            Some(DataSize::new(1))
+        );
+        assert_eq!(
+            DataSize::new(4).checked_sub(DataSize::new(2)),
+            Some(DataSize::new(2))
+        );
         assert_eq!(DataSize::ZERO.checked_sub(DataSize::new(1)), None);
     }
 
     #[test]
     fn saturating_sub() {
-        assert_eq!(DataSize::new(1).saturating_sub(DataSize::ZERO), DataSize::new(1));
-        assert_eq!(DataSize::new(7).saturating_sub(DataSize::new(4)), DataSize::new(3));
-        assert_eq!(DataSize::ZERO.saturating_sub(DataSize::new(1)), DataSize::ZERO);
+        assert_eq!(
+            DataSize::new(1).saturating_sub(DataSize::ZERO),
+            DataSize::new(1)
+        );
+        assert_eq!(
+            DataSize::new(7).saturating_sub(DataSize::new(4)),
+            DataSize::new(3)
+        );
+        assert_eq!(
+            DataSize::ZERO.saturating_sub(DataSize::new(1)),
+            DataSize::ZERO
+        );
     }
 
     #[test]
@@ -399,11 +435,7 @@ mod tests {
 
     #[test]
     fn sum() {
-        let sizes = [
-          DataSize::new(1),
-            DataSize::new(2),
-            DataSize::new(5),
-        ];
+        let sizes = [DataSize::new(1), DataSize::new(2), DataSize::new(5)];
         let sum: DataSize = sizes.iter().sum();
         assert_eq!(sum, DataSize::new(8));
     }

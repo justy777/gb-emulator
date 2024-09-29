@@ -25,7 +25,7 @@ impl Cpu {
         loop {
             // TODO: Add sleeping to save CPU usage
             let joypad = memory.read_joypad();
-            if joypad & 0xF != 0xF {
+            if joypad.is_any_pressed() {
                 break;
             }
         }

@@ -1,4 +1,5 @@
 use crate::cartridge::Cartridge;
+use crate::joypad::Joypad;
 use crate::util::{bit, DataSize};
 use bitflags::bitflags;
 
@@ -13,7 +14,7 @@ const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 
 #[derive(Debug, Clone)]
 struct IORegisters {
-    joypad: u8,
+    joypad: Joypad,
     interrupt_flag: InterruptFlags,
     // TODO: implement all IO Registers
 }
@@ -21,14 +22,14 @@ struct IORegisters {
 impl IORegisters {
     const fn new() -> Self {
         Self {
-            joypad: u8::MAX,
+            joypad: Joypad::new(),
             interrupt_flag: InterruptFlags::empty(),
         }
     }
 
     fn read_byte(&self, address: u16) -> u8 {
         match address {
-            MEM_JOYPAD => self.joypad,
+            MEM_JOYPAD => self.joypad.bits(),
             MEM_INTERRUPT_FLAG => self.interrupt_flag.bits(),
             _ => panic!("IO register is not mapped {address:#X}"),
         }
@@ -36,7 +37,7 @@ impl IORegisters {
 
     fn write_byte(&mut self, address: u16, value: u8) {
         match address {
-            MEM_JOYPAD => self.joypad = value,
+            MEM_JOYPAD => self.joypad = Joypad::from_bits_truncate(value),
             MEM_INTERRUPT_FLAG => self.interrupt_flag = InterruptFlags::from_bits_truncate(value),
             _ => panic!("IO register is not mapped {address:#X}"),
         }
@@ -152,20 +153,27 @@ impl AddressBus {
         }
     }
 
-    pub(crate) fn read_joypad(&self) -> u8 {
-        self.read_byte(MEM_JOYPAD)
+    pub(crate) const fn read_joypad(&self) -> Joypad {
+        self.io_registers.joypad
     }
 
-    pub(crate) fn read_interrupt_flag(&self) -> InterruptFlags {
-        let byte = self.read_byte(MEM_INTERRUPT_FLAG);
-        InterruptFlags::from_bits_truncate(byte)
+    pub(crate) fn write_joypad(&mut self, joypad: Joypad) {
+        self.io_registers.joypad = joypad;
+    }
+
+    pub(crate) const fn read_interrupt_flag(&self) -> InterruptFlags {
+        self.io_registers.interrupt_flag
     }
 
     pub(crate) fn write_interrupt_flag(&mut self, value: InterruptFlags) {
-        self.write_byte(MEM_INTERRUPT_FLAG, value.bits());
+        self.io_registers.interrupt_flag = value;
     }
 
     pub(crate) const fn read_interrupt_enable(&self) -> InterruptFlags {
         self.interrupt_enable
+    }
+
+    pub(crate) fn write_interrupt_enable(&mut self, value: InterruptFlags) {
+        self.interrupt_enable = value;
     }
 }
