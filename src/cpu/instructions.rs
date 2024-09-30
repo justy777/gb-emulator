@@ -97,16 +97,16 @@ impl Cpu {
     /// Add the signed value e8 to SP and store the result in HL.
     pub(crate) fn load16_hl_sp(&mut self, memory: &AddressBus) {
         let sp = self.registers.sp;
-        let offset = self.read_next_byte_signed(memory);
+        let offset = self.read_next_byte_signed(memory) as i16;
         self.registers.f.set(RegisterFlags::ZERO, false);
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
         // Half-carry from bit 3, carry from bit 7
         // Bits are labeled from 0-15 from least to most significant.
-        let half_carry = (sp & 0xF).wrapping_add_signed(offset as i16 & 0xF) > 0xF;
+        let half_carry = (sp & 0xF).wrapping_add_signed(offset & 0xF) > 0xF;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
-        let carry = (sp & 0xFF).wrapping_add_signed(offset as i16 & 0xFF) > 0xFF;
+        let carry = (sp & 0xFF).wrapping_add_signed(offset & 0xFF) > 0xFF;
         self.registers.f.set(RegisterFlags::CARRY, carry);
-        let new_value = sp.wrapping_add_signed(offset as i16);
+        let new_value = sp.wrapping_add_signed(offset);
         self.registers.write_word(R16::HL, new_value);
     }
 
@@ -335,17 +335,17 @@ impl Cpu {
     ///
     /// Add the signed value e8 to SP.
     pub(crate) fn add16_sp(&mut self, memory: &AddressBus) {
-        let offset = self.read_next_byte_signed(memory);
+        let offset = self.read_next_byte_signed(memory) as i16;
         let sp = self.registers.sp;
         self.registers.f.set(RegisterFlags::ZERO, false);
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
         // Half-carry from bit 3, carry from bit 7
         // Bits are labeled from 0-15 from least to most significant.
-        let half_carry = (sp & 0xF).wrapping_add_signed(offset as i16 & 0xF) > 0xF;
-        self.registers.f.set(RegisterFlags::CARRY, half_carry);
-        let carry = (sp & 0xFF).wrapping_add_signed(offset as i16 & 0xFF) > 0xFF;
+        let half_carry = (sp & 0xF).wrapping_add_signed(offset & 0xF) > 0xF;
+        self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
+        let carry = (sp & 0xFF).wrapping_add_signed(offset & 0xFF) > 0xFF;
         self.registers.f.set(RegisterFlags::CARRY, carry);
-        let new_value = sp.wrapping_add_signed(offset as i16);
+        let new_value = sp.wrapping_add_signed(offset);
         self.registers.sp = new_value;
     }
 
@@ -755,9 +755,9 @@ impl Cpu {
     /// Relative Jump to current address plus e8 offset if condition cc is met.
     pub(crate) fn jump_relative(&mut self, memory: &AddressBus, condition: JumpCondition) {
         let should_jump = self.registers.f.test(condition);
-        let offset = self.read_next_byte_signed(memory);
+        let offset = self.read_next_byte_signed(memory) as i16;
         if should_jump {
-            self.registers.pc = self.registers.pc.wrapping_add_signed(offset as i16);
+            self.registers.pc = self.registers.pc.wrapping_add_signed(offset);
         }
     }
 
