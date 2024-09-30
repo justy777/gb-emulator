@@ -503,7 +503,7 @@ impl Cpu {
                 cf = true;
             }
             if hf || (value & 0x0F) > 0x09 {
-                value = value.wrapping_sub(0x06);
+                value = value.wrapping_add(0x06);
             }
         }
 
@@ -511,6 +511,8 @@ impl Cpu {
         // SUBTRACT left untouched
         self.registers.f.set(RegisterFlags::HALF_CARRY, false);
         self.registers.f.set(RegisterFlags::CARRY, cf);
+
+        self.registers.a = value;
     }
 
     /// RLC r8
