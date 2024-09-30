@@ -836,7 +836,7 @@ impl Cpu {
     /// Push current address onto stack, and jump to address u8.
     pub(crate) fn restart(&mut self, memory: &mut AddressBus, address: u16) {
         self.push(memory, R16::PC);
-        self.registers.sp = address;
+        self.registers.pc = address;
     }
 
     /// DI
