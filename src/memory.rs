@@ -1,8 +1,11 @@
 use crate::cartridge::Cartridge;
-use crate::io::interrupts::InterruptFlags;
-use crate::io::joypad::Joypad;
-use crate::io::IORegisters;
+use io::interrupts::InterruptFlags;
+use io::joypad::Joypad;
+use io::IORegisters;
+use crate::memory::io::serial_transfer::SerialTransferControl;
 use crate::util::DataSize;
+
+pub(crate) mod io;
 
 const VIDEO_RAM_SIZE: DataSize = DataSize::from_kilobytes(8);
 const WORK_RAM_SIZE: DataSize = DataSize::from_kilobytes(8);
@@ -107,27 +110,43 @@ impl AddressBus {
         }
     }
 
-    pub(crate) const fn read_joypad(&self) -> Joypad {
+    pub(crate) const fn get_joypad(&self) -> Joypad {
         self.io_registers.joypad
     }
 
-    pub(crate) fn write_joypad(&mut self, joypad: Joypad) {
+    pub(crate) fn set_joypad(&mut self, joypad: Joypad) {
         self.io_registers.joypad = joypad;
     }
 
-    pub(crate) const fn read_interrupt_flag(&self) -> InterruptFlags {
+    pub(crate) const fn get_serial_transfer_data(&self) -> u8 {
+        self.io_registers.serial_transfer.data
+    }
+
+    pub(crate) fn set_serial_transfer_data(&mut self, value: u8) {
+        self.io_registers.serial_transfer.data = value;
+    }
+
+    pub(crate) const fn get_serial_transfer_control(&self) -> SerialTransferControl {
+        self.io_registers.serial_transfer.control
+    }
+
+    pub(crate) fn set_serial_transfer_control(&mut self, value: SerialTransferControl) {
+        self.io_registers.serial_transfer.control = value;
+    }
+
+    pub(crate) const fn get_interrupt_flag(&self) -> InterruptFlags {
         self.io_registers.interrupt_flag
     }
 
-    pub(crate) fn write_interrupt_flag(&mut self, value: InterruptFlags) {
+    pub(crate) fn set_interrupt_flag(&mut self, value: InterruptFlags) {
         self.io_registers.interrupt_flag = value;
     }
 
-    pub(crate) const fn read_interrupt_enable(&self) -> InterruptFlags {
+    pub(crate) const fn get_interrupt_enable(&self) -> InterruptFlags {
         self.interrupt_enable
     }
 
-    pub(crate) fn write_interrupt_enable(&mut self, value: InterruptFlags) {
+    pub(crate) fn set_interrupt_enable(&mut self, value: InterruptFlags) {
         self.interrupt_enable = value;
     }
 }

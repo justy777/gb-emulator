@@ -3,6 +3,6 @@ pub mod cartridge;
 #[allow(clippy::cast_lossless)]
 pub mod cpu;
 mod error;
-pub(crate) mod io;
 pub mod memory;
+pub mod serial_port;
 mod util;

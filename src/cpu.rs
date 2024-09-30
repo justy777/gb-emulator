@@ -1,8 +1,8 @@
 mod instructions;
 #[allow(clippy::too_many_lines)]
-mod optables;
+mod execute;
 
-use crate::io::interrupts::InterruptFlags;
+use crate::memory::io::interrupts::InterruptFlags;
 use crate::memory::AddressBus;
 use crate::util::bit;
 use bitflags::bitflags;
@@ -378,39 +378,39 @@ impl Cpu {
 
         // Calls interrupt handlers
         if self.ime {
-            let mut interrupt_flag = memory.read_interrupt_flag();
-            let interrupt_enable = memory.read_interrupt_enable();
+            let mut interrupt_flag = memory.get_interrupt_flag();
+            let interrupt_enable = memory.get_interrupt_enable();
             let interrupt_pending = interrupt_enable & interrupt_flag;
 
             if !interrupt_pending.is_empty() {
                 self.ime = false;
                 if interrupt_pending.contains(InterruptFlags::VBLANK) {
                     interrupt_flag.set(InterruptFlags::VBLANK, false);
-                    memory.write_interrupt_flag(interrupt_flag);
+                    memory.set_interrupt_flag(interrupt_flag);
                     self.push(memory, R16::PC);
                     self.registers.pc = PC_VBLANK_HANDLER;
                 }
                 if interrupt_pending.contains(InterruptFlags::LCD) {
                     interrupt_flag.set(InterruptFlags::LCD, false);
-                    memory.write_interrupt_flag(interrupt_flag);
+                    memory.set_interrupt_flag(interrupt_flag);
                     self.push(memory, R16::PC);
                     self.registers.pc = PC_LCD_HANDLER;
                 }
                 if interrupt_pending.contains(InterruptFlags::TIMER) {
                     interrupt_flag.set(InterruptFlags::TIMER, false);
-                    memory.write_interrupt_flag(interrupt_flag);
+                    memory.set_interrupt_flag(interrupt_flag);
                     self.push(memory, R16::PC);
                     self.registers.pc = PC_TIMER_HANDLER;
                 }
                 if interrupt_pending.contains(InterruptFlags::SERIAL) {
                     interrupt_flag.set(InterruptFlags::SERIAL, false);
-                    memory.write_interrupt_flag(interrupt_flag);
+                    memory.set_interrupt_flag(interrupt_flag);
                     self.push(memory, R16::PC);
                     self.registers.pc = PC_SERIAL_HANDLER;
                 }
                 if interrupt_pending.contains(InterruptFlags::JOYPAD) {
                     interrupt_flag.set(InterruptFlags::JOYPAD, false);
-                    memory.write_interrupt_flag(interrupt_flag);
+                    memory.set_interrupt_flag(interrupt_flag);
                     self.push(memory, R16::PC);
                     self.registers.pc = PC_JOYPAD_HANDLER;
                 }

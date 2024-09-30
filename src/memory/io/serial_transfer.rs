@@ -9,15 +9,17 @@ bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub struct SerialTransferControl: u8 {
         const TRANSFER_ENABLE = bit(7);
+        const CLOCK_SPEED = bit(1);
         const CLOCK_SELECT = bit(0);
-        // TODO: Implement serial transfer
+
+        const TRANSFER_REQUESTED = Self::TRANSFER_ENABLE.bits() | Self::CLOCK_SELECT.bits();
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SerialTransfer {
-    data: u8,
-    control: SerialTransferControl,
+    pub(crate) data: u8,
+    pub(crate) control: SerialTransferControl,
 }
 
 impl SerialTransfer {

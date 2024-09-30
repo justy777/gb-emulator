@@ -24,7 +24,7 @@ impl Cpu {
         let _ = self.read_next_byte(memory);
         loop {
             // TODO: Add sleeping to save CPU usage
-            let joypad = memory.read_joypad();
+            let joypad = memory.get_joypad();
             if joypad.is_any_pressed() {
                 break;
             }
@@ -40,8 +40,8 @@ impl Cpu {
     pub(crate) fn halt(memory: &AddressBus) {
         loop {
             // TODO: Add sleeping to save CPU usage
-            let interrupt_flag = memory.read_interrupt_flag();
-            let interrupt_enable = memory.read_interrupt_enable();
+            let interrupt_flag = memory.get_interrupt_flag();
+            let interrupt_enable = memory.get_interrupt_enable();
             let interrupt_pending = interrupt_enable & interrupt_flag;
 
             if !interrupt_pending.is_empty() {
@@ -245,7 +245,7 @@ impl Cpu {
         let value = self.read_byte(memory, src);
         let new_value = self.registers.a | value;
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
-        self.registers.f.set(RegisterFlags::SUBTRACT, true);
+        self.registers.f.set(RegisterFlags::SUBTRACT, false);
         self.registers.f.set(RegisterFlags::HALF_CARRY, false);
         self.registers.f.set(RegisterFlags::CARRY, false);
         self.registers.a = new_value;
