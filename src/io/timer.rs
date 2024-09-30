@@ -20,7 +20,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Timer {
     // DIV
     divider: u8,
@@ -43,7 +43,7 @@ impl Timer {
         }
     }
 
-    pub const fn read_byte(self, address: u16) -> u8 {
+    pub const fn read_byte(&self, address: u16) -> u8 {
         match address {
             MEM_DIVIDER_REGISTER => self.divider,
             MEM_TIMER_COUNTER => self.counter,

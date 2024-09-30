@@ -14,7 +14,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SerialTransfer {
     data: u8,
     control: SerialTransferControl,
@@ -28,7 +28,7 @@ impl SerialTransfer {
         }
     }
 
-    pub const fn read_byte(self, address: u16) -> u8 {
+    pub const fn read_byte(&self, address: u16) -> u8 {
         match address {
             MEM_SERIAL_TRANSFER_DATA => self.data,
             MEM_SERIAL_TRANSFER_CONTROL => self.control.bits(),
