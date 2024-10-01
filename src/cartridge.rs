@@ -3,6 +3,12 @@ use crate::util::DataSize;
 const ROM_BANK_SIZE: DataSize = DataSize::from_kilobytes(16);
 const RAM_BANK_SIZE: DataSize = DataSize::from_kilobytes(8);
 
+const CART_ROM_SIZE: usize = 0x148;
+const CART_RAM_SIZE: usize = 0x149;
+const CART_HEADER_CHECKSUM: usize = 0x14D;
+const CART_GLOBAL_CHECKSUM1: usize = 0x14E;
+const CART_GLOBAL_CHECKSUM2: usize = 0x14F;
+
 #[derive(Clone)]
 pub struct Cartridge {
     rom: Vec<u8>,
@@ -38,21 +44,21 @@ impl Cartridge {
 
     #[must_use]
     pub fn get_rom_size(&self) -> DataSize {
-        ROM_BANK_SIZE * self.get_number_of_rom_banks() as u32
+        ROM_BANK_SIZE * self.get_rom_bank_count()
     }
 
-    pub(crate) fn get_number_of_rom_banks(&self) -> usize {
-        let value = self.rom[0x148];
-        2_usize.pow((value + 1) as u32)
+    pub(crate) fn get_rom_bank_count(&self) -> u32 {
+        let value = self.rom[CART_ROM_SIZE];
+        2_u32.pow((value + 1) as u32)
     }
 
     #[must_use]
     pub fn get_ram_size(&self) -> DataSize {
-        RAM_BANK_SIZE * self.get_number_of_ram_banks() as u32
+        RAM_BANK_SIZE * self.get_ram_bank_count()
     }
 
-    pub(crate) fn get_number_of_ram_banks(&self) -> usize {
-        let value = self.rom[0x149];
+    pub(crate) fn get_ram_bank_count(&self) -> u32 {
+        let value = self.rom[CART_RAM_SIZE];
         match value {
             0x00 => 0,
             0x02 => 1,
@@ -65,7 +71,7 @@ impl Cartridge {
 
     #[must_use]
     pub fn get_header_checksum(&self) -> u8 {
-        self.rom[0x014D]
+        self.rom[CART_HEADER_CHECKSUM]
     }
 
     #[must_use]
@@ -79,14 +85,17 @@ impl Cartridge {
 
     #[must_use]
     pub fn get_global_checksum(&self) -> u16 {
-        u16::from_be_bytes([self.rom[0x14E], self.rom[0x14F]])
+        u16::from_be_bytes([
+            self.rom[CART_GLOBAL_CHECKSUM1],
+            self.rom[CART_GLOBAL_CHECKSUM2],
+        ])
     }
 
     #[must_use]
     pub fn calculate_global_checksum(&self) -> u16 {
         let mut checksum: u16 = 0;
         for (address, byte) in self.rom.iter().enumerate() {
-            if address != 0x14E && address != 0x14F {
+            if address != CART_GLOBAL_CHECKSUM1 && address != CART_GLOBAL_CHECKSUM2 {
                 checksum = checksum.wrapping_add(*byte as u16);
             }
         }

@@ -1,8 +1,8 @@
 use gb_emulator::cartridge::Cartridge;
 use gb_emulator::cpu::Cpu;
 use gb_emulator::memory::AddressBus;
-use std::{env, fs, io};
 use gb_emulator::serial_port::SerialPort;
+use std::{env, fs, io};
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();

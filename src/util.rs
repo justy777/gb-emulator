@@ -253,7 +253,7 @@ macro_rules! bits {
         {
             let mut val = 0;
             $(
-                val ^= 1 << $n;
+                val |= 1 << $n;
             )*
             val
         }

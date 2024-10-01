@@ -1,6 +1,6 @@
-mod instructions;
 #[allow(clippy::too_many_lines)]
 mod execute;
+mod instructions;
 
 use crate::memory::io::interrupts::InterruptFlags;
 use crate::memory::AddressBus;

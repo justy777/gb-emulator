@@ -1,5 +1,5 @@
-use crate::memory::AddressBus;
 use crate::memory::io::serial_transfer::SerialTransferControl;
+use crate::memory::AddressBus;
 
 // TODO: Implement serial transfer between emulators
 pub struct SerialPort {}

@@ -1,9 +1,9 @@
 use crate::cartridge::Cartridge;
+use crate::memory::io::serial_transfer::SerialTransferControl;
+use crate::util::DataSize;
 use io::interrupts::InterruptFlags;
 use io::joypad::Joypad;
 use io::IORegisters;
-use crate::memory::io::serial_transfer::SerialTransferControl;
-use crate::util::DataSize;
 
 pub(crate) mod io;
 

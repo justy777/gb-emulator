@@ -5,12 +5,12 @@ use crate::memory::io::joypad::Joypad;
 use crate::memory::io::serial_transfer::SerialTransfer;
 use crate::memory::io::timer::Timer;
 
+mod audio;
 pub mod display;
 pub mod interrupts;
 pub mod joypad;
 pub mod serial_transfer;
 pub mod timer;
-mod audio;
 
 const MEM_JOYPAD: u16 = 0xFF00;
 const MEM_SERIAL_TRANSFER_START: u16 = 0xFF01;
