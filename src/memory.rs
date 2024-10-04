@@ -13,7 +13,6 @@ const OBJECT_ATTRIBUTE_MEMORY_SIZE: usize = 0xFE9F - 0xFE00 + 1;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 const MEM_INTERRUPT_ENABLE: u16 = 0xFFFF;
 
-#[derive(Clone)]
 pub struct AddressBus {
     // ROM and External RAM
     cartridge: Cartridge,
@@ -46,7 +45,11 @@ impl AddressBus {
 
     pub(crate) fn read_byte(&self, address: u16) -> u8 {
         match address {
-            0x0000..=0x7FFF => self.cartridge.read_rom(address),
+            0x0000..=0x3FFF => self.cartridge.read_rom_bank0(address),
+            0x4000..=0x7FFF => {
+                let offset = address - 0x4000;
+                self.cartridge.read_rom_bank1(offset)
+            }
             0x8000..=0x9FFF => {
                 let offset = (address - 0x8000) as usize;
                 self.video_ram[offset]

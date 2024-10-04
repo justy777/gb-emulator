@@ -32,7 +32,6 @@ pub struct IORegisters {
     pub(crate) interrupt_flag: InterruptFlags,
     audio: Audio,
     display: Display,
-    // TODO: implement all IO Registers
 }
 
 impl IORegisters {
@@ -58,7 +57,7 @@ impl IORegisters {
             MEM_AUDIO_START..=MEM_AUDIO_END => self.audio.read_byte(address),
             MEM_DISPLAY_START..=MEM_DISPLAY_END => self.display.read_byte(address),
             MEM_DISABLE_BOOT_ROM => 1,
-            _ => panic!("I/O register is not mapped {address:#X}"),
+            _ => panic!("Address {address:#X} is not mapped in I/O registers."),
         }
     }
 
@@ -72,7 +71,7 @@ impl IORegisters {
             MEM_INTERRUPT_FLAG => self.interrupt_flag = InterruptFlags::from_bits_truncate(value),
             MEM_AUDIO_START..=MEM_AUDIO_END => self.audio.write_byte(address, value),
             MEM_DISPLAY_START..=MEM_DISPLAY_END => self.display.write_byte(address, value),
-            _ => panic!("I/O register is not mapped {address:#X}"),
+            _ => panic!("Address {address:#X} is not mapped I/O registers."),
         }
     }
 }

@@ -1,6 +1,5 @@
-#[allow(clippy::cast_lossless)]
+#![allow(clippy::cast_lossless, clippy::option_if_let_else)]
 pub mod cartridge;
-#[allow(clippy::cast_lossless)]
 pub mod cpu;
 mod error;
 pub mod memory;
