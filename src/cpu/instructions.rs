@@ -284,7 +284,7 @@ impl Cpu {
         let new_value = value.wrapping_add(1);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, false);
-        let half_carry = value.trailing_ones() >= 4;
+        let half_carry = value & 0xF == 0xF;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
         // CARRY is left untouched
         self.write_byte(memory, src, new_value);
@@ -304,7 +304,7 @@ impl Cpu {
         let new_value = value.wrapping_sub(1);
         self.registers.f.set(RegisterFlags::ZERO, new_value == 0);
         self.registers.f.set(RegisterFlags::SUBTRACT, true);
-        let half_carry = value.trailing_zeros() >= 4;
+        let half_carry = value & 0xF == 0;
         self.registers.f.set(RegisterFlags::HALF_CARRY, half_carry);
         // CARRY is left untouched
         self.write_byte(memory, src, new_value);
