@@ -13,15 +13,16 @@ fn main() -> io::Result<()> {
     println!("ROM Size: {}", cartridge.get_rom_size());
     println!("RAM Size: {}", cartridge.get_ram_size());
 
-    let read_checksum = cartridge.get_header_checksum();
-    let calculated_checksum = cartridge.calculate_header_checksum();
-    if read_checksum != calculated_checksum {
-        println!("Warning: Header checksum on cartridge failed verification {read_checksum:#X} != {calculated_checksum:#X}. Run at your own Risk.");
+    if !cartridge.passed_header_check() {
+        println!(
+            "Warning: Header checksum on cartridge failed verification. Run at your own Risk."
+        );
     }
-    let read_checksum = cartridge.get_global_checksum();
-    let calculated_checksum = cartridge.calculate_global_checksum();
-    if read_checksum != calculated_checksum {
-        println!("Warning: Global checksum on cartridge failed verification {read_checksum:#X} != {calculated_checksum:#X}. Run at your own Risk.");
+
+    if !cartridge.passed_global_check() {
+        println!(
+            "Warning: Global checksum on cartridge failed verification. Run at your own Risk."
+        );
     }
 
     let mut memory = AddressBus::new(cartridge);

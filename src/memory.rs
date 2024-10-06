@@ -80,7 +80,7 @@ impl AddressBus {
 
     pub(crate) fn write_byte(&mut self, address: u16, value: u8) {
         match address {
-            0x0000..=0x7FFF => panic!("Writing to ROM is prohibited {address:#X}"),
+            0x0000..=0x7FFF => self.cartridge.write_rom(address, value),
             0x8000..=0x9FFF => {
                 let offset = (address - 0x8000) as usize;
                 self.video_ram[offset] = value;

@@ -8,8 +8,7 @@ const MEM_TIMER_COUNTER: u16 = 0xFF05;
 const MEM_TIMER_MODULO: u16 = 0xFF06;
 const MEM_TIMER_CONTROL: u16 = 0xFF07;
 
-// Measured in Hz
-const CLOCK_SPEED: u32 = 4_194_304;
+const CLOCK_SPEED_HZ: u32 = 4_194_304;
 
 bitflags! {
     #[repr(transparent)]
@@ -82,7 +81,7 @@ impl Clock {
     }
 
     const fn frequency(&self) -> u32 {
-        CLOCK_SPEED / (self.increment_every() * 4)
+        CLOCK_SPEED_HZ / (self.increment_every() * 4)
     }
 }
 
