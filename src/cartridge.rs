@@ -248,6 +248,60 @@ impl MemoryBankController for Mbc1 {
     }
 }
 
+// TODO: add real-time clock (RTC) support
+struct Mbc3 {
+    ram_enabled: bool,
+    rom_bank_number: u8,
+    ram_bank_number: u8,
+}
+
+impl Mbc3 {
+    const fn new() -> Self {
+        Self {
+            ram_enabled: false,
+            rom_bank_number: 0,
+            ram_bank_number: 0,
+        }
+    }
+}
+
+impl MemoryBankController for Mbc3 {
+    fn get_rom_bank0(&self) -> u32 {
+        0
+    }
+
+    fn get_rom_bank1(&self) -> u32 {
+        self.rom_bank_number as u32
+    }
+
+    fn get_ram_bank(&self) -> u32 {
+        self.ram_bank_number as u32
+    }
+
+    fn is_ram_enabled(&self) -> bool {
+        self.ram_enabled
+    }
+
+    fn write_registers(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..=0x1FFF => {
+                if value & 0xF == 0xA {
+                    self.ram_enabled = true;
+                } else if value & 0xF == 0 {
+                    self.ram_enabled = false;
+                }
+            }
+            0x2000..=0x3FFF => {
+                self.rom_bank_number = value & 0x1F;
+            }
+            0x4000..=0x5FFF => {
+                self.ram_bank_number = value & 0x3;
+            }
+            _ => panic!("Address {address:#X} not mapped in Memory Bank Controller."),
+        }
+    }
+}
+
 struct Mbc5 {
     ram_enabled: bool,
     rom_bank_number: u8,
