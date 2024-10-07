@@ -22,7 +22,7 @@ bitflags! {
 #[derive(Debug, Clone)]
 pub struct Timer {
     // DIV
-    divider: u8,
+    divider: u16,
     // TIMA
     counter: u8,
     // TMA
@@ -44,7 +44,7 @@ impl Timer {
 
     pub const fn read_byte(&self, address: u16) -> u8 {
         match address {
-            MEM_DIVIDER_REGISTER => self.divider,
+            MEM_DIVIDER_REGISTER => (self.divider >> 8) as u8,
             MEM_TIMER_COUNTER => self.counter,
             MEM_TIMER_MODULO => self.modulo,
             MEM_TIMER_CONTROL => self.control.bits(),
@@ -54,7 +54,7 @@ impl Timer {
 
     pub fn write_byte(&mut self, address: u16, value: u8) {
         match address {
-            MEM_DIVIDER_REGISTER => self.divider = value,
+            MEM_DIVIDER_REGISTER => self.divider = 0,
             MEM_TIMER_COUNTER => self.counter = value,
             MEM_TIMER_MODULO => self.modulo = value,
             MEM_TIMER_CONTROL => self.control = TimerControl::from_bits_truncate(value),
