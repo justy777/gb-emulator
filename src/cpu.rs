@@ -378,41 +378,25 @@ impl Cpu {
 
         // Calls interrupt handlers
         if self.ime {
-            let mut interrupt_flag = memory.get_interrupt_flag();
+            let interrupt_flag = memory.get_interrupt_flag();
             let interrupt_enable = memory.get_interrupt_enable();
             let interrupt_pending = interrupt_enable & interrupt_flag;
 
-            if !interrupt_pending.is_empty() {
-                self.ime = false;
-                if interrupt_pending.contains(InterruptFlags::VBLANK) {
-                    interrupt_flag.set(InterruptFlags::VBLANK, false);
-                    memory.set_interrupt_flag(interrupt_flag);
+            for flag in InterruptFlags::all().into_iter() {
+                if interrupt_pending.contains(flag) {
+                    self.ime = false;
+                    memory.set_interrupt_flag(interrupt_flag & !flag);
+                    let handler = match flag {
+                        InterruptFlags::VBLANK => PC_VBLANK_HANDLER,
+                        InterruptFlags::LCD => PC_LCD_HANDLER,
+                        InterruptFlags::TIMER => PC_TIMER_HANDLER,
+                        InterruptFlags::SERIAL => PC_SERIAL_HANDLER,
+                        InterruptFlags::JOYPAD => PC_JOYPAD_HANDLER,
+                        _ => unreachable!(),
+                    };
                     self.push(memory, R16::PC);
-                    self.registers.pc = PC_VBLANK_HANDLER;
-                }
-                if interrupt_pending.contains(InterruptFlags::LCD) {
-                    interrupt_flag.set(InterruptFlags::LCD, false);
-                    memory.set_interrupt_flag(interrupt_flag);
-                    self.push(memory, R16::PC);
-                    self.registers.pc = PC_LCD_HANDLER;
-                }
-                if interrupt_pending.contains(InterruptFlags::TIMER) {
-                    interrupt_flag.set(InterruptFlags::TIMER, false);
-                    memory.set_interrupt_flag(interrupt_flag);
-                    self.push(memory, R16::PC);
-                    self.registers.pc = PC_TIMER_HANDLER;
-                }
-                if interrupt_pending.contains(InterruptFlags::SERIAL) {
-                    interrupt_flag.set(InterruptFlags::SERIAL, false);
-                    memory.set_interrupt_flag(interrupt_flag);
-                    self.push(memory, R16::PC);
-                    self.registers.pc = PC_SERIAL_HANDLER;
-                }
-                if interrupt_pending.contains(InterruptFlags::JOYPAD) {
-                    interrupt_flag.set(InterruptFlags::JOYPAD, false);
-                    memory.set_interrupt_flag(interrupt_flag);
-                    self.push(memory, R16::PC);
-                    self.registers.pc = PC_JOYPAD_HANDLER;
+                    self.registers.pc = handler;
+                    break;
                 }
             }
         }

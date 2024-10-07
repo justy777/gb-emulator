@@ -3,7 +3,7 @@ use bitflags::bitflags;
 
 bitflags! {
     #[repr(transparent)]
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct InterruptFlags: u8 {
         const VBLANK = bit(0);
         const LCD = bit(1);
