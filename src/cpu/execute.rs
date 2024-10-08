@@ -287,7 +287,7 @@ impl Cpu {
             // STOP
             0x10 => self.stop(memory),
             // HALT
-            0x76 => Self::halt(memory),
+            0x76 => self.halt(),
             // PREFIX
             0xCB => {
                 let next_byte = self.read_next_byte(memory);

@@ -349,10 +349,11 @@ pub(crate) enum JumpCondition {
 #[derive(Clone)]
 pub struct Cpu {
     registers: Registers,
+    halted: bool,
     /// IME: Interrupt Master Enable
     ime: bool,
     // Used to delay setting IME after calling EI
-    enable_irq: Option<i8>,
+    ime_delay_counter: Option<i8>,
 }
 
 impl Cpu {
@@ -360,30 +361,30 @@ impl Cpu {
     pub const fn new() -> Self {
         Self {
             registers: Registers::new(),
+            halted: false,
             ime: false,
-            enable_irq: None,
+            ime_delay_counter: None,
         }
     }
 
     pub fn step(&mut self, memory: &mut AddressBus) {
-        let instruction_byte = self.read_next_byte(memory);
-        self.execute(memory, instruction_byte);
-
-        // Checks for next command after EI is called
-        self.enable_irq = self.enable_irq.map(|n| n - 1);
-        if self.enable_irq.is_some_and(|n| n == 0) {
+        // Checks for next instruction after EI is called
+        self.ime_delay_counter = self.ime_delay_counter.map(|n| n - 1);
+        if self.ime_delay_counter.is_some_and(|n| n == 0) {
             self.ime = true;
-            self.enable_irq = None;
+            self.ime_delay_counter = None;
         }
 
-        // Calls interrupt handlers
-        if self.ime {
-            let interrupt_flag = memory.get_interrupt_flag();
-            let interrupt_enable = memory.get_interrupt_enable();
-            let interrupt_pending = interrupt_enable & interrupt_flag;
+        // Checks for pending interrupts
+        let interrupt_flag = memory.get_interrupt_flag();
+        let interrupt_enable = memory.get_interrupt_enable();
+        let interrupt_pending = interrupt_enable & interrupt_flag;
 
-            for flag in InterruptFlags::all().into_iter() {
-                if interrupt_pending.contains(flag) {
+        for flag in InterruptFlags::all() {
+            if interrupt_pending.contains(flag) {
+                self.halted = false;
+                if self.ime {
+                    // Calls interrupt handler
                     self.ime = false;
                     memory.set_interrupt_flag(interrupt_flag & !flag);
                     let handler = match flag {
@@ -396,10 +397,17 @@ impl Cpu {
                     };
                     self.push(memory, R16::PC);
                     self.registers.pc = handler;
-                    break;
                 }
+                break;
             }
         }
+
+        if self.halted {
+            return;
+        }
+
+        let instruction_byte = self.read_next_byte(memory);
+        self.execute(memory, instruction_byte);
     }
 
     fn read_next_byte(&mut self, memory: &AddressBus) -> u8 {

@@ -37,17 +37,8 @@ impl Cpu {
     /// - - - -
     ///
     /// Halt CPU until an interrupt occurs.
-    pub(crate) fn halt(memory: &AddressBus) {
-        loop {
-            // TODO: Add sleeping to save CPU usage
-            let interrupt_flag = memory.get_interrupt_flag();
-            let interrupt_enable = memory.get_interrupt_enable();
-            let interrupt_pending = interrupt_enable & interrupt_flag;
-
-            if !interrupt_pending.is_empty() {
-                break;
-            }
-        }
+    pub(crate) fn halt(&mut self) {
+        self.halted = true;
         // TODO: Look into halt bug
     }
 
@@ -847,7 +838,7 @@ impl Cpu {
     ///
     /// Disable Interrupts by clearing the IME flag.
     pub(crate) fn disable_interrupt(&mut self) {
-        self.enable_irq = None;
+        self.ime_delay_counter = None;
         self.ime = false;
     }
 
@@ -858,6 +849,6 @@ impl Cpu {
     /// Enable Interrupts by setting the IME flag.
     /// The flag is only set after the instruction following EI.
     pub(crate) fn enable_interrupt(&mut self) {
-        self.enable_irq = Some(2);
+        self.ime_delay_counter = Some(2);
     }
 }
