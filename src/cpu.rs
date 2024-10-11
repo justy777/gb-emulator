@@ -353,7 +353,7 @@ pub struct Cpu {
     /// IME: Interrupt Master Enable
     ime: bool,
     // Used to delay setting IME after calling EI
-    ime_delay_counter: Option<i8>,
+    ime_delay_counter: Option<u8>,
 }
 
 impl Cpu {

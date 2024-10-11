@@ -28,8 +28,10 @@ pub struct Timer {
     modulo: u8,
     // TAC
     control: TimerControl,
-    // TODO: implement cycles and ticks
+    // Used to check for falling edge
     last_edge: bool,
+    // Used to delay overflow until the next cycle
+    overflow_delay_counter: Option<u8>,
 }
 
 impl Timer {
@@ -40,6 +42,7 @@ impl Timer {
             modulo: 0,
             control: TimerControl::empty(),
             last_edge: false,
+            overflow_delay_counter: None,
         }
     }
 
@@ -56,7 +59,10 @@ impl Timer {
     pub fn write_byte(&mut self, address: u16, value: u8) {
         match address {
             MEM_DIVIDER_REGISTER => self.divider = 0,
-            MEM_TIMER_COUNTER => self.counter = value,
+            MEM_TIMER_COUNTER => {
+                self.counter = value;
+                self.overflow_delay_counter = None;
+            }
             MEM_TIMER_MODULO => self.modulo = value,
             MEM_TIMER_CONTROL => self.control = TimerControl::from_bits_truncate(value),
             _ => unreachable!(),
@@ -77,13 +83,21 @@ impl Timer {
 
             if self.last_edge && !current_edge {
                 if self.counter == 255 {
-                    self.counter = self.modulo;
-                    interrupt_flag.set(InterruptFlags::TIMER, true);
+                    self.counter = 0;
+                    self.overflow_delay_counter = Some(2);
                 } else {
                     self.counter += 1;
                 }
             }
             self.last_edge = current_edge;
+
+            // Checks for next cycle after overflow occurs
+            self.overflow_delay_counter = self.overflow_delay_counter.map(|n| n - 1);
+            if self.overflow_delay_counter.is_some_and(|n| n == 0) {
+                self.counter = self.modulo;
+                interrupt_flag.set(InterruptFlags::TIMER, true);
+                self.overflow_delay_counter = None;
+            }
         }
     }
 }
