@@ -367,7 +367,7 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, memory: &mut AddressBus) {
+    pub fn step(&mut self, memory: &mut AddressBus) -> usize {
         // Checks for next instruction after EI is called
         self.ime_delay_counter = self.ime_delay_counter.map(|n| n - 1);
         if self.ime_delay_counter.is_some_and(|n| n == 0) {
@@ -403,11 +403,11 @@ impl Cpu {
         }
 
         if self.halted {
-            return;
+            return 4;
         }
 
         let instruction_byte = self.read_next_byte(memory);
-        self.execute(memory, instruction_byte);
+        self.execute(memory, instruction_byte)
     }
 
     fn read_next_byte(&mut self, memory: &AddressBus) -> u8 {

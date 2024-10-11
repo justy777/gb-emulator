@@ -731,12 +731,14 @@ impl Cpu {
     /// - - - -
     ///
     /// Jump to address n16 if condition cc is met.
-    pub(crate) fn jump(&mut self, memory: &AddressBus, condition: JumpCondition) {
+    pub(crate) fn jump(&mut self, memory: &AddressBus, condition: JumpCondition) -> usize {
         let should_jump = self.registers.f.test(condition);
         let address = self.read_next_word(memory);
         if should_jump {
             self.registers.pc = address;
+            return 16;
         }
+        12
     }
 
     /// JR cc, e8
@@ -744,12 +746,14 @@ impl Cpu {
     /// - - - -
     ///
     /// Relative Jump to current address plus e8 offset if condition cc is met.
-    pub(crate) fn jump_relative(&mut self, memory: &AddressBus, condition: JumpCondition) {
+    pub(crate) fn jump_relative(&mut self, memory: &AddressBus, condition: JumpCondition) -> usize {
         let should_jump = self.registers.f.test(condition);
         let offset = self.read_next_byte_signed(memory) as i16;
         if should_jump {
             self.registers.pc = self.registers.pc.wrapping_add_signed(offset);
+            return 12;
         }
+        8
     }
 
     /// PUSH r16
@@ -790,13 +794,15 @@ impl Cpu {
     /// - - - -
     ///
     /// Call address n16 if condition cc is met.
-    pub(crate) fn call(&mut self, memory: &mut AddressBus, condition: JumpCondition) {
+    pub(crate) fn call(&mut self, memory: &mut AddressBus, condition: JumpCondition) -> usize {
         let should_jump = self.registers.f.test(condition);
         let address = self.read_next_word(memory);
         if should_jump {
             self.push(memory, R16::PC);
             self.registers.pc = address;
+            return 24;
         }
+        12
     }
 
     /// RET cc
@@ -804,11 +810,13 @@ impl Cpu {
     /// - - - -
     ///
     /// Return from subroutine if condition cc is met.
-    pub(crate) fn return_(&mut self, memory: &AddressBus, condition: JumpCondition) {
+    pub(crate) fn return_(&mut self, memory: &AddressBus, condition: JumpCondition) -> usize {
         let should_jump = self.registers.f.test(condition);
         if should_jump {
             self.pop(memory, R16::PC);
+            return 20;
         }
+        8
     }
 
     /// RETI

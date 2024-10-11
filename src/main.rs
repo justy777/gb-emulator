@@ -28,7 +28,8 @@ fn main() -> io::Result<()> {
     let mut memory = AddressBus::new(cartridge);
     let mut cpu = Cpu::new();
     loop {
-        cpu.step(&mut memory);
+        let cycles = cpu.step(&mut memory);
+        memory.tick(cycles);
         SerialPort::step(&mut memory);
     }
 }

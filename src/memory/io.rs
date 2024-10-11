@@ -28,7 +28,7 @@ const MEM_DISABLE_BOOT_ROM: u16 = 0xFF50;
 pub struct IORegisters {
     pub(crate) joypad: Joypad,
     pub(crate) serial_transfer: SerialTransfer,
-    timer: Timer,
+    pub(crate) timer: Timer,
     pub(crate) interrupt_flag: InterruptFlags,
     audio: Audio,
     display: Display,

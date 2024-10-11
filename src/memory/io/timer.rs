@@ -1,5 +1,6 @@
 use crate::bits;
 use crate::error::TryFromUintError;
+use crate::memory::io::interrupts::InterruptFlags;
 use crate::util::bit;
 use bitflags::bitflags;
 
@@ -7,8 +8,6 @@ const MEM_DIVIDER_REGISTER: u16 = 0xFF04;
 const MEM_TIMER_COUNTER: u16 = 0xFF05;
 const MEM_TIMER_MODULO: u16 = 0xFF06;
 const MEM_TIMER_CONTROL: u16 = 0xFF07;
-
-const CLOCK_SPEED_HZ: u32 = 4_194_304;
 
 bitflags! {
     #[repr(transparent)]
@@ -30,6 +29,7 @@ pub struct Timer {
     // TAC
     control: TimerControl,
     // TODO: implement cycles and ticks
+    last_edge: bool,
 }
 
 impl Timer {
@@ -39,6 +39,7 @@ impl Timer {
             counter: 0,
             modulo: 0,
             control: TimerControl::empty(),
+            last_edge: false,
         }
     }
 
@@ -61,42 +62,62 @@ impl Timer {
             _ => unreachable!(),
         }
     }
+
+    pub fn tick(&mut self, cycles: usize, interrupt_flag: &mut InterruptFlags) {
+        for _ in 0..cycles {
+            self.divider = self.divider.wrapping_add(1);
+
+            let clock_select = self.control.intersection(TimerControl::CLOCK_SELECT);
+            let clock_frequency = ClockFrequency::try_from(clock_select.bits()).unwrap();
+            let bit_set = self.divider & clock_frequency.increment_every()
+                == clock_frequency.increment_every();
+
+            let enabled = self.control.contains(TimerControl::ENABLE);
+            let current_edge = bit_set && enabled;
+
+            if self.last_edge && !current_edge {
+                if self.counter == 255 {
+                    self.counter = self.modulo;
+                    interrupt_flag.set(InterruptFlags::TIMER, true);
+                } else {
+                    self.counter += 1;
+                }
+            }
+            self.last_edge = current_edge;
+        }
+    }
 }
 
-enum Clock {
+enum ClockFrequency {
     Zero,
     One,
     Two,
     Three,
 }
 
-impl Clock {
-    const fn increment_every(&self) -> u32 {
+impl ClockFrequency {
+    const fn increment_every(&self) -> u16 {
         match self {
-            Self::Zero => 256,
-            Self::One => 4,
-            Self::Two => 16,
-            Self::Three => 64,
+            Self::Zero => 512,
+            Self::One => 8,
+            Self::Two => 32,
+            Self::Three => 128,
         }
-    }
-
-    const fn frequency(&self) -> u32 {
-        CLOCK_SPEED_HZ / (self.increment_every() * 4)
     }
 }
 
-impl From<Clock> for u8 {
-    fn from(clock: Clock) -> Self {
+impl From<ClockFrequency> for u8 {
+    fn from(clock: ClockFrequency) -> Self {
         match clock {
-            Clock::Zero => 0b00,
-            Clock::One => 0b01,
-            Clock::Two => 0b10,
-            Clock::Three => 0b11,
+            ClockFrequency::Zero => 0b00,
+            ClockFrequency::One => 0b01,
+            ClockFrequency::Two => 0b10,
+            ClockFrequency::Three => 0b11,
         }
     }
 }
 
-impl TryFrom<u8> for Clock {
+impl TryFrom<u8> for ClockFrequency {
     type Error = TryFromUintError;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {

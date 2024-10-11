@@ -113,6 +113,12 @@ impl AddressBus {
         }
     }
 
+    pub fn tick(&mut self, cycles: usize) {
+        self.io_registers
+            .timer
+            .tick(cycles, &mut self.io_registers.interrupt_flag);
+    }
+
     pub(crate) const fn get_joypad(&self) -> Joypad {
         self.io_registers.joypad
     }
