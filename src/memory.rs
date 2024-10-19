@@ -1,14 +1,13 @@
 use crate::cartridge::Cartridge;
 use crate::memory::io::serial_transfer::SerialTransferControl;
-use crate::util::DataSize;
 use io::interrupts::InterruptFlags;
 use io::joypad::Joypad;
 use io::IORegisters;
 
 pub(crate) mod io;
 
-const VIDEO_RAM_SIZE: DataSize = DataSize::from_kilobytes(8);
-const WORK_RAM_SIZE: DataSize = DataSize::from_kilobytes(8);
+const VIDEO_RAM_SIZE: usize = 8 * 1024;
+const WORK_RAM_SIZE: usize = 8 * 1024;
 const OBJECT_ATTRIBUTE_MEMORY_SIZE: usize = 0xFE9F - 0xFE00 + 1;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 const MEM_INTERRUPT_ENABLE: u16 = 0xFFFF;
@@ -17,9 +16,9 @@ pub struct AddressBus {
     // ROM and External RAM
     cartridge: Cartridge,
     // VRAM
-    video_ram: [u8; VIDEO_RAM_SIZE.as_bytes()],
+    video_ram: [u8; VIDEO_RAM_SIZE],
     // WRAM
-    work_ram: [u8; WORK_RAM_SIZE.as_bytes()],
+    work_ram: [u8; WORK_RAM_SIZE],
     // OAM
     object_attribute_memory: [u8; OBJECT_ATTRIBUTE_MEMORY_SIZE],
     io_registers: IORegisters,
@@ -34,8 +33,8 @@ impl AddressBus {
     pub const fn new(cartridge: Cartridge) -> Self {
         Self {
             cartridge,
-            video_ram: [0; VIDEO_RAM_SIZE.as_bytes()],
-            work_ram: [0; WORK_RAM_SIZE.as_bytes()],
+            video_ram: [0; VIDEO_RAM_SIZE],
+            work_ram: [0; WORK_RAM_SIZE],
             object_attribute_memory: [0; OBJECT_ATTRIBUTE_MEMORY_SIZE],
             io_registers: IORegisters::new(),
             high_ram: [0; HIGH_RAM_SIZE],

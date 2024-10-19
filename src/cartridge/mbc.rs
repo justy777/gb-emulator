@@ -1,9 +1,9 @@
 use crate::util::bits_needed;
 
 pub trait MemoryBankController {
-    fn get_rom_bank0(&self) -> u32;
-    fn get_rom_bank1(&self) -> u32;
-    fn get_ram_bank(&self) -> u32;
+    fn get_rom_bank0(&self) -> usize;
+    fn get_rom_bank1(&self) -> usize;
+    fn get_ram_bank(&self) -> usize;
     fn is_ram_enabled(&self) -> bool;
     fn write_registers(&mut self, address: u16, value: u8);
 }
@@ -17,15 +17,15 @@ impl NoMBC {
 }
 
 impl MemoryBankController for NoMBC {
-    fn get_rom_bank0(&self) -> u32 {
+    fn get_rom_bank0(&self) -> usize {
         0
     }
 
-    fn get_rom_bank1(&self) -> u32 {
+    fn get_rom_bank1(&self) -> usize {
         1
     }
 
-    fn get_ram_bank(&self) -> u32 {
+    fn get_ram_bank(&self) -> usize {
         0
     }
 
@@ -41,14 +41,14 @@ impl MemoryBankController for NoMBC {
 pub struct MBC1 {
     ram_enabled: bool,
     rom_bank_number: u8,
-    rom_bank_max: u32,
+    rom_bank_max: usize,
     ram_bank_number: u8,
-    ram_bank_max: u32,
+    ram_bank_max: usize,
     banking_mode: bool,
 }
 
 impl MBC1 {
-    pub const fn new(rom_bank_max: u32, ram_bank_max: u32) -> Self {
+    pub const fn new(rom_bank_max: usize, ram_bank_max: usize) -> Self {
         Self {
             ram_enabled: false,
             rom_bank_number: 0,
@@ -61,19 +61,19 @@ impl MBC1 {
 }
 
 impl MemoryBankController for MBC1 {
-    fn get_rom_bank0(&self) -> u32 {
+    fn get_rom_bank0(&self) -> usize {
         if self.banking_mode {
-            let max_bits = bits_needed(self.rom_bank_max as usize);
-            ((self.ram_bank_number << 5) & u8::MAX >> (8 - max_bits)) as u32
+            let max_bits = bits_needed(self.rom_bank_max);
+            ((self.ram_bank_number << 5) & u8::MAX >> (8 - max_bits)) as usize
         } else {
             0
         }
     }
 
-    fn get_rom_bank1(&self) -> u32 {
-        let max_bits = bits_needed(self.rom_bank_max as usize);
+    fn get_rom_bank1(&self) -> usize {
+        let max_bits = bits_needed(self.rom_bank_max);
         let value = (((self.ram_bank_number << 5) | self.rom_bank_number)
-            & (u8::MAX >> (8 - max_bits))) as u32;
+            & (u8::MAX >> (8 - max_bits))) as usize;
         if self.rom_bank_number == 0 {
             value + 1
         } else {
@@ -81,10 +81,10 @@ impl MemoryBankController for MBC1 {
         }
     }
 
-    fn get_ram_bank(&self) -> u32 {
+    fn get_ram_bank(&self) -> usize {
         if self.banking_mode {
-            let max_bits = bits_needed(self.ram_bank_max as usize);
-            (self.ram_bank_number & u8::MAX >> (8 - max_bits)) as u32
+            let max_bits = bits_needed(self.ram_bank_max);
+            (self.ram_bank_number & u8::MAX >> (8 - max_bits)) as usize
         } else {
             0
         }
@@ -131,16 +131,16 @@ impl MBC3 {
 }
 
 impl MemoryBankController for MBC3 {
-    fn get_rom_bank0(&self) -> u32 {
+    fn get_rom_bank0(&self) -> usize {
         0
     }
 
-    fn get_rom_bank1(&self) -> u32 {
-        self.rom_bank_number as u32
+    fn get_rom_bank1(&self) -> usize {
+        self.rom_bank_number as usize
     }
 
-    fn get_ram_bank(&self) -> u32 {
-        self.ram_bank_number as u32
+    fn get_ram_bank(&self) -> usize {
+        self.ram_bank_number as usize
     }
 
     fn is_ram_enabled(&self) -> bool {
@@ -186,16 +186,16 @@ impl MBC5 {
 }
 
 impl MemoryBankController for MBC5 {
-    fn get_rom_bank0(&self) -> u32 {
+    fn get_rom_bank0(&self) -> usize {
         0
     }
 
-    fn get_rom_bank1(&self) -> u32 {
-        (((self.rom_bank_number2 as u16) << 8) | (self.rom_bank_number as u16)) as u32
+    fn get_rom_bank1(&self) -> usize {
+        (((self.rom_bank_number2 as u16) << 8) | (self.rom_bank_number as u16)) as usize
     }
 
-    fn get_ram_bank(&self) -> u32 {
-        self.ram_bank_number as u32
+    fn get_ram_bank(&self) -> usize {
+        self.ram_bank_number as usize
     }
 
     fn is_ram_enabled(&self) -> bool {

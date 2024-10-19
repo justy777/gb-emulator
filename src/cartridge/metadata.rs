@@ -14,8 +14,8 @@ pub struct Metadata {
     pub mbc_number: u8,
     pub has_ram: bool,
     pub has_battery: bool,
-    pub rom_bank_count: u32,
-    pub ram_bank_count: u32,
+    pub rom_bank_count: usize,
+    pub ram_bank_count: usize,
     pub passed_header_check: bool,
     pub passed_global_check: bool,
 }

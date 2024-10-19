@@ -3,10 +3,9 @@ mod metadata;
 
 use crate::cartridge::mbc::{MemoryBankController, NoMBC, MBC1, MBC3, MBC5};
 use crate::cartridge::metadata::Metadata;
-use crate::util::DataSize;
 
-const ROM_BANK_SIZE: DataSize = DataSize::from_kilobytes(16);
-const RAM_BANK_SIZE: DataSize = DataSize::from_kilobytes(8);
+const ROM_BANK_SIZE: usize = 16 * 1024;
+const RAM_BANK_SIZE: usize = 8 * 1024;
 
 // TODO: add support for save files
 pub struct Cartridge {
@@ -31,7 +30,7 @@ impl Cartridge {
 
         let ram = if metadata.has_ram {
             let capacity = RAM_BANK_SIZE * metadata.ram_bank_count;
-            let vec = Vec::with_capacity(capacity.as_bytes());
+            let vec = Vec::with_capacity(capacity);
             Some(vec)
         } else {
             None
@@ -47,12 +46,12 @@ impl Cartridge {
 
     pub(crate) fn read_rom_bank0(&self, address: u16) -> u8 {
         let offset = ROM_BANK_SIZE * self.mbc.get_rom_bank0();
-        self.rom[(address as usize) + offset.as_bytes()]
+        self.rom[(address as usize) + offset]
     }
 
     pub(crate) fn read_rom_bank1(&self, address: u16) -> u8 {
         let offset = ROM_BANK_SIZE * self.mbc.get_rom_bank1();
-        self.rom[(address as usize) + offset.as_bytes()]
+        self.rom[(address as usize) + offset]
     }
 
     pub(crate) fn write_rom(&mut self, address: u16, value: u8) {
@@ -66,7 +65,7 @@ impl Cartridge {
 
         if let Some(ram) = &self.ram {
             let offset = RAM_BANK_SIZE * self.mbc.get_ram_bank();
-            ram[(address as usize) + offset.as_bytes()]
+            ram[(address as usize) + offset]
         } else {
             panic!("Unable to read from cartridge RAM. No RAM included in cartridge.");
         }
@@ -79,7 +78,7 @@ impl Cartridge {
 
         if let Some(ram) = &mut self.ram {
             let offset = RAM_BANK_SIZE * self.mbc.get_ram_bank();
-            ram[(address as usize) + offset.as_bytes()] = value;
+            ram[(address as usize) + offset] = value;
         } else {
             panic!("Unable to write to cartridge RAM. No RAM included in cartridge.")
         }
@@ -91,20 +90,20 @@ impl Cartridge {
     }
 
     #[must_use]
-    pub fn get_rom_size(&self) -> DataSize {
+    pub const fn get_rom_size(&self) -> usize {
         ROM_BANK_SIZE * self.get_rom_bank_count()
     }
 
-    pub(crate) const fn get_rom_bank_count(&self) -> u32 {
+    pub(crate) const fn get_rom_bank_count(&self) -> usize {
         self.metadata.rom_bank_count
     }
 
     #[must_use]
-    pub fn get_ram_size(&self) -> DataSize {
+    pub const fn get_ram_size(&self) -> usize {
         RAM_BANK_SIZE * self.get_ram_bank_count()
     }
 
-    pub(crate) const fn get_ram_bank_count(&self) -> u32 {
+    pub(crate) const fn get_ram_bank_count(&self) -> usize {
         self.metadata.ram_bank_count
     }
 
