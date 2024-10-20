@@ -1,13 +1,11 @@
 use crate::cartridge::Cartridge;
-use crate::display::Display;
 use crate::interrupts::InterruptFlags;
 use crate::joypad::Joypad;
+use crate::ppu::Ppu;
 use crate::serial_port::SerialPort;
 use crate::timer::Timer;
 
-const VIDEO_RAM_SIZE: usize = 8 * 1024;
 const WORK_RAM_SIZE: usize = 8 * 1024;
-const SPRITE_RAM_SIZE: usize = 0xFE9F - 0xFE00 + 1;
 const AUDIO_SIZE: usize = 0xFF3F - 0xFF10 + 1;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 const MEM_INTERRUPT_ENABLE: u16 = 0xFFFF;
@@ -15,20 +13,18 @@ const MEM_INTERRUPT_ENABLE: u16 = 0xFFFF;
 pub struct AddressBus {
     // ROM and External RAM
     cartridge: Cartridge,
-    // VRAM
-    video_ram: [u8; VIDEO_RAM_SIZE],
+    // Picture Processing Unit
+    ppu: Ppu,
     // WRAM
     work_ram: [u8; WORK_RAM_SIZE],
-    // OAM
-    sprite_ram: [u8; SPRITE_RAM_SIZE],
     // P1/JOYP
     joypad: Joypad,
+    // Link Cable
     serial_port: SerialPort,
     timer: Timer,
     // IF
     interrupt_flag: InterruptFlags,
     audio: [u8; AUDIO_SIZE],
-    display: Display,
     // HRAM
     high_ram: [u8; HIGH_RAM_SIZE],
     // IE
@@ -40,15 +36,13 @@ impl AddressBus {
     pub const fn new(cartridge: Cartridge) -> Self {
         Self {
             cartridge,
-            video_ram: [0; VIDEO_RAM_SIZE],
+            ppu: Ppu::new(),
             work_ram: [0; WORK_RAM_SIZE],
-            sprite_ram: [0; SPRITE_RAM_SIZE],
             joypad: Joypad::new(),
             serial_port: SerialPort::new(),
             timer: Timer::new(),
             interrupt_flag: InterruptFlags::empty(),
             audio: [0; AUDIO_SIZE],
-            display: Display::new(),
             high_ram: [0; HIGH_RAM_SIZE],
             interrupt_enable: InterruptFlags::empty(),
         }
@@ -62,8 +56,8 @@ impl AddressBus {
                 self.cartridge.read_rom_bank1(offset)
             }
             0x8000..=0x9FFF => {
-                let offset = (address - 0x8000) as usize;
-                self.video_ram[offset]
+                let offset = address - 0x8000;
+                self.ppu.read_vram(offset)
             }
             0xA000..=0xBFFF => {
                 let offset = address - 0xA000;
@@ -74,8 +68,8 @@ impl AddressBus {
                 self.work_ram[offset]
             }
             0xFE00..=0xFE9F => {
-                let offset = (address - 0xFE00) as usize;
-                self.sprite_ram[offset]
+                let offset = address - 0xFE00;
+                self.ppu.read_sprite(offset)
             }
             0xFF00..=0xFF7F => self.read_io(address),
             0xFF80..=0xFFFE => {
@@ -99,7 +93,7 @@ impl AddressBus {
                 let offset = (address - 0xFF10) as usize;
                 self.audio[offset]
             }
-            0xFF40..=0xFF4B => self.display.read_byte(address),
+            0xFF40..=0xFF4B => self.ppu.read_display(address),
             0xFF50 => 1,
             _ => panic!("Address {address:#X} is not mapped in I/O registers."),
         }
@@ -109,8 +103,8 @@ impl AddressBus {
         match address {
             0x0000..=0x7FFF => self.cartridge.write_rom(address, value),
             0x8000..=0x9FFF => {
-                let offset = (address - 0x8000) as usize;
-                self.video_ram[offset] = value;
+                let offset = address - 0x8000;
+                self.ppu.write_vram(offset, value);
             }
             0xA000..=0xBFFF => {
                 let offset = address - 0xA000;
@@ -121,8 +115,8 @@ impl AddressBus {
                 self.work_ram[offset] = value;
             }
             0xFE00..=0xFE9F => {
-                let offset = (address - 0xFE00) as usize;
-                self.sprite_ram[offset] = value;
+                let offset = address - 0xFE00;
+                self.ppu.write_sprite(offset, value);
             }
             0xFF00..=0xFF7F => {
                 self.write_io(address, value);
@@ -150,7 +144,7 @@ impl AddressBus {
                 let offset = (address - 0xFF10) as usize;
                 self.audio[offset] = value;
             }
-            0xFF40..=0xFF4B => self.display.write_byte(address, value),
+            0xFF40..=0xFF4B => self.ppu.write_display(address, value),
             _ => panic!("Address {address:#X} is not mapped in I/O registers."),
         }
     }

@@ -3,6 +3,9 @@ use crate::error::TryFromUintError;
 use crate::util::bit;
 use bitflags::bitflags;
 
+const VIDEO_RAM_SIZE: usize = 8 * 1024;
+const SPRITE_RAM_SIZE: usize = 0xFE9F - 0xFE00 + 1;
+
 const MEM_DISPLAY_CONTROL: u16 = 0xFF40;
 const MEM_DISPLAY_STATUS: u16 = 0xFF41;
 const MEM_SCROLL_Y: u16 = 0xFF42;
@@ -77,7 +80,11 @@ impl TryFrom<u8> for MonochromePalette {
 }
 
 #[derive(Debug, Clone)]
-pub struct Display {
+pub struct Ppu {
+    // VRAM
+    video_ram: [u8; VIDEO_RAM_SIZE],
+    // OAM
+    sprite_ram: [u8; SPRITE_RAM_SIZE],
     control: DisplayControl,
     status: DisplayStatus,
     scroll_y: u8,
@@ -92,9 +99,11 @@ pub struct Display {
     window_x: u8,
 }
 
-impl Display {
+impl Ppu {
     pub const fn new() -> Self {
         Self {
+            video_ram: [0; VIDEO_RAM_SIZE],
+            sprite_ram: [0; SPRITE_RAM_SIZE],
             control: DisplayControl::empty(),
             status: DisplayStatus::empty(),
             scroll_y: 0,
@@ -110,7 +119,23 @@ impl Display {
         }
     }
 
-    pub const fn read_byte(&self, address: u16) -> u8 {
+    pub const fn read_vram(&self, addr: u16) -> u8 {
+        self.video_ram[addr as usize]
+    }
+
+    pub fn write_vram(&mut self, addr: u16, data: u8) {
+        self.video_ram[addr as usize] = data;
+    }
+
+    pub const fn read_sprite(&self, addr: u16) -> u8 {
+        self.sprite_ram[addr as usize]
+    }
+
+    pub fn write_sprite(&mut self, addr: u16, data: u8) {
+        self.sprite_ram[addr as usize] = data;
+    }
+
+    pub const fn read_display(&self, address: u16) -> u8 {
         match address {
             MEM_DISPLAY_CONTROL => self.control.bits(),
             MEM_DISPLAY_STATUS => self.status.bits(),
@@ -128,7 +153,7 @@ impl Display {
         }
     }
 
-    pub fn write_byte(&mut self, address: u16, value: u8) {
+    pub fn write_display(&mut self, address: u16, value: u8) {
         match address {
             MEM_DISPLAY_CONTROL => self.control = DisplayControl::from_bits_truncate(value),
             MEM_DISPLAY_STATUS => self.status = DisplayStatus::from_bits_truncate(value),

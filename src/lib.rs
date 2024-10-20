@@ -5,11 +5,11 @@
 )]
 pub mod cartridge;
 pub mod cpu;
-mod display;
 mod error;
 mod interrupts;
 mod joypad;
 pub mod memory;
+mod ppu;
 mod serial_port;
 mod timer;
 mod util;
