@@ -2,7 +2,7 @@
 mod execute;
 mod instructions;
 
-use crate::memory::io::interrupts::InterruptFlags;
+use crate::interrupts::InterruptFlags;
 use crate::memory::AddressBus;
 use crate::util::bit;
 use bitflags::bitflags;

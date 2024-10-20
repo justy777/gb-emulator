@@ -1,6 +1,6 @@
 use crate::bits;
 use crate::error::TryFromUintError;
-use crate::memory::io::interrupts::InterruptFlags;
+use crate::interrupts::InterruptFlags;
 use crate::util::bit;
 use bitflags::bitflags;
 

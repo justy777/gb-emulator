@@ -1,14 +1,14 @@
 use crate::cartridge::Cartridge;
-use crate::memory::io::serial_transfer::SerialTransferControl;
-use io::interrupts::InterruptFlags;
-use io::joypad::Joypad;
-use io::IORegisters;
-
-pub(crate) mod io;
+use crate::display::Display;
+use crate::interrupts::InterruptFlags;
+use crate::joypad::Joypad;
+use crate::serial_port::SerialPort;
+use crate::timer::Timer;
 
 const VIDEO_RAM_SIZE: usize = 8 * 1024;
 const WORK_RAM_SIZE: usize = 8 * 1024;
-const OBJECT_ATTRIBUTE_MEMORY_SIZE: usize = 0xFE9F - 0xFE00 + 1;
+const SPRITE_RAM_SIZE: usize = 0xFE9F - 0xFE00 + 1;
+const AUDIO_SIZE: usize = 0xFF3F - 0xFF10 + 1;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 const MEM_INTERRUPT_ENABLE: u16 = 0xFFFF;
 
@@ -20,8 +20,15 @@ pub struct AddressBus {
     // WRAM
     work_ram: [u8; WORK_RAM_SIZE],
     // OAM
-    object_attribute_memory: [u8; OBJECT_ATTRIBUTE_MEMORY_SIZE],
-    io_registers: IORegisters,
+    sprite_ram: [u8; SPRITE_RAM_SIZE],
+    // P1/JOYP
+    joypad: Joypad,
+    serial_port: SerialPort,
+    timer: Timer,
+    // IF
+    interrupt_flag: InterruptFlags,
+    audio: [u8; AUDIO_SIZE],
+    display: Display,
     // HRAM
     high_ram: [u8; HIGH_RAM_SIZE],
     // IE
@@ -35,8 +42,13 @@ impl AddressBus {
             cartridge,
             video_ram: [0; VIDEO_RAM_SIZE],
             work_ram: [0; WORK_RAM_SIZE],
-            object_attribute_memory: [0; OBJECT_ATTRIBUTE_MEMORY_SIZE],
-            io_registers: IORegisters::new(),
+            sprite_ram: [0; SPRITE_RAM_SIZE],
+            joypad: Joypad::new(),
+            serial_port: SerialPort::new(),
+            timer: Timer::new(),
+            interrupt_flag: InterruptFlags::empty(),
+            audio: [0; AUDIO_SIZE],
+            display: Display::new(),
             high_ram: [0; HIGH_RAM_SIZE],
             interrupt_enable: InterruptFlags::empty(),
         }
@@ -63,9 +75,9 @@ impl AddressBus {
             }
             0xFE00..=0xFE9F => {
                 let offset = (address - 0xFE00) as usize;
-                self.object_attribute_memory[offset]
+                self.sprite_ram[offset]
             }
-            0xFF00..=0xFF7F => self.io_registers.read_byte(address),
+            0xFF00..=0xFF7F => self.read_io(address),
             0xFF80..=0xFFFE => {
                 let offset = (address - 0xFF80) as usize;
                 self.high_ram[offset]
@@ -74,6 +86,22 @@ impl AddressBus {
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
                 panic!("Use of this area is prohibited {address:#X}")
             }
+        }
+    }
+
+    fn read_io(&self, address: u16) -> u8 {
+        match address {
+            0xFF00 => self.joypad.bits(),
+            0xFF01..=0xFF02 => self.serial_port.read_byte(address),
+            0xFF04..=0xFF07 => self.timer.read_byte(address),
+            0xFF0F => self.interrupt_flag.bits(),
+            0xFF10..=0xFF3F => {
+                let offset = (address - 0xFF10) as usize;
+                self.audio[offset]
+            }
+            0xFF40..=0xFF4B => self.display.read_byte(address),
+            0xFF50 => 1,
+            _ => panic!("Address {address:#X} is not mapped in I/O registers."),
         }
     }
 
@@ -94,10 +122,10 @@ impl AddressBus {
             }
             0xFE00..=0xFE9F => {
                 let offset = (address - 0xFE00) as usize;
-                self.object_attribute_memory[offset] = value;
+                self.sprite_ram[offset] = value;
             }
             0xFF00..=0xFF7F => {
-                self.io_registers.write_byte(address, value);
+                self.write_io(address, value);
             }
             0xFF80..=0xFFFE => {
                 let offset = (address - 0xFF80) as usize;
@@ -112,34 +140,36 @@ impl AddressBus {
         }
     }
 
-    pub fn tick(&mut self, cycles: usize) {
-        self.io_registers
-            .timer
-            .tick(cycles, &mut self.io_registers.interrupt_flag);
+    fn write_io(&mut self, address: u16, value: u8) {
+        match address {
+            0xFF00 => self.joypad = Joypad::from_bits_truncate(value),
+            0xFF01..=0xFF02 => self.serial_port.write_byte(address, value),
+            0xFF04..=0xFF07 => self.timer.write_byte(address, value),
+            0xFF0F => self.interrupt_flag = InterruptFlags::from_bits_truncate(value),
+            0xFF10..=0xFF3F => {
+                let offset = (address - 0xFF10) as usize;
+                self.audio[offset] = value;
+            }
+            0xFF40..=0xFF4B => self.display.write_byte(address, value),
+            _ => panic!("Address {address:#X} is not mapped in I/O registers."),
+        }
+    }
+
+    pub fn step(&mut self, cycles: usize) {
+        self.timer.tick(cycles, &mut self.interrupt_flag);
+        self.serial_port.step();
     }
 
     pub(crate) const fn get_joypad(&self) -> Joypad {
-        self.io_registers.joypad
-    }
-
-    pub(crate) const fn get_serial_transfer_data(&self) -> u8 {
-        self.io_registers.serial_transfer.data
-    }
-
-    pub(crate) const fn get_serial_transfer_control(&self) -> SerialTransferControl {
-        self.io_registers.serial_transfer.control
-    }
-
-    pub(crate) fn set_serial_transfer_control(&mut self, value: SerialTransferControl) {
-        self.io_registers.serial_transfer.control = value;
+        self.joypad
     }
 
     pub(crate) const fn get_interrupt_flag(&self) -> InterruptFlags {
-        self.io_registers.interrupt_flag
+        self.interrupt_flag
     }
 
     pub(crate) fn set_interrupt_flag(&mut self, value: InterruptFlags) {
-        self.io_registers.interrupt_flag = value;
+        self.interrupt_flag = value;
     }
 
     pub(crate) const fn get_interrupt_enable(&self) -> InterruptFlags {

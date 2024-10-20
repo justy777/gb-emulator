@@ -1,7 +1,6 @@
 use gb_emulator::cartridge::Cartridge;
 use gb_emulator::cpu::Cpu;
 use gb_emulator::memory::AddressBus;
-use gb_emulator::serial_port::SerialPort;
 use std::{env, fs, io};
 
 fn main() -> io::Result<()> {
@@ -29,7 +28,6 @@ fn main() -> io::Result<()> {
     let mut cpu = Cpu::new();
     loop {
         let cycles = cpu.step(&mut memory);
-        memory.tick(cycles);
-        SerialPort::step(&mut memory);
+        memory.step(cycles);
     }
 }
