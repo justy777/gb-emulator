@@ -122,16 +122,8 @@ impl AddressBus {
         self.io_registers.joypad
     }
 
-    pub(crate) fn set_joypad(&mut self, joypad: Joypad) {
-        self.io_registers.joypad = joypad;
-    }
-
     pub(crate) const fn get_serial_transfer_data(&self) -> u8 {
         self.io_registers.serial_transfer.data
-    }
-
-    pub(crate) fn set_serial_transfer_data(&mut self, value: u8) {
-        self.io_registers.serial_transfer.data = value;
     }
 
     pub(crate) const fn get_serial_transfer_control(&self) -> SerialTransferControl {
@@ -152,9 +144,5 @@ impl AddressBus {
 
     pub(crate) const fn get_interrupt_enable(&self) -> InterruptFlags {
         self.interrupt_enable
-    }
-
-    pub(crate) fn set_interrupt_enable(&mut self, value: InterruptFlags) {
-        self.interrupt_enable = value;
     }
 }
