@@ -30,7 +30,7 @@ impl Cartridge {
 
         let ram = if metadata.has_ram {
             let capacity = RAM_BANK_SIZE * metadata.ram_bank_count;
-            let vec = Vec::with_capacity(capacity);
+            let vec = vec![0; capacity];
             Some(vec)
         } else {
             None
