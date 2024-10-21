@@ -12,9 +12,20 @@ const MEM_TIMER_CONTROL: u16 = 0xFF07;
 bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy)]
-    pub struct TimerControl: u8 {
+    struct TimerControl: u8 {
         const ENABLE = bit(2);
         const CLOCK_SELECT = bits![0, 1];
+    }
+}
+
+impl TimerControl {
+    fn is_enabled(self) -> bool {
+        self.contains(TimerControl::ENABLE)
+    }
+
+    fn clock_select(self) -> ClockFrequency {
+        let clock_select = self.intersection(TimerControl::CLOCK_SELECT);
+        ClockFrequency::try_from(clock_select.bits()).unwrap()
     }
 }
 
@@ -73,13 +84,11 @@ impl Timer {
         for _ in 0..cycles {
             self.divider = self.divider.wrapping_add(1);
 
-            let clock_select = self.control.intersection(TimerControl::CLOCK_SELECT);
-            let clock_frequency = ClockFrequency::try_from(clock_select.bits()).unwrap();
-            let bit_set = self.divider & clock_frequency.increment_every()
-                == clock_frequency.increment_every();
+            let clock_select = self.control.clock_select();
+            let divider_mask = clock_select.divider_mask();
+            let bit_set = self.divider & divider_mask == divider_mask;
 
-            let enabled = self.control.contains(TimerControl::ENABLE);
-            let current_edge = bit_set && enabled;
+            let current_edge = bit_set && self.control.is_enabled();
 
             if self.last_edge && !current_edge {
                 if self.counter == 255 {
@@ -102,39 +111,40 @@ impl Timer {
     }
 }
 
+#[repr(u8)]
 enum ClockFrequency {
-    Zero,
-    One,
-    Two,
-    Three,
+    // 256 M-cycles
+    Zero = 0b00,
+    // 4 M-cycles
+    One = 0b01,
+    // 16 M-cycles
+    Two = 0b10,
+    // 64 M-cycles
+    Three = 0b11,
 }
 
 impl ClockFrequency {
-    const fn increment_every(&self) -> u16 {
-        match self {
-            Self::Zero => 512,
-            Self::One => 8,
-            Self::Two => 32,
-            Self::Three => 128,
-        }
+    const fn divider_mask(&self) -> u16 {
+        let increment_every = match self {
+            Self::Zero => 256,
+            Self::One => 4,
+            Self::Two => 16,
+            Self::Three => 64,
+        };
+        (increment_every * 4) / 2
     }
 }
 
 impl From<ClockFrequency> for u8 {
     fn from(clock: ClockFrequency) -> Self {
-        match clock {
-            ClockFrequency::Zero => 0b00,
-            ClockFrequency::One => 0b01,
-            ClockFrequency::Two => 0b10,
-            ClockFrequency::Three => 0b11,
-        }
+        clock as Self
     }
 }
 
 impl TryFrom<u8> for ClockFrequency {
     type Error = TryFromUintError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
+        match byte {
             0b00 => Ok(Self::Zero),
             0b01 => Ok(Self::One),
             0b10 => Ok(Self::Two),

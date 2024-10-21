@@ -350,7 +350,7 @@ pub(crate) enum JumpCondition {
 pub struct Cpu {
     registers: Registers,
     halted: bool,
-    /// IME: Interrupt Master Enable
+    // IME: Interrupt Master Enable
     ime: bool,
     // Used to delay setting IME after calling EI
     ime_delay_counter: Option<u8>,
