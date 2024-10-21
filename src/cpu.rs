@@ -8,7 +8,7 @@ use crate::util::bit;
 use bitflags::bitflags;
 
 const PC_VBLANK_HANDLER: u16 = 0x40;
-const PC_LCD_HANDLER: u16 = 0x48;
+const PC_STAT_HANDLER: u16 = 0x48;
 const PC_TIMER_HANDLER: u16 = 0x50;
 const PC_SERIAL_HANDLER: u16 = 0x58;
 const PC_JOYPAD_HANDLER: u16 = 0x60;
@@ -350,7 +350,7 @@ pub(crate) enum JumpCondition {
 pub struct Cpu {
     registers: Registers,
     halted: bool,
-    /// IME: Interrupt Master Enable
+    // IME: Interrupt Master Enable
     ime: bool,
     // Used to delay setting IME after calling EI
     ime_delay_counter: Option<u8>,
@@ -389,7 +389,7 @@ impl Cpu {
                     memory.set_interrupt_flag(interrupt_flag & !flag);
                     let handler = match flag {
                         InterruptFlags::VBLANK => PC_VBLANK_HANDLER,
-                        InterruptFlags::LCD => PC_LCD_HANDLER,
+                        InterruptFlags::STAT => PC_STAT_HANDLER,
                         InterruptFlags::TIMER => PC_TIMER_HANDLER,
                         InterruptFlags::SERIAL => PC_SERIAL_HANDLER,
                         InterruptFlags::JOYPAD => PC_JOYPAD_HANDLER,
