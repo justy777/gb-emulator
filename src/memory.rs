@@ -151,6 +151,7 @@ impl AddressBus {
 
     pub fn step(&mut self, cycles: usize) {
         self.timer.tick(cycles, &mut self.interrupt_flag);
+        self.ppu.step(cycles, &mut self.interrupt_flag);
         self.serial_port.step();
     }
 
