@@ -19,7 +19,7 @@ impl Cpu {
     /// 2 4
     /// - - - -
     ///
-    /// Stop CPU & LCD display until button pressed.
+    /// Stop CPU & display until button pressed.
     pub(crate) fn stop(&mut self, memory: &AddressBus) {
         let _ = self.read_next_byte(memory);
         loop {
