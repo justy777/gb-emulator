@@ -3,7 +3,7 @@ mod execute;
 mod instructions;
 
 use crate::interrupts::InterruptFlags;
-use crate::memory::AddressBus;
+use crate::hardware::AddressBus;
 use crate::util::bit;
 use bitflags::bitflags;
 
@@ -14,7 +14,7 @@ const PC_SERIAL_HANDLER: u16 = 0x58;
 const PC_JOYPAD_HANDLER: u16 = 0x60;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Registers {
+pub struct Registers {
     /// Accumulator
     a: u8,
     b: u8,
@@ -140,7 +140,7 @@ impl RegisterFlags {
 
 /// 8-bit registers (r8)
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum R8 {
+pub enum R8 {
     A,
     B,
     C,
@@ -152,7 +152,7 @@ pub(crate) enum R8 {
 
 /// 16-bit registers (r16)
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum R16 {
+pub enum R16 {
     AF,
     BC,
     DE,
@@ -162,7 +162,7 @@ pub(crate) enum R16 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum Addr {
+pub enum Addr {
     BC,
     DE,
     HL,
@@ -172,20 +172,20 @@ pub(crate) enum Addr {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum HighAddr {
+pub enum HighAddr {
     C,
     N8,
 }
 
 /// Unit struct to represent next byte (n8)
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct N8;
+pub struct N8;
 
 /// Unit struct to represent next word (n16)
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct N16;
+pub struct N16;
 
-pub(crate) trait ReadByte<S> {
+pub trait ReadByte<S> {
     fn read_byte(&mut self, memory: &AddressBus, src: S) -> u8;
 }
 
@@ -251,7 +251,7 @@ impl ReadByte<N8> for Cpu {
     }
 }
 
-pub(crate) trait WriteByte<D> {
+pub trait WriteByte<D> {
     fn write_byte(&mut self, memory: &mut AddressBus, dst: D, value: u8);
 }
 
@@ -311,7 +311,7 @@ impl WriteByte<HighAddr> for Cpu {
     }
 }
 
-pub(crate) trait ReadWord<S> {
+pub trait ReadWord<S> {
     fn read_word(&mut self, memory: &AddressBus, src: S) -> u16;
 }
 
@@ -327,7 +327,7 @@ impl ReadWord<N16> for Cpu {
     }
 }
 
-pub(crate) trait WriteWord<D> {
+pub trait WriteWord<D> {
     fn write_word(&mut self, dst: D, value: u16);
 }
 
@@ -338,7 +338,7 @@ impl WriteWord<R16> for Cpu {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum JumpCondition {
+pub enum JumpCondition {
     NotZero,
     Zero,
     NotCarry,

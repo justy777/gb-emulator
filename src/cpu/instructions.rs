@@ -1,7 +1,7 @@
 use crate::cpu::{
     Cpu, JumpCondition, ReadByte, ReadWord, RegisterFlags, WriteByte, WriteWord, R16,
 };
-use crate::memory::AddressBus;
+use crate::hardware::AddressBus;
 
 impl Cpu {
     pub(crate) fn undefined(byte: u8) {
