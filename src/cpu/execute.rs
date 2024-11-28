@@ -1,5 +1,5 @@
 use crate::cpu::{Addr, Cpu, HighAddr, JumpCondition, N16, N8, R16, R8};
-use crate::memory::AddressBus;
+use crate::hardware::AddressBus;
 
 impl Cpu {
     pub(crate) fn execute(&mut self, memory: &mut AddressBus, byte: u8) -> usize {

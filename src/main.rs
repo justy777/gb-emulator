@@ -1,7 +1,6 @@
 use gb_emulator::cartridge::Cartridge;
-use gb_emulator::cpu::Cpu;
-use gb_emulator::memory::AddressBus;
 use std::{env, fs, io};
+use gb_emulator::hardware::GameboyHardware;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -24,10 +23,8 @@ fn main() -> io::Result<()> {
         );
     }
 
-    let mut memory = AddressBus::new(cartridge);
-    let mut cpu = Cpu::new();
+    let mut gameboy = GameboyHardware::new(cartridge);
     loop {
-        let cycles = cpu.step(&mut memory);
-        memory.step(cycles);
+        gameboy.step();
     }
 }

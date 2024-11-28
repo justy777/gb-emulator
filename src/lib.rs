@@ -4,11 +4,11 @@
     clippy::verbose_bit_mask
 )]
 pub mod cartridge;
-pub mod cpu;
+mod cpu;
+pub mod hardware;
 mod error;
 mod interrupts;
 mod joypad;
-pub mod memory;
 mod ppu;
 mod serial_port;
 mod timer;
