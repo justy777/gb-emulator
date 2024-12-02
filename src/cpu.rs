@@ -33,8 +33,7 @@ impl Registers {
             c: 0x13,
             d: 0x00,
             e: 0xD8,
-            // TODO: write checksum to set half-carry and carry
-            f: RegisterFlags::ZERO,
+            f: RegisterFlags::DEFAULT,
             h: 0x01,
             l: 0x4D,
             sp: 0xFFFE,
@@ -117,6 +116,8 @@ bitflags! {
         const SUBTRACT = bit(6);
         const HALF_CARRY = bit(5);
         const CARRY = bit(4);
+
+        const DEFAULT = Self::ZERO.bits() | Self::HALF_CARRY.bits() | Self::CARRY.bits();
     }
 }
 
