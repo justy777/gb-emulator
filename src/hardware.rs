@@ -66,7 +66,7 @@ impl GameboyHardware {
         };
 
         let cycles = self.cpu.step(&mut memory);
-        self.timer.tick(cycles, &mut self.interrupt_flag);
+        self.timer.tick(cycles / 4, &mut self.interrupt_flag);
         self.serial_port.step();
     }
 }

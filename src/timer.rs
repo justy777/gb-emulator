@@ -18,9 +18,25 @@ bitflags! {
     }
 }
 
+impl TimerControl {
+    fn is_enabled(&self) -> bool {
+        self.contains(Self::ENABLE)
+    }
+    fn counter_mask(&self) -> u16 {
+        match self.bits() & Self::CLOCK_SELECT.bits() {
+            0b00 => 128,
+            0b01 => 2,
+            0b10 => 8,
+            0b11 => 32,
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Timer {
     // DIV
+    // Note: only uses 14 bits
     divider: u16,
     // TIMA
     counter: u8,
@@ -48,7 +64,7 @@ impl Timer {
 
     pub const fn read_byte(&self, address: u16) -> u8 {
         match address {
-            MEM_DIVIDER_REGISTER => (self.divider >> 8) as u8,
+            MEM_DIVIDER_REGISTER => (self.divider >> 6) as u8,
             MEM_TIMER_COUNTER => self.counter,
             MEM_TIMER_MODULO => self.modulo,
             MEM_TIMER_CONTROL => self.control.bits(),
@@ -73,13 +89,7 @@ impl Timer {
         for _ in 0..cycles {
             self.divider = self.divider.wrapping_add(1);
 
-            let clock_select = self.control.intersection(TimerControl::CLOCK_SELECT);
-            let clock_frequency = ClockFrequency::try_from(clock_select.bits()).unwrap();
-            let bit_set = self.divider & clock_frequency.increment_every()
-                == clock_frequency.increment_every();
-
-            let enabled = self.control.contains(TimerControl::ENABLE);
-            let current_edge = bit_set && enabled;
+            let current_edge = self.counter_bit() && self.control.is_enabled();
 
             if self.last_edge && !current_edge {
                 if self.counter == 255 {
@@ -100,46 +110,8 @@ impl Timer {
             }
         }
     }
-}
 
-enum ClockFrequency {
-    Zero,
-    One,
-    Two,
-    Three,
-}
-
-impl ClockFrequency {
-    const fn increment_every(&self) -> u16 {
-        match self {
-            Self::Zero => 512,
-            Self::One => 8,
-            Self::Two => 32,
-            Self::Three => 128,
-        }
-    }
-}
-
-impl From<ClockFrequency> for u8 {
-    fn from(clock: ClockFrequency) -> Self {
-        match clock {
-            ClockFrequency::Zero => 0b00,
-            ClockFrequency::One => 0b01,
-            ClockFrequency::Two => 0b10,
-            ClockFrequency::Three => 0b11,
-        }
-    }
-}
-
-impl TryFrom<u8> for ClockFrequency {
-    type Error = TryFromUintError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0b00 => Ok(Self::Zero),
-            0b01 => Ok(Self::One),
-            0b10 => Ok(Self::Two),
-            0b11 => Ok(Self::Three),
-            _ => Err(TryFromUintError(())),
-        }
+    fn counter_bit(&self) -> bool {
+        (self.divider & self.control.counter_mask()) != 0
     }
 }
