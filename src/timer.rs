@@ -18,10 +18,18 @@ bitflags! {
 }
 
 impl TimerControl {
-    fn is_enabled(&self) -> bool {
+    pub const fn unknown() -> Self {
+        // 0xF8
+        Self::from_bits_retain(0b1111_1000)
+    }
+}
+
+impl TimerControl {
+    const fn is_enabled(self) -> bool {
         self.contains(Self::ENABLE)
     }
-    fn counter_mask(&self) -> u16 {
+
+    fn counter_mask(self) -> u16 {
         match self.bits() & Self::CLOCK_SELECT.bits() {
             0b00 => 128,
             0b01 => 2,
@@ -52,10 +60,11 @@ pub struct Timer {
 impl Timer {
     pub const fn new() -> Self {
         Self {
-            divider: 0,
+            // TODO: between 0x2C and 0x3F
+            divider: (0xAB << 6) + 0x2C,
             counter: 0,
             modulo: 0,
-            control: TimerControl::empty(),
+            control: TimerControl::unknown(),
             interrupt_signal: false,
             overflow_delay_counter: None,
         }
@@ -79,7 +88,7 @@ impl Timer {
                 self.overflow_delay_counter = None;
             }
             MEM_TIMER_MODULO => self.modulo = value,
-            MEM_TIMER_CONTROL => self.control = TimerControl::from_bits_truncate(value),
+            MEM_TIMER_CONTROL => self.control = TimerControl::from_bits_retain(value),
             _ => unreachable!(),
         }
     }

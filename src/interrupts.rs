@@ -20,13 +20,23 @@ bitflags! {
 }
 
 impl InterruptFlags {
+    pub const fn new() -> Self {
+        Self::unknown().union(Self::VBLANK)
+    }
+    pub const fn unknown() -> Self {
+        // 0xE0
+        Self::from_bits_retain(0b1110_0000)
+    }
+}
+
+impl InterruptFlags {
     pub(crate) fn handler(self) -> u16 {
         match self {
-            InterruptFlags::VBLANK => PC_VBLANK_HANDLER,
-            InterruptFlags::STAT => PC_STAT_HANDLER,
-            InterruptFlags::TIMER => PC_TIMER_HANDLER,
-            InterruptFlags::SERIAL => PC_SERIAL_HANDLER,
-            InterruptFlags::JOYPAD => PC_JOYPAD_HANDLER,
+            Self::VBLANK => PC_VBLANK_HANDLER,
+            Self::STAT => PC_STAT_HANDLER,
+            Self::TIMER => PC_TIMER_HANDLER,
+            Self::SERIAL => PC_SERIAL_HANDLER,
+            Self::JOYPAD => PC_JOYPAD_HANDLER,
             _ => unreachable!(),
         }
     }

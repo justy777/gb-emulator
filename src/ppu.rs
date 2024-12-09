@@ -34,6 +34,14 @@ bitflags! {
     }
 }
 
+impl DisplayControl {
+    pub const fn new() -> Self {
+        Self::DISPLAY_AND_PPU_ENABLE
+            .union(Self::BACKGROUND_AND_WINDOW_TILE_DATA_AREA)
+            .union(Self::BACKGROUND_AND_WINDOW_ENABLE)
+    }
+}
+
 bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy)]
@@ -44,6 +52,19 @@ bitflags! {
         const MODE_0 = bit(3);
         const LYC_EQ_LY = bit(2);
         const PPU_MODE = bits![0, 1];
+    }
+}
+
+impl DisplayStatus {
+    pub const fn new() -> Self {
+        Self::unknown()
+            .union(Self::LYC_EQ_LY)
+            .union(Self::from_bits_retain(0b01))
+    }
+
+    pub const fn unknown() -> Self {
+        // 0x80
+        Self::from_bits_retain(0b1000_0000)
     }
 }
 
@@ -85,17 +106,29 @@ pub struct Ppu {
     video_ram: [u8; VIDEO_RAM_SIZE],
     // OAM
     sprite_ram: [u8; SPRITE_RAM_SIZE],
+    // LCDC
     control: DisplayControl,
+    // STAT
     status: DisplayStatus,
+    // SCY
     scroll_y: u8,
+    // SCX
     scroll_x: u8,
+    // LY
     ly: u8,
+    // LYC
     lyc: u8,
+    // DMA
     transfer_and_start_address: u8,
+    // BGP
     background_palette_data: u8,
+    // OBP0
     object_palette_0_data: u8,
+    // OBP1
     object_palette_1_data: u8,
+    // WY
     window_y: u8,
+    // WX
     window_x: u8,
 }
 
@@ -104,16 +137,16 @@ impl Ppu {
         Self {
             video_ram: [0; VIDEO_RAM_SIZE],
             sprite_ram: [0; SPRITE_RAM_SIZE],
-            control: DisplayControl::empty(),
-            status: DisplayStatus::empty(),
+            control: DisplayControl::new(),
+            status: DisplayStatus::new(),
             scroll_y: 0,
             scroll_x: 0,
             ly: 0,
             lyc: 0,
-            transfer_and_start_address: 0,
-            background_palette_data: 0,
-            object_palette_0_data: 0,
-            object_palette_1_data: 0,
+            transfer_and_start_address: 0xFF,
+            background_palette_data: 0xFC,
+            object_palette_0_data: 0xFF,
+            object_palette_1_data: 0xFF,
             window_y: 0,
             window_x: 0,
         }
@@ -155,8 +188,8 @@ impl Ppu {
 
     pub fn write_display(&mut self, address: u16, value: u8) {
         match address {
-            MEM_DISPLAY_CONTROL => self.control = DisplayControl::from_bits_truncate(value),
-            MEM_DISPLAY_STATUS => self.status = DisplayStatus::from_bits_truncate(value),
+            MEM_DISPLAY_CONTROL => self.control = DisplayControl::from_bits_retain(value),
+            MEM_DISPLAY_STATUS => self.status = DisplayStatus::from_bits_retain(value),
             MEM_SCROLL_Y => self.scroll_y = value,
             MEM_SCROLL_X => self.scroll_x = value,
             MEM_LY => self.ly = value,

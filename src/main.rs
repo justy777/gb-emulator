@@ -1,6 +1,6 @@
 use gb_emulator::cartridge::Cartridge;
-use std::{env, fs, io};
 use gb_emulator::hardware::GameboyHardware;
+use std::{env, fs, io};
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();

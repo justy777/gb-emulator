@@ -3,10 +3,12 @@
     clippy::option_if_let_else,
     clippy::verbose_bit_mask
 )]
+
+mod apu;
 pub mod cartridge;
 mod cpu;
-pub mod hardware;
 mod error;
+pub mod hardware;
 mod interrupts;
 mod joypad;
 mod ppu;

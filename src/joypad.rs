@@ -15,11 +15,11 @@ pub struct Joypad(u8);
 
 impl Joypad {
     pub const fn new() -> Self {
-        Self(0x3F)
+        Self(0xCF)
     }
 
-    pub const fn from_bits_truncate(byte: u8) -> Self {
-        Self(byte & 0x3F)
+    pub const fn from_bits_retain(byte: u8) -> Self {
+        Self(byte)
     }
 
     pub const fn bits(self) -> u8 {

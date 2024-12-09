@@ -1,3 +1,4 @@
+use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::cpu::Cpu;
 use crate::interrupts::InterruptFlags;
@@ -7,7 +8,7 @@ use crate::serial_port::SerialPort;
 use crate::timer::Timer;
 
 const WORK_RAM_SIZE: usize = 8 * 1024;
-const AUDIO_SIZE: usize = 0xFF3F - 0xFF10 + 1;
+const WAVE_PATTERN_RAM_SIZE: usize = 0xFF3F - 0xFF30 + 1;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 
 #[allow(clippy::module_name_repetitions)]
@@ -26,7 +27,9 @@ pub struct GameboyHardware {
     timer: Timer,
     // IF
     interrupt_flag: InterruptFlags,
-    audio: [u8; AUDIO_SIZE],
+    // Audio Processing Unit
+    apu: Apu,
+    wave_pattern_ram: [u8; WAVE_PATTERN_RAM_SIZE],
     // HRAM
     high_ram: [u8; HIGH_RAM_SIZE],
     // IE
@@ -44,8 +47,9 @@ impl GameboyHardware {
             joypad: Joypad::new(),
             serial_port: SerialPort::new(),
             timer: Timer::new(),
-            interrupt_flag: InterruptFlags::empty(),
-            audio: [0; AUDIO_SIZE],
+            interrupt_flag: InterruptFlags::new(),
+            apu: Apu::new(),
+            wave_pattern_ram: [0xFF; WAVE_PATTERN_RAM_SIZE],
             high_ram: [0; HIGH_RAM_SIZE],
             interrupt_enable: InterruptFlags::empty(),
         }
@@ -60,7 +64,8 @@ impl GameboyHardware {
             serial_port: &mut self.serial_port,
             timer: &mut self.timer,
             interrupt_flag: &mut self.interrupt_flag,
-            audio: &mut self.audio,
+            apu: &mut self.apu,
+            wave_pattern_ram: &mut self.wave_pattern_ram,
             high_ram: &mut self.high_ram,
             interrupt_enable: &mut self.interrupt_enable,
         };
@@ -85,7 +90,9 @@ pub struct AddressBus<'a> {
     timer: &'a mut Timer,
     // IF
     interrupt_flag: &'a mut InterruptFlags,
-    audio: &'a mut [u8],
+    // Audio Proccessing Unit
+    apu: &'a mut Apu,
+    wave_pattern_ram: &'a mut [u8],
     // HRAM
     high_ram: &'a mut [u8],
     // IE
@@ -134,13 +141,16 @@ impl AddressBus<'_> {
             0xFF01..=0xFF02 => self.serial_port.read_byte(address),
             0xFF04..=0xFF07 => self.timer.read_byte(address),
             0xFF0F => self.interrupt_flag.bits(),
-            0xFF10..=0xFF3F => {
-                let offset = (address - 0xFF10) as usize;
-                self.audio[offset]
+            0xFF10..=0xFF26 => self.apu.read_audio(address),
+            0xFF30..=0xFF3F => {
+                let offset = (address - 0xFF30) as usize;
+                self.wave_pattern_ram[offset]
             }
             0xFF40..=0xFF4B => self.ppu.read_display(address),
-            0xFF50 => 1,
-            _ => panic!("Address {address:#X} is not mapped in I/O registers."),
+            _ => {
+                println!("Warning: Address {address:#X} is not mapped to an I/O register.");
+                0xFF
+            }
         }
     }
 
@@ -171,7 +181,7 @@ impl AddressBus<'_> {
                 self.high_ram[offset] = value;
             }
             0xFFFF => {
-                *self.interrupt_enable = InterruptFlags::from_bits_truncate(value);
+                *self.interrupt_enable = InterruptFlags::from_bits_retain(value);
             }
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
                 panic!("Use of this area is prohibited {address:#X}")
@@ -181,16 +191,17 @@ impl AddressBus<'_> {
 
     fn write_io(&mut self, address: u16, value: u8) {
         match address {
-            0xFF00 => *self.joypad = Joypad::from_bits_truncate(value),
+            0xFF00 => *self.joypad = Joypad::from_bits_retain(value),
             0xFF01..=0xFF02 => self.serial_port.write_byte(address, value),
             0xFF04..=0xFF07 => self.timer.write_byte(address, value),
-            0xFF0F => *self.interrupt_flag = InterruptFlags::from_bits_truncate(value),
-            0xFF10..=0xFF3F => {
-                let offset = (address - 0xFF10) as usize;
-                self.audio[offset] = value;
+            0xFF0F => *self.interrupt_flag = InterruptFlags::from_bits_retain(value),
+            0xFF10..=0xFF26 => self.apu.write_audio(address, value),
+            0xFF30..=0xFF3F => {
+                let offset = (address - 0xFF30) as usize;
+                self.wave_pattern_ram[offset] = value;
             }
             0xFF40..=0xFF4B => self.ppu.write_display(address, value),
-            _ => panic!("Address {address:#X} is not mapped in I/O registers."),
+            _ => panic!("Address {address:#X} is not mapped to an I/O register."),
         }
     }
 

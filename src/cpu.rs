@@ -2,8 +2,8 @@
 mod execute;
 mod instructions;
 
-use crate::interrupts::InterruptFlags;
 use crate::hardware::AddressBus;
+use crate::interrupts::InterruptFlags;
 use crate::util::bit;
 use bitflags::bitflags;
 
@@ -81,7 +81,7 @@ impl Registers {
             R16::AF => {
                 let [low, high] = value.to_le_bytes();
                 self.a = high;
-                self.f = RegisterFlags::from_bits_truncate(low);
+                self.f = RegisterFlags::from_bits_retain(low);
             }
             R16::BC => {
                 let [low, high] = value.to_le_bytes();
