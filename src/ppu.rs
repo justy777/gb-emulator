@@ -1,7 +1,4 @@
-use crate::bits;
 use crate::error::TryFromUintError;
-use crate::util::bit;
-use bitflags::bitflags;
 
 const VIDEO_RAM_SIZE: usize = 8 * 1024;
 const SPRITE_RAM_SIZE: usize = 0xFE9F - 0xFE00 + 1;
@@ -19,52 +16,58 @@ const MEM_OBJECT_PALETTE_1_DATA: u16 = 0xFF49;
 const MEM_WINDOW_Y: u16 = 0xFF4A;
 const MEM_WINDOW_X: u16 = 0xFF4B;
 
-bitflags! {
-    #[repr(transparent)]
-    #[derive(Debug, Clone, Copy)]
-    struct DisplayControl: u8 {
-        const DISPLAY_AND_PPU_ENABLE = bit(7);
-        const WINDOW_TILE_MAP_AREA = bit(6);
-        const WINDOW_ENABLE = bit(5);
-        const BACKGROUND_AND_WINDOW_TILE_DATA_AREA = bit(4);
-        const BACKGROUND_TILE_MAP_AREA = bit(3);
-        const OBJECT_SIZE = bit(2);
-        const OBJECT_ENABLE = bit(1);
-        const BACKGROUND_AND_WINDOW_ENABLE = bit(0);
-    }
-}
+#[derive(Debug, Clone, Copy)]
+struct DisplayControl(u8);
 
 impl DisplayControl {
-    pub const fn new() -> Self {
-        Self::DISPLAY_AND_PPU_ENABLE
-            .union(Self::BACKGROUND_AND_WINDOW_TILE_DATA_AREA)
-            .union(Self::BACKGROUND_AND_WINDOW_ENABLE)
+    const DISPLAY_AND_PPU_ENABLE: u8 = 0b1000_0000;
+    const WINDOW_TILE_MAP_AREA: u8 = 0b0100_0000;
+    const WINDOW_ENABLE: u8 = 0b0010_0000;
+    const BACKGROUND_AND_WINDOW_TILE_DATA_AREA: u8 = 0b0001_0000;
+    const BACKGROUND_TILE_MAP_AREA: u8 = 0b0000_1000;
+    const SPRITE_SIZE: u8 = 0b0000_0100;
+    const SPRITE_ENABLE: u8 = 0b0000_0010;
+    const BACKGROUND_AND_WINDOW_ENABLE: u8 = 0b0000_0001;
+
+    const fn new() -> Self {
+        Self::from_bits(
+            Self::DISPLAY_AND_PPU_ENABLE
+                | Self::BACKGROUND_AND_WINDOW_TILE_DATA_AREA
+                | Self::BACKGROUND_AND_WINDOW_ENABLE,
+        )
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
     }
 }
 
-bitflags! {
-    #[repr(transparent)]
-    #[derive(Debug, Clone, Copy)]
-    struct DisplayStatus: u8 {
-        const LYC = bit(6);
-        const MODE_2 = bit(5);
-        const MODE_1 = bit(4);
-        const MODE_0 = bit(3);
-        const LYC_EQ_LY = bit(2);
-        const PPU_MODE = bits![0, 1];
-    }
-}
+#[derive(Debug, Clone, Copy)]
+struct DisplayStatus(u8);
 
 impl DisplayStatus {
-    pub const fn new() -> Self {
-        Self::unknown()
-            .union(Self::LYC_EQ_LY)
-            .union(Self::from_bits_retain(0b01))
+    const LYC: u8 = 0b0100_0000;
+    const MODE_2: u8 = 0b0010_0000;
+    const MODE_1: u8 = 0b0001_0000;
+    const MODE_0: u8 = 0b0000_1000;
+    const LYC_EQ_LY: u8 = 0b0000_0100;
+    const PPU_MODE: u8 = 0b0000_0011;
+    const UNUSED: u8 = 0b1000_0000;
+
+    const fn new() -> Self {
+        Self::from_bits(Self::LYC_EQ_LY | 0b01)
     }
 
-    pub const fn unknown() -> Self {
-        // 0x80
-        Self::from_bits_retain(0b1000_0000)
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
     }
 }
 
@@ -188,8 +191,8 @@ impl Ppu {
 
     pub fn write_display(&mut self, address: u16, value: u8) {
         match address {
-            MEM_DISPLAY_CONTROL => self.control = DisplayControl::from_bits_retain(value),
-            MEM_DISPLAY_STATUS => self.status = DisplayStatus::from_bits_retain(value),
+            MEM_DISPLAY_CONTROL => self.control = DisplayControl::from_bits(value),
+            MEM_DISPLAY_STATUS => self.status = DisplayStatus::from_bits(value),
             MEM_SCROLL_Y => self.scroll_y = value,
             MEM_SCROLL_X => self.scroll_x = value,
             MEM_LY => self.ly = value,

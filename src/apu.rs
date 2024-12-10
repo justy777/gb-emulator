@@ -20,101 +20,417 @@ const MEM_NR50: u16 = 0xFF24;
 const MEM_NR51: u16 = 0xFF25;
 const MEM_NR52: u16 = 0xFF26;
 
-pub struct Apu {
+#[derive(Debug, Copy, Clone)]
+struct ChannelSweep(u8);
+
+impl ChannelSweep {
+    const PACE: u8 = 0b0111_0000;
+    const DIRECTION: u8 = 0b0000_1000;
+    const INDIVIDUAL_STEP: u8 = 0b0000_0111;
+    const UNUSED: u8 = 0b1000_0000;
+
+    const fn empty() -> Self {
+        Self::from_bits(0)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct LengthTimerAndDutyCycle(u8);
+
+impl LengthTimerAndDutyCycle {
+    const WAVE_DUTY: u8 = 0b1100_0000;
+    const INITIAL_LENGTH_TIMER: u8 = 0b0011_1111;
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct VolumeAndEnvelope(u8);
+
+impl VolumeAndEnvelope {
+    const INITIAL_VOLUME: u8 = 0b1111_0000;
+    const ENVELOPE_DIRECTION: u8 = 0b0000_1000;
+    const SWEEP_PACE: u8 = 0b0000_0111;
+
+    const fn empty() -> Self {
+        Self::from_bits(0)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct PeriodHighAndControl(u8);
+
+impl PeriodHighAndControl {
+    const TRIGGER: u8 = 0b1000_0000;
+    const LENGTH_ENABLE: u8 = 0b0100_0000;
+    const PERIOD: u8 = 0b0000_0111;
+    const UNUSED: u8 = 0b0011_1000;
+
+    const fn new() -> Self {
+        Self::from_bits(Self::TRIGGER | Self::PERIOD)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct DacEnable(u8);
+
+impl DacEnable {
+    const ENABLE: u8 = 0b1000_0000;
+    const UNUSED: u8 = 0b0111_1111;
+
+    const fn empty() -> Self {
+        Self::from_bits(0)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct OutputLevel(u8);
+
+impl OutputLevel {
+    const OUTPUT_LEVEL: u8 = 0b0110_0000;
+    const UNUSED: u8 = 0b1001_1111;
+
+    const fn empty() -> Self {
+        Self::from_bits(0)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct LengthTimer(u8);
+
+impl LengthTimer {
+    const INITIAL_LENGTH_TIMER: u8 = 0b0011_1111;
+    const UNUSED: u8 = 0b1100_0000;
+
+    const fn new() -> Self {
+        Self::from_bits(Self::INITIAL_LENGTH_TIMER)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct FrequencyAndRandomness(u8);
+
+impl FrequencyAndRandomness {
+    const CLOCK_SHIFT: u8 = 0b1111_0000;
+    const LFSR_WIDTH: u8 = 0b0000_1000;
+    const CLOCK_DIVIDER: u8 = 0b0000_0111;
+
+    const fn empty() -> Self {
+        Self::from_bits(0)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct Control(u8);
+
+impl Control {
+    const TRIGGER: u8 = 0b1000_0000;
+    const LENGTH_ENABLE: u8 = 0b0100_0000;
+    const UNUSED: u8 = 0b0011_1111;
+
+    const fn new() -> Self {
+        Self::from_bits(Self::TRIGGER)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct MasterVolume(u8);
+
+impl MasterVolume {
+    const VIN_LEFT: u8 = 0b1000_0000;
+    const LEFT_VOLUME: u8 = 0b0111_0000;
+    const VIN_RIGHT: u8 = 0b0000_1000;
+    const RIGHT_VOLUME: u8 = 0b0000_0111;
+
+    const fn new() -> Self {
+        Self::from_bits(Self::LEFT_VOLUME | Self::RIGHT_VOLUME)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct SoundPanning(u8);
+
+impl SoundPanning {
+    const CHANNEL_4_LEFT: u8 = 0b1000_0000;
+    const CHANNEL_3_LEFT: u8 = 0b0100_0000;
+    const CHANNEL_2_LEFT: u8 = 0b0010_0000;
+    const CHANNEL_1_LEFT: u8 = 0b0001_0000;
+    const CHANNEL_4_RIGHT: u8 = 0b0000_1000;
+    const CHANNEL_3_RIGHT: u8 = 0b0000_0100;
+    const CHANNEL_2_RIGHT: u8 = 0b0000_0010;
+    const CHANNEL_1_RIGHT: u8 = 0b0000_0001;
+
+    const fn new() -> Self {
+        Self::from_bits(
+            Self::CHANNEL_4_LEFT
+                | Self::CHANNEL_3_LEFT
+                | Self::CHANNEL_2_LEFT
+                | Self::CHANNEL_1_LEFT
+                | Self::CHANNEL_2_RIGHT
+                | Self::CHANNEL_1_RIGHT,
+        )
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct AudioMasterControl(u8);
+
+impl AudioMasterControl {
+    const AUDIO_ENABLE: u8 = 0b1000_0000;
+    const CHANNEL_4_ENABLE: u8 = 0b0000_1000;
+    const CHANNEL_3_ENABLE: u8 = 0b0000_0100;
+    const CHANNEL_2_ENABLE: u8 = 0b0000_0010;
+    const CHANNEL_1_ENABLE: u8 = 0b0000_0001;
+    const UNUSED: u8 = 0b0111_0000;
+
+    const fn new() -> Self {
+        Self::from_bits(Self::AUDIO_ENABLE | Self::CHANNEL_4_ENABLE)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+struct Channel1 {
     // NR10
-    nr10: u8,
+    sweep: ChannelSweep,
     // NR11
-    nr11: u8,
+    length_timer_and_duty_cycle: LengthTimerAndDutyCycle,
     // NR12
-    nr12: u8,
+    volume_and_envelope: VolumeAndEnvelope,
     // NR13
-    nr13: u8,
+    period_low: u8,
     // NR14
-    nr14: u8,
+    period_high_and_control: PeriodHighAndControl,
+}
+
+impl Channel1 {
+    const fn new() -> Self {
+        Self {
+            sweep: ChannelSweep::empty(),
+            length_timer_and_duty_cycle: LengthTimerAndDutyCycle::from_bits(
+                0b1000_0000 | LengthTimerAndDutyCycle::INITIAL_LENGTH_TIMER,
+            ),
+            volume_and_envelope: VolumeAndEnvelope::from_bits(
+                VolumeAndEnvelope::INITIAL_VOLUME | 0b11,
+            ),
+            period_low: 0xFF,
+            period_high_and_control: PeriodHighAndControl::new(),
+        }
+    }
+}
+
+struct Channel2 {
     // NR21
-    nr21: u8,
+    length_timer_and_duty_cycle: LengthTimerAndDutyCycle,
     // NR22
-    nr22: u8,
+    volume_and_envelope: VolumeAndEnvelope,
     // NR23
-    nr23: u8,
+    period_low: u8,
     // NR24
-    nr24: u8,
+    period_high_and_control: PeriodHighAndControl,
+}
+
+impl Channel2 {
+    const fn new() -> Self {
+        Self {
+            length_timer_and_duty_cycle: LengthTimerAndDutyCycle::from_bits(
+                LengthTimerAndDutyCycle::INITIAL_LENGTH_TIMER,
+            ),
+            volume_and_envelope: VolumeAndEnvelope::empty(),
+            period_low: 0xFF,
+            period_high_and_control: PeriodHighAndControl::new(),
+        }
+    }
+}
+
+struct Channel3 {
     // NR30
-    nr30: u8,
+    dac_enable: DacEnable,
     // NR31
-    nr31: u8,
+    length_timer: u8,
     // NR32
-    nr32: u8,
+    output_level: OutputLevel,
     // NR33
-    nr33: u8,
+    period_low: u8,
     // NR34
-    nr34: u8,
+    period_high_and_control: PeriodHighAndControl,
+}
+
+impl Channel3 {
+    const fn new() -> Self {
+        Self {
+            dac_enable: DacEnable::empty(),
+            length_timer: 0xFF,
+            output_level: OutputLevel::empty(),
+            period_low: 0xFF,
+            period_high_and_control: PeriodHighAndControl::new(),
+        }
+    }
+}
+
+struct Channel4 {
     // NR41
-    nr41: u8,
+    length_timer: LengthTimer,
     // NR42
-    nr42: u8,
+    volume_and_envelope: VolumeAndEnvelope,
     // NR43
-    nr43: u8,
+    frequency_and_randomness: FrequencyAndRandomness,
     // NR44
-    nr44: u8,
+    control: Control,
+}
+
+impl Channel4 {
+    const fn new() -> Self {
+        Self {
+            length_timer: LengthTimer::new(),
+            volume_and_envelope: VolumeAndEnvelope::empty(),
+            frequency_and_randomness: FrequencyAndRandomness::empty(),
+            control: Control::new(),
+        }
+    }
+}
+
+pub struct Apu {
+    channel_1: Channel1,
+    channel_2: Channel2,
+    channel_3: Channel3,
+    channel_4: Channel4,
     // NR50
-    nr50: u8,
+    master_volume: MasterVolume,
     // NR51
-    nr51: u8,
+    sound_panning: SoundPanning,
     // NR52
-    nr52: u8,
+    audio_master_control: AudioMasterControl,
 }
 
 impl Apu {
     pub const fn new() -> Self {
         Self {
-            nr10: 0x80,
-            nr11: 0xBF,
-            nr12: 0xF3,
-            nr13: 0xFF,
-            nr14: 0xBF,
-            nr21: 0x3F,
-            nr22: 0,
-            nr23: 0xFF,
-            nr24: 0xBF,
-            nr30: 0x7F,
-            nr31: 0xFF,
-            nr32: 0x9F,
-            nr33: 0xFF,
-            nr34: 0xBF,
-            nr41: 0xFF,
-            nr42: 0,
-            nr43: 0,
-            nr44: 0xBF,
-            nr50: 0x77,
-            nr51: 0xF3,
-            nr52: 0xF1,
+            channel_1: Channel1::new(),
+            channel_2: Channel2::new(),
+            channel_3: Channel3::new(),
+            channel_4: Channel4::new(),
+            master_volume: MasterVolume::new(),
+            sound_panning: SoundPanning::new(),
+            audio_master_control: AudioMasterControl::new(),
         }
     }
 
     pub fn read_audio(&self, address: u16) -> u8 {
         match address {
-            MEM_NR10 => self.nr10,
-            MEM_NR11 => self.nr11,
-            MEM_NR12 => self.nr12,
-            MEM_NR13 => self.nr13,
-            MEM_NR14 => self.nr14,
-            MEM_NR21 => self.nr21,
-            MEM_NR22 => self.nr22,
-            MEM_NR23 => self.nr23,
-            MEM_NR24 => self.nr24,
-            MEM_NR30 => self.nr30,
-            MEM_NR31 => self.nr31,
-            MEM_NR32 => self.nr32,
-            MEM_NR33 => self.nr33,
-            MEM_NR34 => self.nr34,
-            MEM_NR41 => self.nr41,
-            MEM_NR42 => self.nr42,
-            MEM_NR43 => self.nr43,
-            MEM_NR44 => self.nr44,
-            MEM_NR50 => self.nr50,
-            MEM_NR51 => self.nr51,
-            MEM_NR52 => self.nr52,
+            MEM_NR10 => self.channel_1.sweep.bits(),
+            MEM_NR11 => self.channel_1.length_timer_and_duty_cycle.bits(),
+            MEM_NR12 => self.channel_1.volume_and_envelope.bits(),
+            MEM_NR13 => self.channel_1.period_low,
+            MEM_NR14 => self.channel_1.period_high_and_control.bits(),
+            MEM_NR21 => self.channel_2.length_timer_and_duty_cycle.bits(),
+            MEM_NR22 => self.channel_2.volume_and_envelope.bits(),
+            MEM_NR23 => self.channel_2.period_low,
+            MEM_NR24 => self.channel_2.period_high_and_control.bits(),
+            MEM_NR30 => self.channel_3.dac_enable.bits(),
+            MEM_NR31 => self.channel_3.length_timer,
+            MEM_NR32 => self.channel_3.output_level.bits(),
+            MEM_NR33 => self.channel_3.period_low,
+            MEM_NR34 => self.channel_3.period_high_and_control.bits(),
+            MEM_NR41 => self.channel_4.length_timer.bits(),
+            MEM_NR42 => self.channel_4.volume_and_envelope.bits(),
+            MEM_NR43 => self.channel_4.frequency_and_randomness.bits(),
+            MEM_NR44 => self.channel_4.control.bits(),
+            MEM_NR50 => self.master_volume.bits(),
+            MEM_NR51 => self.sound_panning.bits(),
+            MEM_NR52 => self.audio_master_control.bits(),
             _ => {
                 println!("Warning: Address {address:#X} is not mapped to an I/O register.");
                 0xFF
@@ -124,28 +440,42 @@ impl Apu {
 
     pub fn write_audio(&mut self, address: u16, value: u8) {
         match address {
-            MEM_NR10 => self.nr10 = value,
-            MEM_NR11 => self.nr11 = value,
-            MEM_NR12 => self.nr12 = value,
-            MEM_NR13 => self.nr13 = value,
-            MEM_NR14 => self.nr14 = value,
-            MEM_NR21 => self.nr21 = value,
-            MEM_NR22 => self.nr22 = value,
-            MEM_NR23 => self.nr23 = value,
-            MEM_NR24 => self.nr24 = value,
-            MEM_NR30 => self.nr30 = value,
-            MEM_NR31 => self.nr31 = value,
-            MEM_NR32 => self.nr32 = value,
-            MEM_NR33 => self.nr33 = value,
-            MEM_NR34 => self.nr34 = value,
-            MEM_NR41 => self.nr41 = value,
-            MEM_NR42 => self.nr42 = value,
-            MEM_NR43 => self.nr43 = value,
-            MEM_NR44 => self.nr44 = value,
-            MEM_NR50 => self.nr50 = value,
-            MEM_NR51 => self.nr51 = value,
-            MEM_NR52 => self.nr52 = value,
-            _ => panic!("Address {address:#X} is not mapped to an I/O register."),
+            MEM_NR10 => self.channel_1.sweep = ChannelSweep::from_bits(value),
+            MEM_NR11 => {
+                self.channel_1.length_timer_and_duty_cycle =
+                    LengthTimerAndDutyCycle::from_bits(value);
+            }
+            MEM_NR12 => self.channel_1.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_NR13 => self.channel_1.period_low = value,
+            MEM_NR14 => {
+                self.channel_1.period_high_and_control = PeriodHighAndControl::from_bits(value);
+            }
+            MEM_NR21 => {
+                self.channel_2.length_timer_and_duty_cycle =
+                    LengthTimerAndDutyCycle::from_bits(value);
+            }
+            MEM_NR22 => self.channel_2.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_NR23 => self.channel_2.period_low = value,
+            MEM_NR24 => {
+                self.channel_2.period_high_and_control = PeriodHighAndControl::from_bits(value);
+            }
+            MEM_NR30 => self.channel_3.dac_enable = DacEnable::from_bits(value),
+            MEM_NR31 => self.channel_3.length_timer = value,
+            MEM_NR32 => self.channel_3.output_level = OutputLevel::from_bits(value),
+            MEM_NR33 => self.channel_3.period_low = value,
+            MEM_NR34 => {
+                self.channel_3.period_high_and_control = PeriodHighAndControl::from_bits(value);
+            }
+            MEM_NR41 => self.channel_4.length_timer = LengthTimer::from_bits(value),
+            MEM_NR42 => self.channel_4.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_NR43 => {
+                self.channel_4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
+            }
+            MEM_NR44 => self.channel_4.control = Control::from_bits(value),
+            MEM_NR50 => self.master_volume = MasterVolume::from_bits(value),
+            MEM_NR51 => self.sound_panning = SoundPanning::from_bits(value),
+            MEM_NR52 => self.audio_master_control = AudioMasterControl::from_bits(value),
+            _ => println!("Warning: Address {address:#X} is not mapped to an I/O register."),
         }
     }
 }

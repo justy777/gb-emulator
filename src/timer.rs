@@ -1,36 +1,36 @@
-use crate::bits;
 use crate::interrupts::InterruptFlags;
-use crate::util::bit;
-use bitflags::bitflags;
 
 const MEM_DIVIDER_REGISTER: u16 = 0xFF04;
 const MEM_TIMER_COUNTER: u16 = 0xFF05;
 const MEM_TIMER_MODULO: u16 = 0xFF06;
 const MEM_TIMER_CONTROL: u16 = 0xFF07;
 
-bitflags! {
-    #[repr(transparent)]
-    #[derive(Debug, Clone, Copy)]
-    struct TimerControl: u8 {
-        const ENABLE = bit(2);
-        const CLOCK_SELECT = bits![0, 1];
-    }
-}
+#[derive(Debug, Clone, Copy)]
+struct TimerControl(u8);
 
 impl TimerControl {
-    pub const fn unknown() -> Self {
-        // 0xF8
-        Self::from_bits_retain(0b1111_1000)
-    }
-}
+    const ENABLE: u8 = 0b0000_0100;
+    const CLOCK_SELECT: u8 = 0b0000_0011;
+    const UNUSED: u8 = 0b1111_1000;
 
-impl TimerControl {
+    const fn empty() -> Self {
+        Self::from_bits(0)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+
     const fn is_enabled(self) -> bool {
-        self.contains(Self::ENABLE)
+        (self.0 & Self::ENABLE) == Self::ENABLE
     }
 
     fn counter_mask(self) -> u16 {
-        match self.bits() & Self::CLOCK_SELECT.bits() {
+        match self.0 & Self::CLOCK_SELECT {
             0b00 => 128,
             0b01 => 2,
             0b10 => 8,
@@ -64,7 +64,7 @@ impl Timer {
             divider: (0xAB << 6) + 0x2C,
             counter: 0,
             modulo: 0,
-            control: TimerControl::unknown(),
+            control: TimerControl::empty(),
             interrupt_signal: false,
             overflow_delay_counter: None,
         }
@@ -72,6 +72,7 @@ impl Timer {
 
     pub const fn read_byte(&self, address: u16) -> u8 {
         match address {
+            #[allow(clippy::cast_possible_truncation)]
             MEM_DIVIDER_REGISTER => (self.divider >> 6) as u8,
             MEM_TIMER_COUNTER => self.counter,
             MEM_TIMER_MODULO => self.modulo,
@@ -88,7 +89,7 @@ impl Timer {
                 self.overflow_delay_counter = None;
             }
             MEM_TIMER_MODULO => self.modulo = value,
-            MEM_TIMER_CONTROL => self.control = TimerControl::from_bits_retain(value),
+            MEM_TIMER_CONTROL => self.control = TimerControl::from_bits(value),
             _ => unreachable!(),
         }
     }
