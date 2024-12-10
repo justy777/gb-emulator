@@ -4,8 +4,6 @@ mod instructions;
 
 use crate::hardware::AddressBus;
 use crate::interrupts::InterruptFlags;
-use crate::util::bit;
-use bitflags::bitflags;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Registers {
@@ -33,7 +31,7 @@ impl Registers {
             c: 0x13,
             d: 0x00,
             e: 0xD8,
-            f: RegisterFlags::DEFAULT,
+            f: RegisterFlags::new(),
             h: 0x01,
             l: 0x4D,
             sp: 0xFFFE,
@@ -81,7 +79,7 @@ impl Registers {
             R16::AF => {
                 let [low, high] = value.to_le_bytes();
                 self.a = high;
-                self.f = RegisterFlags::from_bits_retain(low);
+                self.f = RegisterFlags::from_bits(low);
             }
             R16::BC => {
                 let [low, high] = value.to_le_bytes();
@@ -108,20 +106,41 @@ impl Registers {
     }
 }
 
-bitflags! {
-    #[repr(transparent)]
-    #[derive(Debug, Clone, Copy)]
-    struct RegisterFlags: u8 {
-        const ZERO = bit(7);
-        const SUBTRACT = bit(6);
-        const HALF_CARRY = bit(5);
-        const CARRY = bit(4);
-
-        const DEFAULT = Self::ZERO.bits() | Self::HALF_CARRY.bits() | Self::CARRY.bits();
-    }
-}
+#[derive(Debug, Clone, Copy)]
+struct RegisterFlags(u8);
 
 impl RegisterFlags {
+    const ZERO: u8 = 0b1000_0000;
+    const SUBTRACT: u8 = 0b0100_0000;
+    const HALF_CARRY: u8 = 0b0010_0000;
+    const CARRY: u8 = 0b0001_0000;
+    const UNUSED: u8 = 0b0000_1111;
+
+    const fn new() -> Self {
+        Self::from_bits(Self::ZERO | Self::HALF_CARRY | Self::CARRY)
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self(bits & !Self::UNUSED)
+    }
+
+    const fn bits(self) -> u8 {
+        self.0
+    }
+
+    fn set(&mut self, bits: u8, enable: bool) {
+        if enable {
+            self.0 |= bits;
+        } else {
+            self.0 &= !bits;
+        }
+        self.0 &= !Self::UNUSED;
+    }
+
+    const fn contains(self, bits: u8) -> bool {
+        (self.0 & bits) == bits
+    }
+
     const fn test(self, condition: JumpCondition) -> bool {
         match condition {
             JumpCondition::NotZero => !self.contains(Self::ZERO),
@@ -371,17 +390,15 @@ impl Cpu {
         }
 
         // Checks for pending interrupts
-        let interrupt_flag = memory.get_interrupt_flag();
-        let interrupt_enable = memory.get_interrupt_enable();
-        let interrupt_pending = interrupt_enable & interrupt_flag;
+        let interrupt_pending = memory.get_interrupts_pending();
 
-        for flag in InterruptFlags::all() {
-            if interrupt_pending.contains(flag) {
+        for flag in InterruptFlags::flags() {
+            if interrupt_pending.contains(flag.bits()) {
                 self.halted = false;
                 if self.ime {
                     // Calls interrupt handler
                     self.ime = false;
-                    memory.set_interrupt_flag(interrupt_flag & !flag);
+                    memory.interrupt_flag().set(flag.bits(), false);
                     self.push(memory, R16::PC);
                     self.registers.pc = flag.handler();
                 }
