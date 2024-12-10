@@ -973,9 +973,8 @@ impl Cpu {
                 4
             }
             // ---- Undefined
-            n @ (0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD) => {
-                Self::undefined(n);
-                unreachable!()
+            byte @ (0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD) => {
+                panic!("Error: Trying to run undefined instruction {byte:#02X}");
             }
         }
     }

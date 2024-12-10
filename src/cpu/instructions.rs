@@ -4,10 +4,6 @@ use crate::cpu::{
 use crate::hardware::AddressBus;
 
 impl Cpu {
-    pub(crate) fn undefined(byte: u8) {
-        panic!("Undefined instruction found: {byte:#02X}");
-    }
-
     /// NOP
     /// 1 4
     /// - - - -
