@@ -1,4 +1,4 @@
-use std::ops::BitAnd;
+use std::ops::{BitAnd, Not};
 
 const PC_VBLANK_HANDLER: u16 = 0x40;
 const PC_STAT_HANDLER: u16 = 0x48;
@@ -53,14 +53,14 @@ impl InterruptFlags {
         (self.0 & bits) == bits
     }
 
-    pub(crate) fn handler(self) -> u16 {
+    pub(crate) fn handler_addr(self) -> u16 {
         match self.0 {
             Self::VBLANK => PC_VBLANK_HANDLER,
             Self::STAT => PC_STAT_HANDLER,
             Self::TIMER => PC_TIMER_HANDLER,
             Self::SERIAL => PC_SERIAL_HANDLER,
             Self::JOYPAD => PC_JOYPAD_HANDLER,
-            _ => unreachable!(),
+            _ => panic!("Error: No interrupt handler for {:0b}", self.0),
         }
     }
 }
@@ -70,5 +70,13 @@ impl BitAnd for InterruptFlags {
 
     fn bitand(self, other: Self) -> Self {
         Self(self.0 & other.0)
+    }
+}
+
+impl Not for InterruptFlags {
+    type Output = Self;
+
+    fn not(self) -> Self {
+        Self(!self.0)
     }
 }

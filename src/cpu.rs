@@ -400,7 +400,7 @@ impl Cpu {
                     self.ime = false;
                     memory.interrupt_flag().set(flag.bits(), false);
                     self.push(memory, R16::PC);
-                    self.registers.pc = flag.handler();
+                    self.registers.pc = flag.handler_addr();
                 }
                 break;
             }

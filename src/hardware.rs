@@ -214,6 +214,6 @@ impl AddressBus<'_> {
     }
 
     pub(crate) fn get_interrupts_pending(&self) -> InterruptFlags {
-        *self.interrupt_enable & *self.interrupt_flag
+        (*self.interrupt_enable & *self.interrupt_flag) & !InterruptFlags::empty()
     }
 }
