@@ -16,8 +16,9 @@ impl Cpu {
     /// - - - -
     ///
     /// Stop CPU & display until button pressed.
-    pub(crate) fn stop(&mut self, memory: &AddressBus) {
+    pub(crate) fn stop(&mut self, memory: &mut AddressBus) {
         let _ = self.read_next_byte(memory);
+        memory.reset_timer();
         loop {
             // TODO: Add sleeping to save CPU usage
             let joypad = memory.get_joypad();

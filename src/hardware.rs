@@ -71,12 +71,14 @@ impl GameboyHardware {
         };
 
         let cycles = self.cpu.step(&mut memory);
-        self.timer.tick(cycles / 4, &mut self.interrupt_flag);
+        for _ in 0..(cycles / 4) {
+            self.timer.increment(&mut self.interrupt_flag);
+        }
         self.serial_port.step();
     }
 }
 
-pub struct AddressBus<'a> {
+pub(crate) struct AddressBus<'a> {
     // ROM and External RAM
     cartridge: &'a mut Cartridge,
     // Picture Processing Unit
@@ -90,7 +92,7 @@ pub struct AddressBus<'a> {
     timer: &'a mut Timer,
     // IF
     interrupt_flag: &'a mut InterruptFlags,
-    // Audio Proccessing Unit
+    // Audio Processing Unit
     apu: &'a mut Apu,
     wave_pattern_ram: &'a mut [u8],
     // HRAM
@@ -193,7 +195,7 @@ impl AddressBus<'_> {
         match address {
             0xFF00 => *self.joypad = Joypad::from_bits(value),
             0xFF01..=0xFF02 => self.serial_port.write_byte(address, value),
-            0xFF04..=0xFF07 => self.timer.write_byte(address, value),
+            0xFF04..=0xFF07 => self.timer.write_byte(address, value, self.interrupt_flag),
             0xFF0F => *self.interrupt_flag = InterruptFlags::from_bits(value),
             0xFF10..=0xFF26 => self.apu.write_audio(address, value),
             0xFF30..=0xFF3F => {
@@ -209,11 +211,23 @@ impl AddressBus<'_> {
         *self.joypad
     }
 
-    pub(crate) const fn interrupt_flag(&mut self) -> &mut InterruptFlags {
-        self.interrupt_flag
+    pub(crate) fn request_interrupt(&mut self, flag: u8) {
+        self.interrupt_flag.set(flag, true);
+    }
+
+    pub(crate) fn service_interrupt(&mut self, flag: u8) {
+        self.interrupt_flag.set(flag, false);
     }
 
     pub(crate) fn get_interrupts_pending(&self) -> InterruptFlags {
         (*self.interrupt_enable & *self.interrupt_flag) & !InterruptFlags::empty()
+    }
+
+    pub(crate) fn reset_timer(&mut self) {
+        self.timer.reset(self.interrupt_flag);
+    }
+
+    pub(crate) fn increment_timer(&mut self) {
+        self.timer.increment(self.interrupt_flag);
     }
 }

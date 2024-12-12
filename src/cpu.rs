@@ -398,7 +398,7 @@ impl Cpu {
                 if self.ime {
                     // Calls interrupt handler
                     self.ime = false;
-                    memory.interrupt_flag().set(flag.bits(), false);
+                    memory.service_interrupt(flag.bits());
                     self.push(memory, R16::PC);
                     self.registers.pc = flag.handler_addr();
                 }
