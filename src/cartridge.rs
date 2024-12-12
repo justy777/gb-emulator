@@ -44,41 +44,41 @@ impl Cartridge {
         }
     }
 
-    pub(crate) fn read_rom_bank0(&self, address: u16) -> u8 {
+    pub(crate) fn read_rom_bank0(&self, addr: u16) -> u8 {
         let offset = ROM_BANK_SIZE * self.mbc.get_rom_bank0();
-        self.rom[(address as usize) + offset]
+        self.rom[(addr as usize) + offset]
     }
 
-    pub(crate) fn read_rom_bank1(&self, address: u16) -> u8 {
+    pub(crate) fn read_rom_bank1(&self, addr: u16) -> u8 {
         let offset = ROM_BANK_SIZE * self.mbc.get_rom_bank1();
-        self.rom[(address as usize) + offset]
+        self.rom[(addr as usize) + offset]
     }
 
-    pub(crate) fn write_rom(&mut self, address: u16, value: u8) {
-        self.mbc.write_registers(address, value);
+    pub(crate) fn write_rom(&mut self, addr: u16, value: u8) {
+        self.mbc.write_registers(addr, value);
     }
 
-    pub(crate) fn read_ram(&self, address: u16) -> u8 {
+    pub(crate) fn read_ram(&self, addr: u16) -> u8 {
         if !self.mbc.is_ram_enabled() {
             return 0xFF;
         }
 
         if let Some(ram) = &self.ram {
             let offset = RAM_BANK_SIZE * self.mbc.get_ram_bank();
-            ram[(address as usize) + offset]
+            ram[(addr as usize) + offset]
         } else {
             panic!("Unable to read from cartridge RAM. No RAM included in cartridge.");
         }
     }
 
-    pub(crate) fn write_ram(&mut self, address: u16, value: u8) {
+    pub(crate) fn write_ram(&mut self, addr: u16, value: u8) {
         if !self.mbc.is_ram_enabled() {
             return;
         }
 
         if let Some(ram) = &mut self.ram {
             let offset = RAM_BANK_SIZE * self.mbc.get_ram_bank();
-            ram[(address as usize) + offset] = value;
+            ram[(addr as usize) + offset] = value;
         } else {
             panic!("Unable to write to cartridge RAM. No RAM included in cartridge.")
         }

@@ -60,16 +60,16 @@ impl SerialPort {
         }
     }
 
-    pub const fn read_byte(&self, address: u16) -> u8 {
-        match address {
+    pub const fn read_byte(&self, addr: u16) -> u8 {
+        match addr {
             MEM_SERIAL_TRANSFER_DATA => self.data,
             MEM_SERIAL_TRANSFER_CONTROL => self.control.bits(),
             _ => unreachable!(),
         }
     }
 
-    pub fn write_byte(&mut self, address: u16, value: u8) {
-        match address {
+    pub fn write_byte(&mut self, addr: u16, value: u8) {
+        match addr {
             MEM_SERIAL_TRANSFER_DATA => {
                 self.data = value;
             }

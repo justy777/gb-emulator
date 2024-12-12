@@ -104,8 +104,8 @@ fn calculate_header_checksum(rom: &[u8]) -> u8 {
 
 fn calculate_global_checksum(rom: &[u8]) -> u16 {
     let mut checksum: u16 = 0;
-    for (address, byte) in rom.iter().enumerate() {
-        if address != CART_GLOBAL_CHECKSUM1 && address != CART_GLOBAL_CHECKSUM2 {
+    for (addr, byte) in rom.iter().enumerate() {
+        if addr != CART_GLOBAL_CHECKSUM1 && addr != CART_GLOBAL_CHECKSUM2 {
             checksum = checksum.wrapping_add(*byte as u16);
         }
     }

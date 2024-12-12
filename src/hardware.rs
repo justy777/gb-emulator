@@ -56,7 +56,7 @@ impl GameboyHardware {
     }
 
     pub fn step(&mut self) {
-        let mut memory = AddressBus {
+        let mut bus = AddressBus {
             cartridge: &mut self.cartridge,
             ppu: &mut self.ppu,
             work_ram: &mut self.work_ram,
@@ -70,13 +70,15 @@ impl GameboyHardware {
             interrupt_enable: &mut self.interrupt_enable,
         };
 
-        let cycles = self.cpu.step(&mut memory);
-        self.timer.tick(cycles / 4, &mut self.interrupt_flag);
+        let cycles = self.cpu.step(&mut bus);
+        for _ in 0..(cycles / 4) {
+            self.timer.tick(&mut self.interrupt_flag);
+        }
         self.serial_port.step();
     }
 }
 
-pub struct AddressBus<'a> {
+pub(crate) struct AddressBus<'a> {
     // ROM and External RAM
     cartridge: &'a mut Cartridge,
     // Picture Processing Unit
@@ -90,7 +92,7 @@ pub struct AddressBus<'a> {
     timer: &'a mut Timer,
     // IF
     interrupt_flag: &'a mut InterruptFlags,
-    // Audio Proccessing Unit
+    // Audio Processing Unit
     apu: &'a mut Apu,
     wave_pattern_ram: &'a mut [u8],
     // HRAM
@@ -100,108 +102,108 @@ pub struct AddressBus<'a> {
 }
 
 impl AddressBus<'_> {
-    pub(crate) fn read_byte(&self, address: u16) -> u8 {
-        match address {
-            0x0000..=0x3FFF => self.cartridge.read_rom_bank0(address),
+    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x3FFF => self.cartridge.read_rom_bank0(addr),
             0x4000..=0x7FFF => {
-                let offset = address - 0x4000;
+                let offset = addr - 0x4000;
                 self.cartridge.read_rom_bank1(offset)
             }
             0x8000..=0x9FFF => {
-                let offset = address - 0x8000;
+                let offset = addr - 0x8000;
                 self.ppu.read_vram(offset)
             }
             0xA000..=0xBFFF => {
-                let offset = address - 0xA000;
+                let offset = addr - 0xA000;
                 self.cartridge.read_ram(offset)
             }
             0xC000..=0xDFFF => {
-                let offset = (address - 0xC000) as usize;
+                let offset = (addr - 0xC000) as usize;
                 self.work_ram[offset]
             }
             0xFE00..=0xFE9F => {
-                let offset = address - 0xFE00;
+                let offset = addr - 0xFE00;
                 self.ppu.read_sprite(offset)
             }
-            0xFF00..=0xFF7F => self.read_io(address),
+            0xFF00..=0xFF7F => self.read_io(addr),
             0xFF80..=0xFFFE => {
-                let offset = (address - 0xFF80) as usize;
+                let offset = (addr - 0xFF80) as usize;
                 self.high_ram[offset]
             }
             0xFFFF => self.interrupt_enable.bits(),
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
-                panic!("Use of this area is prohibited {address:#X}")
+                panic!("Use of this area is prohibited {addr:#X}")
             }
         }
     }
 
-    fn read_io(&self, address: u16) -> u8 {
-        match address {
+    fn read_io(&self, addr: u16) -> u8 {
+        match addr {
             0xFF00 => self.joypad.bits(),
-            0xFF01..=0xFF02 => self.serial_port.read_byte(address),
-            0xFF04..=0xFF07 => self.timer.read_byte(address),
+            0xFF01..=0xFF02 => self.serial_port.read_byte(addr),
+            0xFF04..=0xFF07 => self.timer.read_byte(addr),
             0xFF0F => self.interrupt_flag.bits(),
-            0xFF10..=0xFF26 => self.apu.read_audio(address),
+            0xFF10..=0xFF26 => self.apu.read_audio(addr),
             0xFF30..=0xFF3F => {
-                let offset = (address - 0xFF30) as usize;
+                let offset = (addr - 0xFF30) as usize;
                 self.wave_pattern_ram[offset]
             }
-            0xFF40..=0xFF4B => self.ppu.read_display(address),
+            0xFF40..=0xFF4B => self.ppu.read_display(addr),
             _ => {
-                println!("Warning: Address {address:#X} is not mapped to an I/O register.");
+                println!("Warning: Address {addr:#X} is not mapped to an I/O register.");
                 0xFF
             }
         }
     }
 
-    pub(crate) fn write_byte(&mut self, address: u16, value: u8) {
-        match address {
-            0x0000..=0x7FFF => self.cartridge.write_rom(address, value),
+    pub(crate) fn write_byte(&mut self, addr: u16, value: u8) {
+        match addr {
+            0x0000..=0x7FFF => self.cartridge.write_rom(addr, value),
             0x8000..=0x9FFF => {
-                let offset = address - 0x8000;
+                let offset = addr - 0x8000;
                 self.ppu.write_vram(offset, value);
             }
             0xA000..=0xBFFF => {
-                let offset = address - 0xA000;
+                let offset = addr - 0xA000;
                 self.cartridge.write_ram(offset, value);
             }
             0xC000..=0xDFFF => {
-                let offset = (address - 0xC000) as usize;
+                let offset = (addr - 0xC000) as usize;
                 self.work_ram[offset] = value;
             }
             0xFE00..=0xFE9F => {
-                let offset = address - 0xFE00;
+                let offset = addr - 0xFE00;
                 self.ppu.write_sprite(offset, value);
             }
             0xFF00..=0xFF7F => {
-                self.write_io(address, value);
+                self.write_io(addr, value);
             }
             0xFF80..=0xFFFE => {
-                let offset = (address - 0xFF80) as usize;
+                let offset = (addr - 0xFF80) as usize;
                 self.high_ram[offset] = value;
             }
             0xFFFF => {
                 *self.interrupt_enable = InterruptFlags::from_bits(value);
             }
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
-                panic!("Use of this area is prohibited {address:#X}")
+                panic!("Use of this area is prohibited {addr:#X}")
             }
         }
     }
 
-    fn write_io(&mut self, address: u16, value: u8) {
-        match address {
+    fn write_io(&mut self, addr: u16, value: u8) {
+        match addr {
             0xFF00 => *self.joypad = Joypad::from_bits(value),
-            0xFF01..=0xFF02 => self.serial_port.write_byte(address, value),
-            0xFF04..=0xFF07 => self.timer.write_byte(address, value),
+            0xFF01..=0xFF02 => self.serial_port.write_byte(addr, value),
+            0xFF04..=0xFF07 => self.timer.write_byte(addr, value),
             0xFF0F => *self.interrupt_flag = InterruptFlags::from_bits(value),
-            0xFF10..=0xFF26 => self.apu.write_audio(address, value),
+            0xFF10..=0xFF26 => self.apu.write_audio(addr, value),
             0xFF30..=0xFF3F => {
-                let offset = (address - 0xFF30) as usize;
+                let offset = (addr - 0xFF30) as usize;
                 self.wave_pattern_ram[offset] = value;
             }
-            0xFF40..=0xFF4B => self.ppu.write_display(address, value),
-            _ => println!("Warning: Address {address:#X} is not mapped to an I/O register."),
+            0xFF40..=0xFF4B => self.ppu.write_display(addr, value),
+            _ => println!("Warning: Address {addr:#X} is not mapped to an I/O register."),
         }
     }
 

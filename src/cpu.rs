@@ -200,7 +200,7 @@ pub struct N8;
 pub struct N16;
 
 pub trait ReadByte<S> {
-    fn read_byte(&mut self, memory: &AddressBus, src: S) -> u8;
+    fn read_byte(&mut self, bus: &AddressBus, src: S) -> u8;
 }
 
 impl ReadByte<R8> for Cpu {
@@ -210,63 +210,63 @@ impl ReadByte<R8> for Cpu {
 }
 
 impl ReadByte<Addr> for Cpu {
-    fn read_byte(&mut self, memory: &AddressBus, src: Addr) -> u8 {
+    fn read_byte(&mut self, bus: &AddressBus, src: Addr) -> u8 {
         match src {
             Addr::BC => {
-                let address = self.registers.read_word(R16::BC);
-                memory.read_byte(address)
+                let addr = self.registers.read_word(R16::BC);
+                bus.read_byte(addr)
             }
             Addr::DE => {
-                let address = self.registers.read_word(R16::DE);
-                memory.read_byte(address)
+                let addr = self.registers.read_word(R16::DE);
+                bus.read_byte(addr)
             }
             Addr::HL => {
-                let address = self.registers.read_word(R16::HL);
-                memory.read_byte(address)
+                let addr = self.registers.read_word(R16::HL);
+                bus.read_byte(addr)
             }
             Addr::HLi => {
-                let address = self.registers.read_word(R16::HL);
-                let new_address = address.wrapping_add(1);
-                self.registers.write_word(R16::HL, new_address);
-                memory.read_byte(address)
+                let addr = self.registers.read_word(R16::HL);
+                let new_addr = addr.wrapping_add(1);
+                self.registers.write_word(R16::HL, new_addr);
+                bus.read_byte(addr)
             }
             Addr::HLd => {
-                let address = self.registers.read_word(R16::HL);
-                let new_address = address.wrapping_sub(1);
-                self.registers.write_word(R16::HL, new_address);
-                memory.read_byte(address)
+                let addr = self.registers.read_word(R16::HL);
+                let new_addr = addr.wrapping_sub(1);
+                self.registers.write_word(R16::HL, new_addr);
+                bus.read_byte(addr)
             }
             Addr::N16 => {
-                let address = self.read_next_word(memory);
-                memory.read_byte(address)
+                let addr = self.read_next_word(bus);
+                bus.read_byte(addr)
             }
         }
     }
 }
 
 impl ReadByte<HighAddr> for Cpu {
-    fn read_byte(&mut self, memory: &AddressBus, src: HighAddr) -> u8 {
+    fn read_byte(&mut self, bus: &AddressBus, src: HighAddr) -> u8 {
         match src {
             HighAddr::C => {
-                let address = self.registers.read_byte(R8::C) as u16;
-                memory.read_byte(0xFF00 + address)
+                let addr = self.registers.read_byte(R8::C) as u16;
+                bus.read_byte(0xFF00 + addr)
             }
             HighAddr::N8 => {
-                let address = self.read_next_byte(memory) as u16;
-                memory.read_byte(0xFF00 + address)
+                let addr = self.read_next_byte(bus) as u16;
+                bus.read_byte(0xFF00 + addr)
             }
         }
     }
 }
 
 impl ReadByte<N8> for Cpu {
-    fn read_byte(&mut self, memory: &AddressBus, _: N8) -> u8 {
-        self.read_next_byte(memory)
+    fn read_byte(&mut self, bus: &AddressBus, _: N8) -> u8 {
+        self.read_next_byte(bus)
     }
 }
 
 pub trait WriteByte<D> {
-    fn write_byte(&mut self, memory: &mut AddressBus, dst: D, value: u8);
+    fn write_byte(&mut self, bus: &mut AddressBus, dst: D, value: u8);
 }
 
 impl WriteByte<R8> for Cpu {
@@ -276,57 +276,57 @@ impl WriteByte<R8> for Cpu {
 }
 
 impl WriteByte<Addr> for Cpu {
-    fn write_byte(&mut self, memory: &mut AddressBus, dst: Addr, value: u8) {
+    fn write_byte(&mut self, bus: &mut AddressBus, dst: Addr, value: u8) {
         match dst {
             Addr::BC => {
-                let address = self.registers.read_word(R16::BC);
-                memory.write_byte(address, value);
+                let addr = self.registers.read_word(R16::BC);
+                bus.write_byte(addr, value);
             }
             Addr::DE => {
-                let address = self.registers.read_word(R16::DE);
-                memory.write_byte(address, value);
+                let addr = self.registers.read_word(R16::DE);
+                bus.write_byte(addr, value);
             }
             Addr::HL => {
-                let address = self.registers.read_word(R16::HL);
-                memory.write_byte(address, value);
+                let addr = self.registers.read_word(R16::HL);
+                bus.write_byte(addr, value);
             }
             Addr::HLi => {
-                let address = self.registers.read_word(R16::HL);
-                let new_address = address.wrapping_add(1);
-                self.registers.write_word(R16::HL, new_address);
-                memory.write_byte(address, value);
+                let addr = self.registers.read_word(R16::HL);
+                let new_addr = addr.wrapping_add(1);
+                self.registers.write_word(R16::HL, new_addr);
+                bus.write_byte(addr, value);
             }
             Addr::HLd => {
-                let address = self.registers.read_word(R16::HL);
-                let new_address = address.wrapping_sub(1);
-                self.registers.write_word(R16::HL, new_address);
-                memory.write_byte(address, value);
+                let addr = self.registers.read_word(R16::HL);
+                let new_addr = addr.wrapping_sub(1);
+                self.registers.write_word(R16::HL, new_addr);
+                bus.write_byte(addr, value);
             }
             Addr::N16 => {
-                let address = self.read_next_word(memory);
-                memory.write_byte(address, value);
+                let addr = self.read_next_word(bus);
+                bus.write_byte(addr, value);
             }
         }
     }
 }
 
 impl WriteByte<HighAddr> for Cpu {
-    fn write_byte(&mut self, memory: &mut AddressBus, dst: HighAddr, value: u8) {
+    fn write_byte(&mut self, bus: &mut AddressBus, dst: HighAddr, value: u8) {
         match dst {
             HighAddr::C => {
-                let address = self.registers.read_byte(R8::C) as u16;
-                memory.write_byte(0xFF00 + address, value);
+                let addr = self.registers.read_byte(R8::C) as u16;
+                bus.write_byte(0xFF00 + addr, value);
             }
             HighAddr::N8 => {
-                let address = self.read_next_byte(memory) as u16;
-                memory.write_byte(0xFF00 + address, value);
+                let addr = self.read_next_byte(bus) as u16;
+                bus.write_byte(0xFF00 + addr, value);
             }
         }
     }
 }
 
 pub trait ReadWord<S> {
-    fn read_word(&mut self, memory: &AddressBus, src: S) -> u16;
+    fn read_word(&mut self, bus: &AddressBus, src: S) -> u16;
 }
 
 impl ReadWord<R16> for Cpu {
@@ -336,8 +336,8 @@ impl ReadWord<R16> for Cpu {
 }
 
 impl ReadWord<N16> for Cpu {
-    fn read_word(&mut self, memory: &AddressBus, _: N16) -> u16 {
-        self.read_next_word(memory)
+    fn read_word(&mut self, bus: &AddressBus, _: N16) -> u16 {
+        self.read_next_word(bus)
     }
 }
 
@@ -381,7 +381,7 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, memory: &mut AddressBus) -> usize {
+    pub fn step(&mut self, bus: &mut AddressBus) -> usize {
         // Checks for next instruction after EI is called
         self.ime_delay_counter = self.ime_delay_counter.map(|n| n - 1);
         if self.ime_delay_counter.is_some_and(|n| n == 0) {
@@ -390,7 +390,7 @@ impl Cpu {
         }
 
         // Checks for pending interrupts
-        let interrupt_pending = memory.get_interrupts_pending();
+        let interrupt_pending = bus.get_interrupts_pending();
 
         for flag in InterruptFlags::flags() {
             if interrupt_pending.contains(flag.bits()) {
@@ -398,8 +398,8 @@ impl Cpu {
                 if self.ime {
                     // Calls interrupt handler
                     self.ime = false;
-                    memory.interrupt_flag().set(flag.bits(), false);
-                    self.push(memory, R16::PC);
+                    bus.interrupt_flag().set(flag.bits(), false);
+                    self.push(bus, R16::PC);
                     self.registers.pc = flag.handler_addr();
                 }
                 break;
@@ -410,27 +410,27 @@ impl Cpu {
             return 4;
         }
 
-        let instruction_byte = self.read_next_byte(memory);
-        self.execute(memory, instruction_byte)
+        let opcode = self.read_next_byte(bus);
+        self.execute(bus, opcode)
     }
 
-    fn read_next_byte(&mut self, memory: &AddressBus) -> u8 {
-        let byte = memory.read_byte(self.registers.pc);
+    fn read_next_byte(&mut self, bus: &AddressBus) -> u8 {
+        let byte = bus.read_byte(self.registers.pc);
         self.registers.pc = self.registers.pc.wrapping_add(1);
         byte
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn read_next_byte_signed(&mut self, memory: &AddressBus) -> i8 {
-        self.read_next_byte(memory) as i8
+    fn read_next_byte_signed(&mut self, bus: &AddressBus) -> i8 {
+        self.read_next_byte(bus) as i8
     }
 
-    fn read_next_word(&mut self, memory: &AddressBus) -> u16 {
+    fn read_next_word(&mut self, bus: &AddressBus) -> u16 {
         // Game Boy is little endian, so read the second byte as the most significant byte
         // and the first as the least significant
-        let low = memory.read_byte(self.registers.pc);
+        let low = bus.read_byte(self.registers.pc);
         self.registers.pc = self.registers.pc.wrapping_add(1);
-        let high = memory.read_byte(self.registers.pc);
+        let high = bus.read_byte(self.registers.pc);
         self.registers.pc = self.registers.pc.wrapping_add(1);
         u16::from_le_bytes([low, high])
     }

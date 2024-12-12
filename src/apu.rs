@@ -408,8 +408,8 @@ impl Apu {
         }
     }
 
-    pub fn read_audio(&self, address: u16) -> u8 {
-        match address {
+    pub fn read_audio(&self, addr: u16) -> u8 {
+        match addr {
             MEM_NR10 => self.channel_1.sweep.bits(),
             MEM_NR11 => self.channel_1.length_timer_and_duty_cycle.bits(),
             MEM_NR12 => self.channel_1.volume_and_envelope.bits(),
@@ -432,14 +432,14 @@ impl Apu {
             MEM_NR51 => self.sound_panning.bits(),
             MEM_NR52 => self.audio_master_control.bits(),
             _ => {
-                println!("Warning: Address {address:#X} is not mapped to an I/O register.");
+                println!("Warning: Address {addr:#X} is not mapped to an I/O register.");
                 0xFF
             }
         }
     }
 
-    pub fn write_audio(&mut self, address: u16, value: u8) {
-        match address {
+    pub fn write_audio(&mut self, addr: u16, value: u8) {
+        match addr {
             MEM_NR10 => self.channel_1.sweep = ChannelSweep::from_bits(value),
             MEM_NR11 => {
                 self.channel_1.length_timer_and_duty_cycle =
@@ -475,7 +475,7 @@ impl Apu {
             MEM_NR50 => self.master_volume = MasterVolume::from_bits(value),
             MEM_NR51 => self.sound_panning = SoundPanning::from_bits(value),
             MEM_NR52 => self.audio_master_control = AudioMasterControl::from_bits(value),
-            _ => println!("Warning: Address {address:#X} is not mapped to an I/O register."),
+            _ => println!("Warning: Address {addr:#X} is not mapped to an I/O register."),
         }
     }
 }

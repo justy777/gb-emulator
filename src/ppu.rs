@@ -171,8 +171,8 @@ impl Ppu {
         self.sprite_ram[addr as usize] = data;
     }
 
-    pub const fn read_display(&self, address: u16) -> u8 {
-        match address {
+    pub const fn read_display(&self, addr: u16) -> u8 {
+        match addr {
             MEM_DISPLAY_CONTROL => self.control.bits(),
             MEM_DISPLAY_STATUS => self.status.bits(),
             MEM_SCROLL_Y => self.scroll_y,
@@ -189,8 +189,8 @@ impl Ppu {
         }
     }
 
-    pub fn write_display(&mut self, address: u16, value: u8) {
-        match address {
+    pub fn write_display(&mut self, addr: u16, value: u8) {
+        match addr {
             MEM_DISPLAY_CONTROL => self.control = DisplayControl::from_bits(value),
             MEM_DISPLAY_STATUS => self.status = DisplayStatus::from_bits(value),
             MEM_SCROLL_Y => self.scroll_y = value,
