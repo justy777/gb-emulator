@@ -14,7 +14,7 @@ pub struct Registers {
     d: u8,
     e: u8,
     /// Flags Register
-    f: RegisterFlags,
+    f: FlagsRegister,
     h: u8,
     l: u8,
     /// Stack Pointer
@@ -31,7 +31,7 @@ impl Registers {
             c: 0x13,
             d: 0x00,
             e: 0xD8,
-            f: RegisterFlags::new(),
+            f: FlagsRegister::new(),
             h: 0x01,
             l: 0x4D,
             sp: 0xFFFE,
@@ -39,67 +39,67 @@ impl Registers {
         }
     }
 
-    const fn read_byte(&self, register: R8) -> u8 {
+    const fn read_byte(&self, register: Register8) -> u8 {
         match register {
-            R8::A => self.a,
-            R8::B => self.b,
-            R8::C => self.c,
-            R8::D => self.d,
-            R8::E => self.e,
-            R8::H => self.h,
-            R8::L => self.l,
+            Register8::A => self.a,
+            Register8::B => self.b,
+            Register8::C => self.c,
+            Register8::D => self.d,
+            Register8::E => self.e,
+            Register8::H => self.h,
+            Register8::L => self.l,
         }
     }
 
-    fn write_byte(&mut self, register: R8, value: u8) {
+    fn write_byte(&mut self, register: Register8, value: u8) {
         match register {
-            R8::A => self.a = value,
-            R8::B => self.b = value,
-            R8::C => self.c = value,
-            R8::D => self.d = value,
-            R8::E => self.e = value,
-            R8::H => self.h = value,
-            R8::L => self.l = value,
+            Register8::A => self.a = value,
+            Register8::B => self.b = value,
+            Register8::C => self.c = value,
+            Register8::D => self.d = value,
+            Register8::E => self.e = value,
+            Register8::H => self.h = value,
+            Register8::L => self.l = value,
         }
     }
 
-    const fn read_word(&self, register: R16) -> u16 {
+    const fn read_word(&self, register: Register16) -> u16 {
         match register {
-            R16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
-            R16::BC => u16::from_le_bytes([self.c, self.b]),
-            R16::DE => u16::from_le_bytes([self.e, self.d]),
-            R16::HL => u16::from_le_bytes([self.l, self.h]),
-            R16::SP => self.sp,
-            R16::PC => self.pc,
+            Register16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
+            Register16::BC => u16::from_le_bytes([self.c, self.b]),
+            Register16::DE => u16::from_le_bytes([self.e, self.d]),
+            Register16::HL => u16::from_le_bytes([self.l, self.h]),
+            Register16::SP => self.sp,
+            Register16::PC => self.pc,
         }
     }
 
-    fn write_word(&mut self, register: R16, value: u16) {
+    fn write_word(&mut self, register: Register16, value: u16) {
         match register {
-            R16::AF => {
+            Register16::AF => {
                 let [low, high] = value.to_le_bytes();
                 self.a = high;
-                self.f = RegisterFlags::from_bits(low);
+                self.f = FlagsRegister::from_bits(low);
             }
-            R16::BC => {
+            Register16::BC => {
                 let [low, high] = value.to_le_bytes();
                 self.b = high;
                 self.c = low;
             }
-            R16::DE => {
+            Register16::DE => {
                 let [low, high] = value.to_le_bytes();
                 self.d = high;
                 self.e = low;
             }
-            R16::HL => {
+            Register16::HL => {
                 let [low, high] = value.to_le_bytes();
                 self.h = high;
                 self.l = low;
             }
-            R16::SP => {
+            Register16::SP => {
                 self.sp = value;
             }
-            R16::PC => {
+            Register16::PC => {
                 self.pc = value;
             }
         }
@@ -107,9 +107,9 @@ impl Registers {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct RegisterFlags(u8);
+struct FlagsRegister(u8);
 
-impl RegisterFlags {
+impl FlagsRegister {
     const ZERO: u8 = 0b1000_0000;
     const SUBTRACT: u8 = 0b0100_0000;
     const HALF_CARRY: u8 = 0b0010_0000;
@@ -152,9 +152,25 @@ impl RegisterFlags {
     }
 }
 
+pub trait AccessReadByte<S> {
+    fn read_byte(&mut self, bus: &AddressBus, src: S) -> u8;
+}
+
+pub trait AccessWriteByte<D> {
+    fn write_byte(&mut self, bus: &mut AddressBus, dst: D, value: u8);
+}
+
+pub trait AccessReadWord<S> {
+    fn read_word(&mut self, bus: &AddressBus, src: S) -> u16;
+}
+
+pub trait AccessWriteWord<D> {
+    fn write_word(&mut self, dst: D, value: u16);
+}
+
 /// 8-bit registers (r8)
 #[derive(Debug, Clone, Copy)]
-pub enum R8 {
+pub enum Register8 {
     A,
     B,
     C,
@@ -164,9 +180,21 @@ pub enum R8 {
     L,
 }
 
+impl AccessReadByte<Register8> for Cpu {
+    fn read_byte(&mut self, _: &AddressBus, src: Register8) -> u8 {
+        self.registers.read_byte(src)
+    }
+}
+
+impl AccessWriteByte<Register8> for Cpu {
+    fn write_byte(&mut self, _: &mut AddressBus, dst: Register8, value: u8) {
+        self.registers.write_byte(dst, value);
+    }
+}
+
 /// 16-bit registers (r16)
 #[derive(Debug, Clone, Copy)]
-pub enum R16 {
+pub enum Register16 {
     AF,
     BC,
     DE,
@@ -175,179 +203,108 @@ pub enum R16 {
     PC,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Addr {
-    BC,
-    DE,
-    HL,
-    HLi,
-    HLd,
-    N16,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum HighAddr {
-    C,
-    N8,
-}
-
-/// Unit struct to represent next byte (n8)
-#[derive(Debug, Clone, Copy)]
-pub struct N8;
-
-/// Unit struct to represent next word (n16)
-#[derive(Debug, Clone, Copy)]
-pub struct N16;
-
-pub trait ReadByte<S> {
-    fn read_byte(&mut self, bus: &AddressBus, src: S) -> u8;
-}
-
-impl ReadByte<R8> for Cpu {
-    fn read_byte(&mut self, _: &AddressBus, src: R8) -> u8 {
-        self.registers.read_byte(src)
-    }
-}
-
-impl ReadByte<Addr> for Cpu {
-    fn read_byte(&mut self, bus: &AddressBus, src: Addr) -> u8 {
-        match src {
-            Addr::BC => {
-                let addr = self.registers.read_word(R16::BC);
-                bus.read_byte(addr)
-            }
-            Addr::DE => {
-                let addr = self.registers.read_word(R16::DE);
-                bus.read_byte(addr)
-            }
-            Addr::HL => {
-                let addr = self.registers.read_word(R16::HL);
-                bus.read_byte(addr)
-            }
-            Addr::HLi => {
-                let addr = self.registers.read_word(R16::HL);
-                let new_addr = addr.wrapping_add(1);
-                self.registers.write_word(R16::HL, new_addr);
-                bus.read_byte(addr)
-            }
-            Addr::HLd => {
-                let addr = self.registers.read_word(R16::HL);
-                let new_addr = addr.wrapping_sub(1);
-                self.registers.write_word(R16::HL, new_addr);
-                bus.read_byte(addr)
-            }
-            Addr::N16 => {
-                let addr = self.read_next_word(bus);
-                bus.read_byte(addr)
-            }
-        }
-    }
-}
-
-impl ReadByte<HighAddr> for Cpu {
-    fn read_byte(&mut self, bus: &AddressBus, src: HighAddr) -> u8 {
-        match src {
-            HighAddr::C => {
-                let addr = self.registers.read_byte(R8::C) as u16;
-                bus.read_byte(0xFF00 + addr)
-            }
-            HighAddr::N8 => {
-                let addr = self.read_next_byte(bus) as u16;
-                bus.read_byte(0xFF00 + addr)
-            }
-        }
-    }
-}
-
-impl ReadByte<N8> for Cpu {
-    fn read_byte(&mut self, bus: &AddressBus, _: N8) -> u8 {
-        self.read_next_byte(bus)
-    }
-}
-
-pub trait WriteByte<D> {
-    fn write_byte(&mut self, bus: &mut AddressBus, dst: D, value: u8);
-}
-
-impl WriteByte<R8> for Cpu {
-    fn write_byte(&mut self, _: &mut AddressBus, dst: R8, value: u8) {
-        self.registers.write_byte(dst, value);
-    }
-}
-
-impl WriteByte<Addr> for Cpu {
-    fn write_byte(&mut self, bus: &mut AddressBus, dst: Addr, value: u8) {
-        match dst {
-            Addr::BC => {
-                let addr = self.registers.read_word(R16::BC);
-                bus.write_byte(addr, value);
-            }
-            Addr::DE => {
-                let addr = self.registers.read_word(R16::DE);
-                bus.write_byte(addr, value);
-            }
-            Addr::HL => {
-                let addr = self.registers.read_word(R16::HL);
-                bus.write_byte(addr, value);
-            }
-            Addr::HLi => {
-                let addr = self.registers.read_word(R16::HL);
-                let new_addr = addr.wrapping_add(1);
-                self.registers.write_word(R16::HL, new_addr);
-                bus.write_byte(addr, value);
-            }
-            Addr::HLd => {
-                let addr = self.registers.read_word(R16::HL);
-                let new_addr = addr.wrapping_sub(1);
-                self.registers.write_word(R16::HL, new_addr);
-                bus.write_byte(addr, value);
-            }
-            Addr::N16 => {
-                let addr = self.read_next_word(bus);
-                bus.write_byte(addr, value);
-            }
-        }
-    }
-}
-
-impl WriteByte<HighAddr> for Cpu {
-    fn write_byte(&mut self, bus: &mut AddressBus, dst: HighAddr, value: u8) {
-        match dst {
-            HighAddr::C => {
-                let addr = self.registers.read_byte(R8::C) as u16;
-                bus.write_byte(0xFF00 + addr, value);
-            }
-            HighAddr::N8 => {
-                let addr = self.read_next_byte(bus) as u16;
-                bus.write_byte(0xFF00 + addr, value);
-            }
-        }
-    }
-}
-
-pub trait ReadWord<S> {
-    fn read_word(&mut self, bus: &AddressBus, src: S) -> u16;
-}
-
-impl ReadWord<R16> for Cpu {
-    fn read_word(&mut self, _: &AddressBus, src: R16) -> u16 {
+impl AccessReadWord<Register16> for Cpu {
+    fn read_word(&mut self, _: &AddressBus, src: Register16) -> u16 {
         self.registers.read_word(src)
     }
 }
 
-impl ReadWord<N16> for Cpu {
-    fn read_word(&mut self, bus: &AddressBus, _: N16) -> u16 {
+impl AccessWriteWord<Register16> for Cpu {
+    fn write_word(&mut self, dst: Register16, value: u16) {
+        self.registers.write_word(dst, value);
+    }
+}
+
+/// Unit struct to represent Immediate memory access.
+/// next byte or word (n8 or n16)
+#[derive(Debug, Clone, Copy)]
+pub struct Immediate;
+
+impl AccessReadByte<Immediate> for Cpu {
+    fn read_byte(&mut self, bus: &AddressBus, _: Immediate) -> u8 {
+        self.read_next_byte(bus)
+    }
+}
+
+impl AccessReadWord<Immediate> for Cpu {
+    fn read_word(&mut self, bus: &AddressBus, _: Immediate) -> u16 {
         self.read_next_word(bus)
     }
 }
 
-pub trait WriteWord<D> {
-    fn write_word(&mut self, dst: D, value: u16);
+/// New type to represent Direct memory access.
+/// Use register contents as address ([])
+#[derive(Debug, Clone, Copy)]
+pub struct Direct<T>(T);
+
+impl<T> AccessReadByte<Direct<T>> for Cpu
+where
+    Self: AccessReadWord<T>,
+{
+    fn read_byte(&mut self, bus: &AddressBus, src: Direct<T>) -> u8 {
+        let addr = self.read_word(bus, src.0);
+        bus.read_byte(addr)
+    }
 }
 
-impl WriteWord<R16> for Cpu {
-    fn write_word(&mut self, dst: R16, value: u16) {
-        self.registers.write_word(dst, value);
+impl<T> AccessWriteByte<Direct<T>> for Cpu
+where
+    Self: AccessReadWord<T>,
+{
+    fn write_byte(&mut self, bus: &mut AddressBus, dst: Direct<T>, value: u8) {
+        let addr = self.read_word(bus, dst.0);
+        bus.write_byte(addr, value);
+    }
+}
+
+/// New type to represent register increment.
+/// Increment value in register after read (+)
+#[derive(Debug, Clone, Copy)]
+pub struct Increment<T>(T);
+
+impl<T> AccessReadWord<Increment<T>> for Cpu
+where
+    Self: AccessReadWord<T> + AccessWriteWord<T>,
+    T: Copy,
+{
+    fn read_word(&mut self, bus: &AddressBus, src: Increment<T>) -> u16 {
+        let word = self.read_word(bus, src.0);
+        let new_word = word.wrapping_add(1);
+        self.write_word(src.0, new_word);
+        word
+    }
+}
+
+/// New type to represent register decrement.
+/// Decrement value in register after read (-)
+#[derive(Debug, Clone, Copy)]
+pub struct Decrement<T>(T);
+
+impl<T> AccessReadWord<Decrement<T>> for Cpu
+where
+    Self: AccessReadWord<T> + AccessWriteWord<T>,
+    T: Copy,
+{
+    fn read_word(&mut self, bus: &AddressBus, src: Decrement<T>) -> u16 {
+        let word = self.read_word(bus, src.0);
+        let new_word = word.wrapping_sub(1);
+        self.write_word(src.0, new_word);
+        word
+    }
+}
+
+/// New type to represent Indexed memory access.
+/// offset from High RAM (0xFF00)
+#[derive(Debug, Clone, Copy)]
+pub struct HighIndexed<T>(T);
+
+impl<T> AccessReadWord<HighIndexed<T>> for Cpu
+where
+    Self: AccessReadByte<T>,
+{
+    fn read_word(&mut self, bus: &AddressBus, src: HighIndexed<T>) -> u16 {
+        let byte = self.read_byte(bus, src.0) as u16;
+        0xFF00 | byte
     }
 }
 
@@ -399,7 +356,7 @@ impl Cpu {
                     // Calls interrupt handler
                     self.ime = false;
                     bus.interrupt_flag().set(flag.bits(), false);
-                    self.push(bus, R16::PC);
+                    self.push(bus, Register16::PC);
                     self.registers.pc = flag.handler_addr();
                 }
                 break;
