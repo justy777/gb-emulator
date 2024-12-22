@@ -153,19 +153,19 @@ impl FlagsRegister {
 }
 
 pub trait AccessReadByte<S> {
-    fn read_byte(&mut self, bus: &AddressBus, src: S) -> u8;
+    fn read_byte(&mut self, bus: &mut AddressBus, src: S) -> u8;
 }
 
 pub trait AccessWriteByte<D> {
-    fn write_byte(&mut self, bus: &mut AddressBus, dst: D, value: u8);
+    fn write_byte(&mut self, bus: &mut AddressBus, dest: D, value: u8);
 }
 
 pub trait AccessReadWord<S> {
-    fn read_word(&mut self, bus: &AddressBus, src: S) -> u16;
+    fn read_word(&mut self, bus: &mut AddressBus, src: S) -> u16;
 }
 
 pub trait AccessWriteWord<D> {
-    fn write_word(&mut self, dst: D, value: u16);
+    fn write_word(&mut self, bus: &mut AddressBus, dest: D, value: u16);
 }
 
 /// 8-bit registers (r8)
@@ -181,14 +181,14 @@ pub enum Register8 {
 }
 
 impl AccessReadByte<Register8> for Cpu {
-    fn read_byte(&mut self, _: &AddressBus, src: Register8) -> u8 {
+    fn read_byte(&mut self, _: &mut AddressBus, src: Register8) -> u8 {
         self.registers.read_byte(src)
     }
 }
 
 impl AccessWriteByte<Register8> for Cpu {
-    fn write_byte(&mut self, _: &mut AddressBus, dst: Register8, value: u8) {
-        self.registers.write_byte(dst, value);
+    fn write_byte(&mut self, _: &mut AddressBus, dest: Register8, value: u8) {
+        self.registers.write_byte(dest, value);
     }
 }
 
@@ -204,14 +204,14 @@ pub enum Register16 {
 }
 
 impl AccessReadWord<Register16> for Cpu {
-    fn read_word(&mut self, _: &AddressBus, src: Register16) -> u16 {
+    fn read_word(&mut self, _: &mut AddressBus, src: Register16) -> u16 {
         self.registers.read_word(src)
     }
 }
 
 impl AccessWriteWord<Register16> for Cpu {
-    fn write_word(&mut self, dst: Register16, value: u16) {
-        self.registers.write_word(dst, value);
+    fn write_word(&mut self, _: &mut AddressBus, dest: Register16, value: u16) {
+        self.registers.write_word(dest, value);
     }
 }
 
@@ -221,14 +221,20 @@ impl AccessWriteWord<Register16> for Cpu {
 pub struct Immediate;
 
 impl AccessReadByte<Immediate> for Cpu {
-    fn read_byte(&mut self, bus: &AddressBus, _: Immediate) -> u8 {
-        self.read_next_byte(bus)
+    fn read_byte(&mut self, bus: &mut AddressBus, _: Immediate) -> u8 {
+        let byte = self.read_next_byte(bus);
+        bus.tick();
+        byte
     }
 }
 
 impl AccessReadWord<Immediate> for Cpu {
-    fn read_word(&mut self, bus: &AddressBus, _: Immediate) -> u16 {
-        self.read_next_word(bus)
+    fn read_word(&mut self, bus: &mut AddressBus, _: Immediate) -> u16 {
+        let low = self.read_next_byte(bus);
+        bus.tick();
+        let high = self.read_next_byte(bus);
+        bus.tick();
+        u16::from_le_bytes([low, high])
     }
 }
 
@@ -241,9 +247,11 @@ impl<T> AccessReadByte<Direct<T>> for Cpu
 where
     Self: AccessReadWord<T>,
 {
-    fn read_byte(&mut self, bus: &AddressBus, src: Direct<T>) -> u8 {
+    fn read_byte(&mut self, bus: &mut AddressBus, src: Direct<T>) -> u8 {
         let addr = self.read_word(bus, src.0);
-        bus.read_byte(addr)
+        let byte = bus.read_byte(addr);
+        bus.tick();
+        byte
     }
 }
 
@@ -251,9 +259,24 @@ impl<T> AccessWriteByte<Direct<T>> for Cpu
 where
     Self: AccessReadWord<T>,
 {
-    fn write_byte(&mut self, bus: &mut AddressBus, dst: Direct<T>, value: u8) {
-        let addr = self.read_word(bus, dst.0);
+    fn write_byte(&mut self, bus: &mut AddressBus, dest: Direct<T>, value: u8) {
+        let addr = self.read_word(bus, dest.0);
         bus.write_byte(addr, value);
+        bus.tick();
+    }
+}
+
+impl<T> AccessWriteWord<Direct<T>> for Cpu
+where
+    Self: AccessReadWord<T>,
+{
+    fn write_word(&mut self, bus: &mut AddressBus, dest: Direct<T>, value: u16) {
+        let addr = self.read_word(bus, dest.0);
+        let [low, high] = value.to_le_bytes();
+        bus.write_byte(addr, low);
+        bus.tick();
+        bus.write_byte(addr.wrapping_add(1), high);
+        bus.tick();
     }
 }
 
@@ -267,10 +290,10 @@ where
     Self: AccessReadWord<T> + AccessWriteWord<T>,
     T: Copy,
 {
-    fn read_word(&mut self, bus: &AddressBus, src: Increment<T>) -> u16 {
+    fn read_word(&mut self, bus: &mut AddressBus, src: Increment<T>) -> u16 {
         let word = self.read_word(bus, src.0);
         let new_word = word.wrapping_add(1);
-        self.write_word(src.0, new_word);
+        self.write_word(bus, src.0, new_word);
         word
     }
 }
@@ -285,10 +308,10 @@ where
     Self: AccessReadWord<T> + AccessWriteWord<T>,
     T: Copy,
 {
-    fn read_word(&mut self, bus: &AddressBus, src: Decrement<T>) -> u16 {
+    fn read_word(&mut self, bus: &mut AddressBus, src: Decrement<T>) -> u16 {
         let word = self.read_word(bus, src.0);
         let new_word = word.wrapping_sub(1);
-        self.write_word(src.0, new_word);
+        self.write_word(bus, src.0, new_word);
         word
     }
 }
@@ -302,7 +325,7 @@ impl<T> AccessReadWord<HighIndexed<T>> for Cpu
 where
     Self: AccessReadByte<T>,
 {
-    fn read_word(&mut self, bus: &AddressBus, src: HighIndexed<T>) -> u16 {
+    fn read_word(&mut self, bus: &mut AddressBus, src: HighIndexed<T>) -> u16 {
         let byte = self.read_byte(bus, src.0) as u16;
         0xFF00 | byte
     }
@@ -338,7 +361,7 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, bus: &mut AddressBus) -> usize {
+    pub fn step(&mut self, bus: &mut AddressBus) {
         // Checks for next instruction after EI is called
         self.ime_delay_counter = self.ime_delay_counter.map(|n| n - 1);
         if self.ime_delay_counter.is_some_and(|n| n == 0) {
@@ -346,29 +369,30 @@ impl Cpu {
             self.ime_delay_counter = None;
         }
 
-        // Checks for pending interrupts
-        let interrupt_pending = bus.get_interrupts_pending();
+        if self.ime {
+            // Checks for pending interrupts
+            let interrupt_pending = bus.get_interrupts_pending();
 
-        for flag in InterruptFlags::flags() {
-            if interrupt_pending.contains(flag.bits()) {
-                self.halted = false;
-                if self.ime {
+            for flag in InterruptFlags::flags() {
+                if interrupt_pending.contains(flag.bits()) {
+                    self.halted = false;
                     // Calls interrupt handler
                     self.ime = false;
                     bus.interrupt_flag().set(flag.bits(), false);
                     self.push(bus, Register16::PC);
                     self.registers.pc = flag.handler_addr();
+                    break;
                 }
-                break;
             }
         }
 
         if self.halted {
-            return 4;
+            bus.tick();
+            return;
         }
 
         let opcode = self.read_next_byte(bus);
-        self.execute(bus, opcode)
+        self.execute(bus, opcode);
     }
 
     fn read_next_byte(&mut self, bus: &AddressBus) -> u8 {
@@ -380,16 +404,6 @@ impl Cpu {
     #[allow(clippy::cast_possible_wrap)]
     fn read_next_byte_signed(&mut self, bus: &AddressBus) -> i8 {
         self.read_next_byte(bus) as i8
-    }
-
-    fn read_next_word(&mut self, bus: &AddressBus) -> u16 {
-        // Game Boy is little endian, so read the second byte as the most significant byte
-        // and the first as the least significant
-        let low = bus.read_byte(self.registers.pc);
-        self.registers.pc = self.registers.pc.wrapping_add(1);
-        let high = bus.read_byte(self.registers.pc);
-        self.registers.pc = self.registers.pc.wrapping_add(1);
-        u16::from_le_bytes([low, high])
     }
 }
 

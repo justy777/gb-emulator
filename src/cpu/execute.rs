@@ -1,885 +1,259 @@
 use crate::cpu::{
-    Cpu, Decrement, Direct, HighIndexed, Immediate, Increment, JumpCondition, Register16::*,
-    Register8::*,
+    Cpu, Decrement, Direct, HighIndexed, Immediate, Increment, JumpCondition,
+    Register16::{AF, BC, DE, HL, SP},
+    Register8::{A, B, C, D, E, H, L},
 };
 use crate::hardware::AddressBus;
 
 impl Cpu {
-    pub(crate) fn execute(&mut self, bus: &mut AddressBus, opcode: u8) -> usize {
+    pub(crate) fn execute(&mut self, bus: &mut AddressBus, opcode: u8) {
         match opcode {
             // ---- 8-bit Arithmetic
             // ADD
-            0x87 => {
-                self.add(bus, A);
-                4
-            }
-            0x80 => {
-                self.add(bus, B);
-                4
-            }
-            0x81 => {
-                self.add(bus, C);
-                4
-            }
-            0x82 => {
-                self.add(bus, D);
-                4
-            }
-            0x83 => {
-                self.add(bus, E);
-                4
-            }
-            0x84 => {
-                self.add(bus, H);
-                4
-            }
-            0x85 => {
-                self.add(bus, L);
-                4
-            }
-            0x86 => {
-                self.add(bus, Direct(HL));
-                8
-            }
-            0xC6 => {
-                self.add(bus, Immediate);
-                8
-            }
+            0x87 => self.add(bus, A, A),
+            0x80 => self.add(bus, A, B),
+            0x81 => self.add(bus, A, C),
+            0x82 => self.add(bus, A, D),
+            0x83 => self.add(bus, A, E),
+            0x84 => self.add(bus, A, H),
+            0x85 => self.add(bus, A, L),
+            0x86 => self.add(bus, A, Direct(HL)),
+            0xC6 => self.add(bus, A, Immediate),
             // ADC
-            0x8F => {
-                self.add_with_carry(bus, A);
-                4
-            }
-            0x88 => {
-                self.add_with_carry(bus, B);
-                4
-            }
-            0x89 => {
-                self.add_with_carry(bus, C);
-                4
-            }
-            0x8A => {
-                self.add_with_carry(bus, D);
-                4
-            }
-            0x8B => {
-                self.add_with_carry(bus, E);
-                4
-            }
-            0x8C => {
-                self.add_with_carry(bus, H);
-                4
-            }
-            0x8D => {
-                self.add_with_carry(bus, L);
-                4
-            }
-            0x8E => {
-                self.add_with_carry(bus, Direct(HL));
-                8
-            }
-            0xCE => {
-                self.add_with_carry(bus, Immediate);
-                8
-            }
+            0x8F => self.add_with_carry(bus, A, A),
+            0x88 => self.add_with_carry(bus, A, B),
+            0x89 => self.add_with_carry(bus, A, C),
+            0x8A => self.add_with_carry(bus, A, D),
+            0x8B => self.add_with_carry(bus, A, E),
+            0x8C => self.add_with_carry(bus, A, H),
+            0x8D => self.add_with_carry(bus, A, L),
+            0x8E => self.add_with_carry(bus, A, Direct(HL)),
+            0xCE => self.add_with_carry(bus, A, Immediate),
             // SUB
-            0x97 => {
-                self.subtract(bus, A);
-                4
-            }
-            0x90 => {
-                self.subtract(bus, B);
-                4
-            }
-            0x91 => {
-                self.subtract(bus, C);
-                4
-            }
-            0x92 => {
-                self.subtract(bus, D);
-                4
-            }
-            0x93 => {
-                self.subtract(bus, E);
-                4
-            }
-            0x94 => {
-                self.subtract(bus, H);
-                4
-            }
-            0x95 => {
-                self.subtract(bus, L);
-                4
-            }
-            0x96 => {
-                self.subtract(bus, Direct(HL));
-                8
-            }
-            0xD6 => {
-                self.subtract(bus, Immediate);
-                8
-            }
+            0x97 => self.subtract(bus, A, A),
+            0x90 => self.subtract(bus, A, B),
+            0x91 => self.subtract(bus, A, C),
+            0x92 => self.subtract(bus, A, D),
+            0x93 => self.subtract(bus, A, E),
+            0x94 => self.subtract(bus, A, H),
+            0x95 => self.subtract(bus, A, L),
+            0x96 => self.subtract(bus, A, Direct(HL)),
+            0xD6 => self.subtract(bus, A, Immediate),
             // SBC
-            0x9F => {
-                self.subtract_with_carry(bus, A);
-                4
-            }
-            0x98 => {
-                self.subtract_with_carry(bus, B);
-                4
-            }
-            0x99 => {
-                self.subtract_with_carry(bus, C);
-                4
-            }
-            0x9A => {
-                self.subtract_with_carry(bus, D);
-                4
-            }
-            0x9B => {
-                self.subtract_with_carry(bus, E);
-                4
-            }
-            0x9C => {
-                self.subtract_with_carry(bus, H);
-                4
-            }
-            0x9D => {
-                self.subtract_with_carry(bus, L);
-                4
-            }
-            0x9E => {
-                self.subtract_with_carry(bus, Direct(HL));
-                8
-            }
-            0xDE => {
-                self.subtract_with_carry(bus, Immediate);
-                8
-            }
+            0x9F => self.subtract_with_carry(bus, A, A),
+            0x98 => self.subtract_with_carry(bus, A, B),
+            0x99 => self.subtract_with_carry(bus, A, C),
+            0x9A => self.subtract_with_carry(bus, A, D),
+            0x9B => self.subtract_with_carry(bus, A, E),
+            0x9C => self.subtract_with_carry(bus, A, H),
+            0x9D => self.subtract_with_carry(bus, A, L),
+            0x9E => self.subtract_with_carry(bus, A, Direct(HL)),
+            0xDE => self.subtract_with_carry(bus, A, Immediate),
             // AND
-            0xA7 => {
-                self.and(bus, A);
-                4
-            }
-            0xA0 => {
-                self.and(bus, B);
-                4
-            }
-            0xA1 => {
-                self.and(bus, C);
-                4
-            }
-            0xA2 => {
-                self.and(bus, D);
-                4
-            }
-            0xA3 => {
-                self.and(bus, E);
-                4
-            }
-            0xA4 => {
-                self.and(bus, H);
-                4
-            }
-            0xA5 => {
-                self.and(bus, L);
-                4
-            }
-            0xA6 => {
-                self.and(bus, Direct(HL));
-                8
-            }
-            0xE6 => {
-                self.and(bus, Immediate);
-                8
-            }
+            0xA7 => self.and(bus, A, A),
+            0xA0 => self.and(bus, A, B),
+            0xA1 => self.and(bus, A, C),
+            0xA2 => self.and(bus, A, D),
+            0xA3 => self.and(bus, A, E),
+            0xA4 => self.and(bus, A, H),
+            0xA5 => self.and(bus, A, L),
+            0xA6 => self.and(bus, A, Direct(HL)),
+            0xE6 => self.and(bus, A, Immediate),
             // XOR
-            0xAF => {
-                self.xor(bus, A);
-                4
-            }
-            0xA8 => {
-                self.xor(bus, B);
-                4
-            }
-            0xA9 => {
-                self.xor(bus, C);
-                4
-            }
-            0xAA => {
-                self.xor(bus, D);
-                4
-            }
-            0xAB => {
-                self.xor(bus, E);
-                4
-            }
-            0xAC => {
-                self.xor(bus, H);
-                4
-            }
-            0xAD => {
-                self.xor(bus, L);
-                4
-            }
-            0xAE => {
-                self.xor(bus, Direct(HL));
-                8
-            }
-            0xEE => {
-                self.xor(bus, Immediate);
-                8
-            }
+            0xAF => self.xor(bus, A, A),
+            0xA8 => self.xor(bus, A, B),
+            0xA9 => self.xor(bus, A, C),
+            0xAA => self.xor(bus, A, D),
+            0xAB => self.xor(bus, A, E),
+            0xAC => self.xor(bus, A, H),
+            0xAD => self.xor(bus, A, L),
+            0xAE => self.xor(bus, A, Direct(HL)),
+            0xEE => self.xor(bus, A, Immediate),
             // OR
-            0xB7 => {
-                self.or(bus, A);
-                4
-            }
-            0xB0 => {
-                self.or(bus, B);
-                4
-            }
-            0xB1 => {
-                self.or(bus, C);
-                4
-            }
-            0xB2 => {
-                self.or(bus, D);
-                4
-            }
-            0xB3 => {
-                self.or(bus, E);
-                4
-            }
-            0xB4 => {
-                self.or(bus, H);
-                4
-            }
-            0xB5 => {
-                self.or(bus, L);
-                4
-            }
-            0xB6 => {
-                self.or(bus, Direct(HL));
-                8
-            }
-            0xF6 => {
-                self.or(bus, Immediate);
-                8
-            }
+            0xB7 => self.or(bus, A, A),
+            0xB0 => self.or(bus, A, B),
+            0xB1 => self.or(bus, A, C),
+            0xB2 => self.or(bus, A, D),
+            0xB3 => self.or(bus, A, E),
+            0xB4 => self.or(bus, A, H),
+            0xB5 => self.or(bus, A, L),
+            0xB6 => self.or(bus, A, Direct(HL)),
+            0xF6 => self.or(bus, A, Immediate),
             // CP
-            0xBF => {
-                self.compare(bus, A);
-                4
-            }
-            0xB8 => {
-                self.compare(bus, B);
-                4
-            }
-            0xB9 => {
-                self.compare(bus, C);
-                4
-            }
-            0xBA => {
-                self.compare(bus, D);
-                4
-            }
-            0xBB => {
-                self.compare(bus, E);
-                4
-            }
-            0xBC => {
-                self.compare(bus, H);
-                4
-            }
-            0xBD => {
-                self.compare(bus, L);
-                4
-            }
-            0xBE => {
-                self.compare(bus, Direct(HL));
-                8
-            }
-            0xFE => {
-                self.compare(bus, Immediate);
-                8
-            }
+            0xBF => self.compare(bus, A, A),
+            0xB8 => self.compare(bus, A, B),
+            0xB9 => self.compare(bus, A, C),
+            0xBA => self.compare(bus, A, D),
+            0xBB => self.compare(bus, A, E),
+            0xBC => self.compare(bus, A, H),
+            0xBD => self.compare(bus, A, L),
+            0xBE => self.compare(bus, A, Direct(HL)),
+            0xFE => self.compare(bus, A, Immediate),
             // INC
-            0x3C => {
-                self.increment(bus, A);
-                4
-            }
-            0x04 => {
-                self.increment(bus, B);
-                4
-            }
-            0x0C => {
-                self.increment(bus, C);
-                4
-            }
-            0x14 => {
-                self.increment(bus, D);
-                4
-            }
-            0x1C => {
-                self.increment(bus, E);
-                4
-            }
-            0x24 => {
-                self.increment(bus, H);
-                4
-            }
-            0x2C => {
-                self.increment(bus, L);
-                4
-            }
-            0x34 => {
-                self.increment(bus, Direct(HL));
-                12
-            }
+            0x3C => self.increment(bus, A),
+            0x04 => self.increment(bus, B),
+            0x0C => self.increment(bus, C),
+            0x14 => self.increment(bus, D),
+            0x1C => self.increment(bus, E),
+            0x24 => self.increment(bus, H),
+            0x2C => self.increment(bus, L),
+            0x34 => self.increment(bus, Direct(HL)),
             // DEC
-            0x3D => {
-                self.decrement(bus, A);
-                4
-            }
-            0x05 => {
-                self.decrement(bus, B);
-                4
-            }
-            0x0D => {
-                self.decrement(bus, C);
-                4
-            }
-            0x15 => {
-                self.decrement(bus, D);
-                4
-            }
-            0x1D => {
-                self.decrement(bus, E);
-                4
-            }
-            0x25 => {
-                self.decrement(bus, H);
-                4
-            }
-            0x2D => {
-                self.decrement(bus, L);
-                4
-            }
-            0x35 => {
-                self.decrement(bus, Direct(HL));
-                12
-            }
+            0x3D => self.decrement(bus, A),
+            0x05 => self.decrement(bus, B),
+            0x0D => self.decrement(bus, C),
+            0x15 => self.decrement(bus, D),
+            0x1D => self.decrement(bus, E),
+            0x25 => self.decrement(bus, H),
+            0x2D => self.decrement(bus, L),
+            0x35 => self.decrement(bus, Direct(HL)),
             // DAA
-            0x27 => {
-                self.decimal_adjust_accumulator();
-                4
-            }
+            0x27 => self.decimal_adjust_accumulator(bus),
             // SCF
-            0x37 => {
-                self.set_carry_flag();
-                4
-            }
+            0x37 => self.set_carry_flag(bus),
             // CPL
-            0x2F => {
-                self.complement_accumulator();
-                4
-            }
+            0x2F => self.complement_accumulator(bus),
             // CCF
-            0x3F => {
-                self.complement_carry_flag();
-                4
-            }
+            0x3F => self.complement_carry_flag(bus),
             // ---- 16-bit Arithmetic
             // ADD
-            0x09 => {
-                self.add16_hl(BC);
-                8
-            }
-            0x19 => {
-                self.add16_hl(DE);
-                8
-            }
-            0x29 => {
-                self.add16_hl(HL);
-                8
-            }
-            0x39 => {
-                self.add16_hl(SP);
-                8
-            }
-            0xE8 => {
-                self.add16_sp(bus);
-                16
-            }
+            0x09 => self.add16(bus, HL, BC),
+            0x19 => self.add16(bus, HL, DE),
+            0x29 => self.add16(bus, HL, HL),
+            0x39 => self.add16(bus, HL, SP),
+            0xE8 => self.add16_sp_e(bus),
             // INC
-            0x03 => {
-                self.increment16(BC);
-                8
-            }
-            0x13 => {
-                self.increment16(DE);
-                8
-            }
-            0x23 => {
-                self.increment16(HL);
-                8
-            }
-            0x33 => {
-                self.increment16(SP);
-                8
-            }
+            0x03 => self.increment16(bus, BC),
+            0x13 => self.increment16(bus, DE),
+            0x23 => self.increment16(bus, HL),
+            0x33 => self.increment16(bus, SP),
             // DEC
-            0x0B => {
-                self.decrement16(BC);
-                8
-            }
-            0x1B => {
-                self.decrement16(DE);
-                8
-            }
-            0x2B => {
-                self.decrement16(HL);
-                8
-            }
-            0x3B => {
-                self.decrement16(SP);
-                8
-            }
+            0x0B => self.decrement16(bus, BC),
+            0x1B => self.decrement16(bus, DE),
+            0x2B => self.decrement16(bus, HL),
+            0x3B => self.decrement16(bus, SP),
             // ---- Bit Shift
             // RLCA
-            0x07 => {
-                self.rotate_left_circular_accumulator();
-                4
-            }
+            0x07 => self.rotate_left_circular_accumulator(bus),
             // RRCA
-            0x0F => {
-                self.rotate_right_circular_accumulator();
-                4
-            }
+            0x0F => self.rotate_right_circular_accumulator(bus),
             // RLA
-            0x17 => {
-                self.rotate_left_accumulator();
-                4
-            }
+            0x17 => self.rotate_left_accumulator(bus),
             // RRA
-            0x1F => {
-                self.rotate_right_accumulator();
-                4
-            }
+            0x1F => self.rotate_right_accumulator(bus),
             // ---- 8-bit Load
             // LD
-            0x47 => {
-                self.load(bus, B, A);
-                4
-            }
-            0x40 => {
-                self.load(bus, B, B);
-                4
-            }
-            0x41 => {
-                self.load(bus, B, C);
-                4
-            }
-            0x42 => {
-                self.load(bus, B, D);
-                4
-            }
-            0x43 => {
-                self.load(bus, B, E);
-                4
-            }
-            0x44 => {
-                self.load(bus, B, H);
-                4
-            }
-            0x45 => {
-                self.load(bus, B, L);
-                4
-            }
-            0x46 => {
-                self.load(bus, B, Direct(HL));
-                8
-            }
-            0x06 => {
-                self.load(bus, B, Immediate);
-                8
-            }
-            0x4F => {
-                self.load(bus, C, A);
-                4
-            }
-            0x48 => {
-                self.load(bus, C, B);
-                4
-            }
-            0x49 => {
-                self.load(bus, C, C);
-                4
-            }
-            0x4A => {
-                self.load(bus, C, D);
-                4
-            }
-            0x4B => {
-                self.load(bus, C, E);
-                4
-            }
-            0x4C => {
-                self.load(bus, C, H);
-                4
-            }
-            0x4D => {
-                self.load(bus, C, L);
-                4
-            }
-            0x4E => {
-                self.load(bus, C, Direct(HL));
-                8
-            }
-            0x0E => {
-                self.load(bus, C, Immediate);
-                8
-            }
-            0x57 => {
-                self.load(bus, D, A);
-                4
-            }
-            0x50 => {
-                self.load(bus, D, B);
-                4
-            }
-            0x51 => {
-                self.load(bus, D, C);
-                4
-            }
-            0x52 => {
-                self.load(bus, D, D);
-                4
-            }
-            0x53 => {
-                self.load(bus, D, E);
-                4
-            }
-            0x54 => {
-                self.load(bus, D, H);
-                4
-            }
-            0x55 => {
-                self.load(bus, D, L);
-                4
-            }
-            0x56 => {
-                self.load(bus, D, Direct(HL));
-                8
-            }
-            0x16 => {
-                self.load(bus, D, Immediate);
-                8
-            }
-            0x5F => {
-                self.load(bus, E, A);
-                4
-            }
-            0x58 => {
-                self.load(bus, E, B);
-                4
-            }
-            0x59 => {
-                self.load(bus, E, C);
-                4
-            }
-            0x5A => {
-                self.load(bus, E, D);
-                4
-            }
-            0x5B => {
-                self.load(bus, E, E);
-                4
-            }
-            0x5C => {
-                self.load(bus, E, H);
-                4
-            }
-            0x5D => {
-                self.load(bus, E, L);
-                4
-            }
-            0x5E => {
-                self.load(bus, E, Direct(HL));
-                8
-            }
-            0x1E => {
-                self.load(bus, E, Immediate);
-                8
-            }
-            0x67 => {
-                self.load(bus, H, A);
-                4
-            }
-            0x60 => {
-                self.load(bus, H, B);
-                4
-            }
-            0x61 => {
-                self.load(bus, H, C);
-                4
-            }
-            0x62 => {
-                self.load(bus, H, D);
-                4
-            }
-            0x63 => {
-                self.load(bus, H, E);
-                4
-            }
-            0x64 => {
-                self.load(bus, H, H);
-                4
-            }
-            0x65 => {
-                self.load(bus, H, L);
-                4
-            }
-            0x66 => {
-                self.load(bus, H, Direct(HL));
-                8
-            }
-            0x26 => {
-                self.load(bus, H, Immediate);
-                8
-            }
-            0x6F => {
-                self.load(bus, L, A);
-                4
-            }
-            0x68 => {
-                self.load(bus, L, B);
-                4
-            }
-            0x69 => {
-                self.load(bus, L, C);
-                4
-            }
-            0x6A => {
-                self.load(bus, L, D);
-                4
-            }
-            0x6B => {
-                self.load(bus, L, E);
-                4
-            }
-            0x6C => {
-                self.load(bus, L, H);
-                4
-            }
-            0x6D => {
-                self.load(bus, L, L);
-                4
-            }
-            0x6E => {
-                self.load(bus, L, Direct(HL));
-                8
-            }
-            0x2E => {
-                self.load(bus, L, Immediate);
-                8
-            }
-            0x77 => {
-                self.load(bus, Direct(HL), A);
-                8
-            }
-            0x70 => {
-                self.load(bus, Direct(HL), B);
-                8
-            }
-            0x71 => {
-                self.load(bus, Direct(HL), C);
-                8
-            }
-            0x72 => {
-                self.load(bus, Direct(HL), D);
-                8
-            }
-            0x73 => {
-                self.load(bus, Direct(HL), E);
-                8
-            }
-            0x74 => {
-                self.load(bus, Direct(HL), H);
-                8
-            }
-            0x75 => {
-                self.load(bus, Direct(HL), L);
-                8
-            }
-            0x36 => {
-                self.load(bus, Direct(HL), Immediate);
-                12
-            }
-            0x7F => {
-                self.load(bus, A, A);
-                4
-            }
-            0x78 => {
-                self.load(bus, A, B);
-                4
-            }
-            0x79 => {
-                self.load(bus, A, C);
-                4
-            }
-            0x7A => {
-                self.load(bus, A, D);
-                4
-            }
-            0x7B => {
-                self.load(bus, A, E);
-                4
-            }
-            0x7C => {
-                self.load(bus, A, H);
-                4
-            }
-            0x7D => {
-                self.load(bus, A, L);
-                4
-            }
-            0x7E => {
-                self.load(bus, A, Direct(HL));
-                8
-            }
-            0x3E => {
-                self.load(bus, A, Immediate);
-                8
-            }
-            0x02 => {
-                self.load(bus, Direct(BC), A);
-                8
-            }
-            0x12 => {
-                self.load(bus, Direct(DE), A);
-                8
-            }
-            0x22 => {
-                self.load(bus, Direct(Increment(HL)), A);
-                8
-            }
-            0x32 => {
-                self.load(bus, Direct(Decrement(HL)), A);
-                8
-            }
-            0x0A => {
-                self.load(bus, A, Direct(BC));
-                8
-            }
-            0x1A => {
-                self.load(bus, A, Direct(DE));
-                8
-            }
-            0x2A => {
-                self.load(bus, A, Direct(Increment(HL)));
-                8
-            }
-            0x3A => {
-                self.load(bus, A, Direct(Decrement(HL)));
-                8
-            }
-            0xEA => {
-                self.load(bus, Direct(Immediate), A);
-                16
-            }
-            0xFA => {
-                self.load(bus, A, Direct(Immediate));
-                16
-            }
+            0x47 => self.load(bus, B, A),
+            0x40 => self.load(bus, B, B),
+            0x41 => self.load(bus, B, C),
+            0x42 => self.load(bus, B, D),
+            0x43 => self.load(bus, B, E),
+            0x44 => self.load(bus, B, H),
+            0x45 => self.load(bus, B, L),
+            0x46 => self.load(bus, B, Direct(HL)),
+            0x06 => self.load(bus, B, Immediate),
+            0x4F => self.load(bus, C, A),
+            0x48 => self.load(bus, C, B),
+            0x49 => self.load(bus, C, C),
+            0x4A => self.load(bus, C, D),
+            0x4B => self.load(bus, C, E),
+            0x4C => self.load(bus, C, H),
+            0x4D => self.load(bus, C, L),
+            0x4E => self.load(bus, C, Direct(HL)),
+            0x0E => self.load(bus, C, Immediate),
+            0x57 => self.load(bus, D, A),
+            0x50 => self.load(bus, D, B),
+            0x51 => self.load(bus, D, C),
+            0x52 => self.load(bus, D, D),
+            0x53 => self.load(bus, D, E),
+            0x54 => self.load(bus, D, H),
+            0x55 => self.load(bus, D, L),
+            0x56 => self.load(bus, D, Direct(HL)),
+            0x16 => self.load(bus, D, Immediate),
+            0x5F => self.load(bus, E, A),
+            0x58 => self.load(bus, E, B),
+            0x59 => self.load(bus, E, C),
+            0x5A => self.load(bus, E, D),
+            0x5B => self.load(bus, E, E),
+            0x5C => self.load(bus, E, H),
+            0x5D => self.load(bus, E, L),
+            0x5E => self.load(bus, E, Direct(HL)),
+            0x1E => self.load(bus, E, Immediate),
+            0x67 => self.load(bus, H, A),
+            0x60 => self.load(bus, H, B),
+            0x61 => self.load(bus, H, C),
+            0x62 => self.load(bus, H, D),
+            0x63 => self.load(bus, H, E),
+            0x64 => self.load(bus, H, H),
+            0x65 => self.load(bus, H, L),
+            0x66 => self.load(bus, H, Direct(HL)),
+            0x26 => self.load(bus, H, Immediate),
+            0x6F => self.load(bus, L, A),
+            0x68 => self.load(bus, L, B),
+            0x69 => self.load(bus, L, C),
+            0x6A => self.load(bus, L, D),
+            0x6B => self.load(bus, L, E),
+            0x6C => self.load(bus, L, H),
+            0x6D => self.load(bus, L, L),
+            0x6E => self.load(bus, L, Direct(HL)),
+            0x2E => self.load(bus, L, Immediate),
+            0x77 => self.load(bus, Direct(HL), A),
+            0x70 => self.load(bus, Direct(HL), B),
+            0x71 => self.load(bus, Direct(HL), C),
+            0x72 => self.load(bus, Direct(HL), D),
+            0x73 => self.load(bus, Direct(HL), E),
+            0x74 => self.load(bus, Direct(HL), H),
+            0x75 => self.load(bus, Direct(HL), L),
+            0x36 => self.load(bus, Direct(HL), Immediate),
+            0x7F => self.load(bus, A, A),
+            0x78 => self.load(bus, A, B),
+            0x79 => self.load(bus, A, C),
+            0x7A => self.load(bus, A, D),
+            0x7B => self.load(bus, A, E),
+            0x7C => self.load(bus, A, H),
+            0x7D => self.load(bus, A, L),
+            0x7E => self.load(bus, A, Direct(HL)),
+            0x3E => self.load(bus, A, Immediate),
+            0x02 => self.load(bus, Direct(BC), A),
+            0x12 => self.load(bus, Direct(DE), A),
+            0x22 => self.load(bus, Direct(Increment(HL)), A),
+            0x32 => self.load(bus, Direct(Decrement(HL)), A),
+            0x0A => self.load(bus, A, Direct(BC)),
+            0x1A => self.load(bus, A, Direct(DE)),
+            0x2A => self.load(bus, A, Direct(Increment(HL))),
+            0x3A => self.load(bus, A, Direct(Decrement(HL))),
+            0xEA => self.load(bus, Direct(Immediate), A),
+            0xFA => self.load(bus, A, Direct(Immediate)),
             // LDH
-            0xE0 => {
-                self.load(bus, Direct(HighIndexed(Immediate)), A);
-                12
-            }
-            0xF0 => {
-                self.load(bus, A, Direct(HighIndexed(Immediate)));
-                12
-            }
-            0xE2 => {
-                self.load(bus, Direct(HighIndexed(C)), A);
-                8
-            }
-            0xF2 => {
-                self.load(bus, A, Direct(HighIndexed(C)));
-                8
-            }
+            0xE0 => self.load(bus, Direct(HighIndexed(Immediate)), A),
+            0xF0 => self.load(bus, A, Direct(HighIndexed(Immediate))),
+            0xE2 => self.load(bus, Direct(HighIndexed(C)), A),
+            0xF2 => self.load(bus, A, Direct(HighIndexed(C))),
             // ---- 16-bit Load
             // LD
-            0x01 => {
-                self.load16(bus, BC, Immediate);
-                12
-            }
-            0x11 => {
-                self.load16(bus, DE, Immediate);
-                12
-            }
-            0x21 => {
-                self.load16(bus, HL, Immediate);
-                12
-            }
-            0x31 => {
-                self.load16(bus, SP, Immediate);
-                12
-            }
+            0x01 => self.load16(bus, BC, Immediate),
+            0x11 => self.load16(bus, DE, Immediate),
+            0x21 => self.load16(bus, HL, Immediate),
+            0x31 => self.load16(bus, SP, Immediate),
+            0x08 => self.load16(bus, Direct(Immediate), SP),
             0xF9 => {
                 self.load16(bus, SP, HL);
-                8
+                bus.tick();
             }
-            0x08 => {
-                self.load16_a16_sp(bus);
-                20
-            }
-            0xF8 => {
-                self.load16_hl_sp(bus);
-                12
-            }
+            0xF8 => self.load16_hl_sp_e(bus),
             // PUSH
-            0xC5 => {
-                self.push(bus, BC);
-                16
-            }
-            0xD5 => {
-                self.push(bus, DE);
-                16
-            }
-            0xE5 => {
-                self.push(bus, HL);
-                16
-            }
-            0xF5 => {
-                self.push(bus, AF);
-                16
-            }
+            0xC5 => self.push(bus, BC),
+            0xD5 => self.push(bus, DE),
+            0xE5 => self.push(bus, HL),
+            0xF5 => self.push(bus, AF),
             // POP
-            0xC1 => {
-                self.pop(bus, BC);
-                12
-            }
-            0xD1 => {
-                self.pop(bus, DE);
-                12
-            }
-            0xE1 => {
-                self.pop(bus, HL);
-                12
-            }
-            0xF1 => {
-                self.pop(bus, AF);
-                12
-            }
+            0xC1 => self.pop(bus, BC),
+            0xD1 => self.pop(bus, DE),
+            0xE1 => self.pop(bus, HL),
+            0xF1 => self.pop(bus, AF),
             // ---- Jumps
             // JP
-            0xE9 => {
-                self.jump_to_hl();
-                4
-            }
+            0xE9 => self.jump_hl(bus),
             0xC3 => self.jump(bus, JumpCondition::Always),
             0xC2 => self.jump(bus, JumpCondition::NotZero),
             0xCA => self.jump(bus, JumpCondition::Zero),
@@ -898,1129 +272,316 @@ impl Cpu {
             0xD4 => self.call(bus, JumpCondition::NotCarry),
             0xDC => self.call(bus, JumpCondition::Carry),
             // RET
-            0xC9 => {
-                self.return_(bus, JumpCondition::Always);
-                16
-            }
-            0xC0 => self.return_(bus, JumpCondition::NotZero),
-            0xC8 => self.return_(bus, JumpCondition::Zero),
-            0xD0 => self.return_(bus, JumpCondition::NotCarry),
-            0xD8 => self.return_(bus, JumpCondition::Carry),
+            0xC9 => self.return_(bus),
+            0xC0 => self.return_if(bus, JumpCondition::NotZero),
+            0xC8 => self.return_if(bus, JumpCondition::Zero),
+            0xD0 => self.return_if(bus, JumpCondition::NotCarry),
+            0xD8 => self.return_if(bus, JumpCondition::Carry),
             // RETI
-            0xD9 => {
-                self.return_from_interrupt_handler(bus);
-                16
-            }
+            0xD9 => self.return_from_interrupt_handler(bus),
             // RST
-            0xC7 => {
-                self.restart(bus, 0x00);
-                16
-            }
-            0xCF => {
-                self.restart(bus, 0x08);
-                16
-            }
-            0xD7 => {
-                self.restart(bus, 0x10);
-                16
-            }
-            0xDF => {
-                self.restart(bus, 0x18);
-                16
-            }
-            0xE7 => {
-                self.restart(bus, 0x20);
-                16
-            }
-            0xEF => {
-                self.restart(bus, 0x28);
-                16
-            }
-            0xF7 => {
-                self.restart(bus, 0x30);
-                16
-            }
-            0xFF => {
-                self.restart(bus, 0x38);
-                16
-            }
+            0xC7 => self.restart(bus, 0x00),
+            0xCF => self.restart(bus, 0x08),
+            0xD7 => self.restart(bus, 0x10),
+            0xDF => self.restart(bus, 0x18),
+            0xE7 => self.restart(bus, 0x20),
+            0xEF => self.restart(bus, 0x28),
+            0xF7 => self.restart(bus, 0x30),
+            0xFF => self.restart(bus, 0x38),
             // ---- Control
             //NOP
-            0x00 => {
-                Self::no_operation();
-                4
-            }
+            0x00 => Self::no_operation(bus),
             // STOP
-            0x10 => {
-                self.stop(bus);
-                4
-            }
+            0x10 => self.stop(bus),
             // HALT
-            0x76 => {
-                self.halt();
-                4
-            }
+            0x76 => self.halt(bus),
             // PREFIX
             0xCB => {
                 let next_opcode = self.read_next_byte(bus);
-                self.execute_prefixed(bus, next_opcode)
+                self.execute_prefixed(bus, next_opcode);
             }
             // DI
-            0xF3 => {
-                self.disable_interrupt();
-                4
-            }
+            0xF3 => self.disable_interrupt(bus),
             // EI
-            0xFB => {
-                self.enable_interrupt();
-                4
-            }
+            0xFB => self.enable_interrupt(bus),
             // ---- Undefined
             byte @ (0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD) => {
-                panic!("Error: Trying to run undefined instruction {byte:#02X}");
+                panic!("Error: Trying to run undefined instruction {byte:#02X}")
             }
         }
     }
 
-    fn execute_prefixed(&mut self, bus: &mut AddressBus, opcode: u8) -> usize {
+    fn execute_prefixed(&mut self, bus: &mut AddressBus, opcode: u8) {
         match opcode {
             // ---- Bit Shift
             // RLC
-            0x00 => {
-                self.rotate_left_circular(bus, B);
-                8
-            }
-            0x01 => {
-                self.rotate_left_circular(bus, C);
-                8
-            }
-            0x02 => {
-                self.rotate_left_circular(bus, D);
-                8
-            }
-            0x03 => {
-                self.rotate_left_circular(bus, E);
-                8
-            }
-            0x04 => {
-                self.rotate_left_circular(bus, H);
-                8
-            }
-            0x05 => {
-                self.rotate_left_circular(bus, L);
-                8
-            }
-            0x06 => {
-                self.rotate_left_circular(bus, Direct(HL));
-                16
-            }
-            0x07 => {
-                self.rotate_left_circular(bus, A);
-                8
-            }
+            0x00 => self.rotate_left_circular(bus, B),
+            0x01 => self.rotate_left_circular(bus, C),
+            0x02 => self.rotate_left_circular(bus, D),
+            0x03 => self.rotate_left_circular(bus, E),
+            0x04 => self.rotate_left_circular(bus, H),
+            0x05 => self.rotate_left_circular(bus, L),
+            0x06 => self.rotate_left_circular(bus, Direct(HL)),
+            0x07 => self.rotate_left_circular(bus, A),
             // RRC
-            0x08 => {
-                self.rotate_right_circular(bus, B);
-                8
-            }
-            0x09 => {
-                self.rotate_right_circular(bus, C);
-                8
-            }
-            0x0A => {
-                self.rotate_right_circular(bus, D);
-                8
-            }
-            0x0B => {
-                self.rotate_right_circular(bus, E);
-                8
-            }
-            0x0C => {
-                self.rotate_right_circular(bus, H);
-                8
-            }
-            0x0D => {
-                self.rotate_right_circular(bus, L);
-                8
-            }
-            0x0E => {
-                self.rotate_right_circular(bus, Direct(HL));
-                16
-            }
-            0x0F => {
-                self.rotate_right_circular(bus, A);
-                8
-            }
+            0x08 => self.rotate_right_circular(bus, B),
+            0x09 => self.rotate_right_circular(bus, C),
+            0x0A => self.rotate_right_circular(bus, D),
+            0x0B => self.rotate_right_circular(bus, E),
+            0x0C => self.rotate_right_circular(bus, H),
+            0x0D => self.rotate_right_circular(bus, L),
+            0x0E => self.rotate_right_circular(bus, Direct(HL)),
+            0x0F => self.rotate_right_circular(bus, A),
             // RL
-            0x10 => {
-                self.rotate_left(bus, B);
-                8
-            }
-            0x11 => {
-                self.rotate_left(bus, C);
-                8
-            }
-            0x12 => {
-                self.rotate_left(bus, D);
-                8
-            }
-            0x13 => {
-                self.rotate_left(bus, E);
-                8
-            }
-            0x14 => {
-                self.rotate_left(bus, H);
-                8
-            }
-            0x15 => {
-                self.rotate_left(bus, L);
-                8
-            }
-            0x16 => {
-                self.rotate_left(bus, Direct(HL));
-                16
-            }
-            0x17 => {
-                self.rotate_left(bus, A);
-                8
-            }
+            0x10 => self.rotate_left(bus, B),
+            0x11 => self.rotate_left(bus, C),
+            0x12 => self.rotate_left(bus, D),
+            0x13 => self.rotate_left(bus, E),
+            0x14 => self.rotate_left(bus, H),
+            0x15 => self.rotate_left(bus, L),
+            0x16 => self.rotate_left(bus, Direct(HL)),
+            0x17 => self.rotate_left(bus, A),
             // RR
-            0x18 => {
-                self.rotate_right(bus, B);
-                8
-            }
-            0x19 => {
-                self.rotate_right(bus, C);
-                8
-            }
-            0x1A => {
-                self.rotate_right(bus, D);
-                8
-            }
-            0x1B => {
-                self.rotate_right(bus, E);
-                8
-            }
-            0x1C => {
-                self.rotate_right(bus, H);
-                8
-            }
-            0x1D => {
-                self.rotate_right(bus, L);
-                8
-            }
-            0x1E => {
-                self.rotate_right(bus, Direct(HL));
-                16
-            }
-            0x1F => {
-                self.rotate_right(bus, A);
-                8
-            }
+            0x18 => self.rotate_right(bus, B),
+            0x19 => self.rotate_right(bus, C),
+            0x1A => self.rotate_right(bus, D),
+            0x1B => self.rotate_right(bus, E),
+            0x1C => self.rotate_right(bus, H),
+            0x1D => self.rotate_right(bus, L),
+            0x1E => self.rotate_right(bus, Direct(HL)),
+            0x1F => self.rotate_right(bus, A),
             // SLA
-            0x20 => {
-                self.shift_left_arithmetic(bus, B);
-                8
-            }
-            0x21 => {
-                self.shift_left_arithmetic(bus, C);
-                8
-            }
-            0x22 => {
-                self.shift_left_arithmetic(bus, D);
-                8
-            }
-            0x23 => {
-                self.shift_left_arithmetic(bus, E);
-                8
-            }
-            0x24 => {
-                self.shift_left_arithmetic(bus, H);
-                8
-            }
-            0x25 => {
-                self.shift_left_arithmetic(bus, L);
-                8
-            }
-            0x26 => {
-                self.shift_left_arithmetic(bus, Direct(HL));
-                16
-            }
-            0x27 => {
-                self.shift_left_arithmetic(bus, A);
-                8
-            }
+            0x20 => self.shift_left_arithmetic(bus, B),
+            0x21 => self.shift_left_arithmetic(bus, C),
+            0x22 => self.shift_left_arithmetic(bus, D),
+            0x23 => self.shift_left_arithmetic(bus, E),
+            0x24 => self.shift_left_arithmetic(bus, H),
+            0x25 => self.shift_left_arithmetic(bus, L),
+            0x26 => self.shift_left_arithmetic(bus, Direct(HL)),
+            0x27 => self.shift_left_arithmetic(bus, A),
             // SRA
-            0x28 => {
-                self.shift_right_arithmetic(bus, B);
-                8
-            }
-            0x29 => {
-                self.shift_right_arithmetic(bus, C);
-                8
-            }
-            0x2A => {
-                self.shift_right_arithmetic(bus, D);
-                8
-            }
-            0x2B => {
-                self.shift_right_arithmetic(bus, E);
-                8
-            }
-            0x2C => {
-                self.shift_right_arithmetic(bus, H);
-                8
-            }
-            0x2D => {
-                self.shift_right_arithmetic(bus, L);
-                8
-            }
-            0x2E => {
-                self.shift_right_arithmetic(bus, Direct(HL));
-                16
-            }
-            0x2F => {
-                self.shift_right_arithmetic(bus, A);
-                8
-            }
+            0x28 => self.shift_right_arithmetic(bus, B),
+            0x29 => self.shift_right_arithmetic(bus, C),
+            0x2A => self.shift_right_arithmetic(bus, D),
+            0x2B => self.shift_right_arithmetic(bus, E),
+            0x2C => self.shift_right_arithmetic(bus, H),
+            0x2D => self.shift_right_arithmetic(bus, L),
+            0x2E => self.shift_right_arithmetic(bus, Direct(HL)),
+            0x2F => self.shift_right_arithmetic(bus, A),
             // SWAP
-            0x30 => {
-                self.swap(bus, B);
-                8
-            }
-            0x31 => {
-                self.swap(bus, C);
-                8
-            }
-            0x32 => {
-                self.swap(bus, D);
-                8
-            }
-            0x33 => {
-                self.swap(bus, E);
-                8
-            }
-            0x34 => {
-                self.swap(bus, H);
-                8
-            }
-            0x35 => {
-                self.swap(bus, L);
-                8
-            }
-            0x36 => {
-                self.swap(bus, Direct(HL));
-                16
-            }
-            0x37 => {
-                self.swap(bus, A);
-                8
-            }
+            0x30 => self.swap(bus, B),
+            0x31 => self.swap(bus, C),
+            0x32 => self.swap(bus, D),
+            0x33 => self.swap(bus, E),
+            0x34 => self.swap(bus, H),
+            0x35 => self.swap(bus, L),
+            0x36 => self.swap(bus, Direct(HL)),
+            0x37 => self.swap(bus, A),
             // SRL
-            0x38 => {
-                self.shift_right_logical(bus, B);
-                8
-            }
-            0x39 => {
-                self.shift_right_logical(bus, C);
-                8
-            }
-            0x3A => {
-                self.shift_right_logical(bus, D);
-                8
-            }
-            0x3B => {
-                self.shift_right_logical(bus, E);
-                8
-            }
-            0x3C => {
-                self.shift_right_logical(bus, H);
-                8
-            }
-            0x3D => {
-                self.shift_right_logical(bus, L);
-                8
-            }
-            0x3E => {
-                self.shift_right_logical(bus, Direct(HL));
-                16
-            }
-            0x3F => {
-                self.shift_right_logical(bus, A);
-                8
-            }
+            0x38 => self.shift_right_logical(bus, B),
+            0x39 => self.shift_right_logical(bus, C),
+            0x3A => self.shift_right_logical(bus, D),
+            0x3B => self.shift_right_logical(bus, E),
+            0x3C => self.shift_right_logical(bus, H),
+            0x3D => self.shift_right_logical(bus, L),
+            0x3E => self.shift_right_logical(bus, Direct(HL)),
+            0x3F => self.shift_right_logical(bus, A),
             // ---- Bit Operations
             // BIT
-            0x40 => {
-                self.bit_test(bus, 0, B);
-                8
-            }
-            0x41 => {
-                self.bit_test(bus, 0, C);
-                8
-            }
-            0x42 => {
-                self.bit_test(bus, 0, D);
-                8
-            }
-            0x43 => {
-                self.bit_test(bus, 0, E);
-                8
-            }
-            0x44 => {
-                self.bit_test(bus, 0, H);
-                8
-            }
-            0x45 => {
-                self.bit_test(bus, 0, L);
-                8
-            }
-            0x46 => {
-                self.bit_test(bus, 0, Direct(HL));
-                12
-            }
-            0x47 => {
-                self.bit_test(bus, 0, A);
-                8
-            }
-            0x48 => {
-                self.bit_test(bus, 1, B);
-                8
-            }
-            0x49 => {
-                self.bit_test(bus, 1, C);
-                8
-            }
-            0x4A => {
-                self.bit_test(bus, 1, D);
-                8
-            }
-            0x4B => {
-                self.bit_test(bus, 1, E);
-                8
-            }
-            0x4C => {
-                self.bit_test(bus, 1, H);
-                8
-            }
-            0x4D => {
-                self.bit_test(bus, 1, L);
-                8
-            }
-            0x4E => {
-                self.bit_test(bus, 1, Direct(HL));
-                12
-            }
-            0x4F => {
-                self.bit_test(bus, 1, A);
-                8
-            }
-            0x50 => {
-                self.bit_test(bus, 2, B);
-                8
-            }
-            0x51 => {
-                self.bit_test(bus, 2, C);
-                8
-            }
-            0x52 => {
-                self.bit_test(bus, 2, D);
-                8
-            }
-            0x53 => {
-                self.bit_test(bus, 2, E);
-                8
-            }
-            0x54 => {
-                self.bit_test(bus, 2, H);
-                8
-            }
-            0x55 => {
-                self.bit_test(bus, 2, L);
-                8
-            }
-            0x56 => {
-                self.bit_test(bus, 2, Direct(HL));
-                12
-            }
-            0x57 => {
-                self.bit_test(bus, 2, A);
-                8
-            }
-            0x58 => {
-                self.bit_test(bus, 3, B);
-                8
-            }
-            0x59 => {
-                self.bit_test(bus, 3, C);
-                8
-            }
-            0x5A => {
-                self.bit_test(bus, 3, D);
-                8
-            }
-            0x5B => {
-                self.bit_test(bus, 3, E);
-                8
-            }
-            0x5C => {
-                self.bit_test(bus, 3, H);
-                8
-            }
-            0x5D => {
-                self.bit_test(bus, 3, L);
-                8
-            }
-            0x5E => {
-                self.bit_test(bus, 3, Direct(HL));
-                12
-            }
-            0x5F => {
-                self.bit_test(bus, 3, A);
-                8
-            }
-            0x60 => {
-                self.bit_test(bus, 4, B);
-                8
-            }
-            0x61 => {
-                self.bit_test(bus, 4, C);
-                8
-            }
-            0x62 => {
-                self.bit_test(bus, 4, D);
-                8
-            }
-            0x63 => {
-                self.bit_test(bus, 4, E);
-                8
-            }
-            0x64 => {
-                self.bit_test(bus, 4, H);
-                8
-            }
-            0x65 => {
-                self.bit_test(bus, 4, L);
-                8
-            }
-            0x66 => {
-                self.bit_test(bus, 4, Direct(HL));
-                12
-            }
-            0x67 => {
-                self.bit_test(bus, 4, A);
-                8
-            }
-            0x68 => {
-                self.bit_test(bus, 5, B);
-                8
-            }
-            0x69 => {
-                self.bit_test(bus, 5, C);
-                8
-            }
-            0x6A => {
-                self.bit_test(bus, 5, D);
-                8
-            }
-            0x6B => {
-                self.bit_test(bus, 5, E);
-                8
-            }
-            0x6C => {
-                self.bit_test(bus, 5, H);
-                8
-            }
-            0x6D => {
-                self.bit_test(bus, 5, L);
-                8
-            }
-            0x6E => {
-                self.bit_test(bus, 5, Direct(HL));
-                12
-            }
-            0x6F => {
-                self.bit_test(bus, 5, A);
-                8
-            }
-            0x70 => {
-                self.bit_test(bus, 6, B);
-                8
-            }
-            0x71 => {
-                self.bit_test(bus, 6, C);
-                8
-            }
-            0x72 => {
-                self.bit_test(bus, 6, D);
-                8
-            }
-            0x73 => {
-                self.bit_test(bus, 6, E);
-                8
-            }
-            0x74 => {
-                self.bit_test(bus, 6, H);
-                8
-            }
-            0x75 => {
-                self.bit_test(bus, 6, L);
-                8
-            }
-            0x76 => {
-                self.bit_test(bus, 6, Direct(HL));
-                12
-            }
-            0x77 => {
-                self.bit_test(bus, 6, A);
-                8
-            }
-            0x78 => {
-                self.bit_test(bus, 7, B);
-                8
-            }
-            0x79 => {
-                self.bit_test(bus, 7, C);
-                8
-            }
-            0x7A => {
-                self.bit_test(bus, 7, D);
-                8
-            }
-            0x7B => {
-                self.bit_test(bus, 7, E);
-                8
-            }
-            0x7C => {
-                self.bit_test(bus, 7, H);
-                8
-            }
-            0x7D => {
-                self.bit_test(bus, 7, L);
-                8
-            }
-            0x7E => {
-                self.bit_test(bus, 7, Direct(HL));
-                12
-            }
-            0x7F => {
-                self.bit_test(bus, 7, A);
-                8
-            }
+            0x40 => self.bit_test(bus, 0, B),
+            0x41 => self.bit_test(bus, 0, C),
+            0x42 => self.bit_test(bus, 0, D),
+            0x43 => self.bit_test(bus, 0, E),
+            0x44 => self.bit_test(bus, 0, H),
+            0x45 => self.bit_test(bus, 0, L),
+            0x46 => self.bit_test(bus, 0, Direct(HL)),
+            0x47 => self.bit_test(bus, 0, A),
+            0x48 => self.bit_test(bus, 1, B),
+            0x49 => self.bit_test(bus, 1, C),
+            0x4A => self.bit_test(bus, 1, D),
+            0x4B => self.bit_test(bus, 1, E),
+            0x4C => self.bit_test(bus, 1, H),
+            0x4D => self.bit_test(bus, 1, L),
+            0x4E => self.bit_test(bus, 1, Direct(HL)),
+            0x4F => self.bit_test(bus, 1, A),
+            0x50 => self.bit_test(bus, 2, B),
+            0x51 => self.bit_test(bus, 2, C),
+            0x52 => self.bit_test(bus, 2, D),
+            0x53 => self.bit_test(bus, 2, E),
+            0x54 => self.bit_test(bus, 2, H),
+            0x55 => self.bit_test(bus, 2, L),
+            0x56 => self.bit_test(bus, 2, Direct(HL)),
+            0x57 => self.bit_test(bus, 2, A),
+            0x58 => self.bit_test(bus, 3, B),
+            0x59 => self.bit_test(bus, 3, C),
+            0x5A => self.bit_test(bus, 3, D),
+            0x5B => self.bit_test(bus, 3, E),
+            0x5C => self.bit_test(bus, 3, H),
+            0x5D => self.bit_test(bus, 3, L),
+            0x5E => self.bit_test(bus, 3, Direct(HL)),
+            0x5F => self.bit_test(bus, 3, A),
+            0x60 => self.bit_test(bus, 4, B),
+            0x61 => self.bit_test(bus, 4, C),
+            0x62 => self.bit_test(bus, 4, D),
+            0x63 => self.bit_test(bus, 4, E),
+            0x64 => self.bit_test(bus, 4, H),
+            0x65 => self.bit_test(bus, 4, L),
+            0x66 => self.bit_test(bus, 4, Direct(HL)),
+            0x67 => self.bit_test(bus, 4, A),
+            0x68 => self.bit_test(bus, 5, B),
+            0x69 => self.bit_test(bus, 5, C),
+            0x6A => self.bit_test(bus, 5, D),
+            0x6B => self.bit_test(bus, 5, E),
+            0x6C => self.bit_test(bus, 5, H),
+            0x6D => self.bit_test(bus, 5, L),
+            0x6E => self.bit_test(bus, 5, Direct(HL)),
+            0x6F => self.bit_test(bus, 5, A),
+            0x70 => self.bit_test(bus, 6, B),
+            0x71 => self.bit_test(bus, 6, C),
+            0x72 => self.bit_test(bus, 6, D),
+            0x73 => self.bit_test(bus, 6, E),
+            0x74 => self.bit_test(bus, 6, H),
+            0x75 => self.bit_test(bus, 6, L),
+            0x76 => self.bit_test(bus, 6, Direct(HL)),
+            0x77 => self.bit_test(bus, 6, A),
+            0x78 => self.bit_test(bus, 7, B),
+            0x79 => self.bit_test(bus, 7, C),
+            0x7A => self.bit_test(bus, 7, D),
+            0x7B => self.bit_test(bus, 7, E),
+            0x7C => self.bit_test(bus, 7, H),
+            0x7D => self.bit_test(bus, 7, L),
+            0x7E => self.bit_test(bus, 7, Direct(HL)),
+            0x7F => self.bit_test(bus, 7, A),
             // RES
-            0x80 => {
-                self.bit_reset(bus, 0, B);
-                8
-            }
-            0x81 => {
-                self.bit_reset(bus, 0, C);
-                8
-            }
-            0x82 => {
-                self.bit_reset(bus, 0, D);
-                8
-            }
-            0x83 => {
-                self.bit_reset(bus, 0, E);
-                8
-            }
-            0x84 => {
-                self.bit_reset(bus, 0, H);
-                8
-            }
-            0x85 => {
-                self.bit_reset(bus, 0, L);
-                8
-            }
-            0x86 => {
-                self.bit_reset(bus, 0, Direct(HL));
-                16
-            }
-            0x87 => {
-                self.bit_reset(bus, 0, A);
-                8
-            }
-            0x88 => {
-                self.bit_reset(bus, 1, B);
-                8
-            }
-            0x89 => {
-                self.bit_reset(bus, 1, C);
-                8
-            }
-            0x8A => {
-                self.bit_reset(bus, 1, D);
-                8
-            }
-            0x8B => {
-                self.bit_reset(bus, 1, E);
-                8
-            }
-            0x8C => {
-                self.bit_reset(bus, 1, H);
-                8
-            }
-            0x8D => {
-                self.bit_reset(bus, 1, L);
-                8
-            }
-            0x8E => {
-                self.bit_reset(bus, 1, Direct(HL));
-                16
-            }
-            0x8F => {
-                self.bit_reset(bus, 1, A);
-                8
-            }
-            0x90 => {
-                self.bit_reset(bus, 2, B);
-                8
-            }
-            0x91 => {
-                self.bit_reset(bus, 2, C);
-                8
-            }
-            0x92 => {
-                self.bit_reset(bus, 2, D);
-                8
-            }
-            0x93 => {
-                self.bit_reset(bus, 2, E);
-                8
-            }
-            0x94 => {
-                self.bit_reset(bus, 2, H);
-                8
-            }
-            0x95 => {
-                self.bit_reset(bus, 2, L);
-                8
-            }
-            0x96 => {
-                self.bit_reset(bus, 2, Direct(HL));
-                16
-            }
-            0x97 => {
-                self.bit_reset(bus, 2, A);
-                8
-            }
-            0x98 => {
-                self.bit_reset(bus, 3, B);
-                8
-            }
-            0x99 => {
-                self.bit_reset(bus, 3, C);
-                8
-            }
-            0x9A => {
-                self.bit_reset(bus, 3, D);
-                8
-            }
-            0x9B => {
-                self.bit_reset(bus, 3, E);
-                8
-            }
-            0x9C => {
-                self.bit_reset(bus, 3, H);
-                8
-            }
-            0x9D => {
-                self.bit_reset(bus, 3, L);
-                8
-            }
-            0x9E => {
-                self.bit_reset(bus, 3, Direct(HL));
-                16
-            }
-            0x9F => {
-                self.bit_reset(bus, 3, A);
-                8
-            }
-            0xA0 => {
-                self.bit_reset(bus, 4, B);
-                8
-            }
-            0xA1 => {
-                self.bit_reset(bus, 4, C);
-                8
-            }
-            0xA2 => {
-                self.bit_reset(bus, 4, D);
-                8
-            }
-            0xA3 => {
-                self.bit_reset(bus, 4, E);
-                8
-            }
-            0xA4 => {
-                self.bit_reset(bus, 4, H);
-                8
-            }
-            0xA5 => {
-                self.bit_reset(bus, 4, L);
-                8
-            }
-            0xA6 => {
-                self.bit_reset(bus, 4, Direct(HL));
-                16
-            }
-            0xA7 => {
-                self.bit_reset(bus, 4, A);
-                8
-            }
-            0xA8 => {
-                self.bit_reset(bus, 5, B);
-                8
-            }
-            0xA9 => {
-                self.bit_reset(bus, 5, C);
-                8
-            }
-            0xAA => {
-                self.bit_reset(bus, 5, D);
-                8
-            }
-            0xAB => {
-                self.bit_reset(bus, 5, E);
-                8
-            }
-            0xAC => {
-                self.bit_reset(bus, 5, H);
-                8
-            }
-            0xAD => {
-                self.bit_reset(bus, 5, L);
-                8
-            }
-            0xAE => {
-                self.bit_reset(bus, 5, Direct(HL));
-                16
-            }
-            0xAF => {
-                self.bit_reset(bus, 5, A);
-                8
-            }
-            0xB0 => {
-                self.bit_reset(bus, 6, B);
-                8
-            }
-            0xB1 => {
-                self.bit_reset(bus, 6, C);
-                8
-            }
-            0xB2 => {
-                self.bit_reset(bus, 6, D);
-                8
-            }
-            0xB3 => {
-                self.bit_reset(bus, 6, E);
-                8
-            }
-            0xB4 => {
-                self.bit_reset(bus, 6, H);
-                8
-            }
-            0xB5 => {
-                self.bit_reset(bus, 6, L);
-                8
-            }
-            0xB6 => {
-                self.bit_reset(bus, 6, Direct(HL));
-                16
-            }
-            0xB7 => {
-                self.bit_reset(bus, 6, A);
-                8
-            }
-            0xB8 => {
-                self.bit_reset(bus, 7, B);
-                8
-            }
-            0xB9 => {
-                self.bit_reset(bus, 7, C);
-                8
-            }
-            0xBA => {
-                self.bit_reset(bus, 7, D);
-                8
-            }
-            0xBB => {
-                self.bit_reset(bus, 7, E);
-                8
-            }
-            0xBC => {
-                self.bit_reset(bus, 7, H);
-                8
-            }
-            0xBD => {
-                self.bit_reset(bus, 7, L);
-                8
-            }
-            0xBE => {
-                self.bit_reset(bus, 7, Direct(HL));
-                16
-            }
-            0xBF => {
-                self.bit_reset(bus, 7, A);
-                8
-            }
+            0x80 => self.bit_reset(bus, 0, B),
+            0x81 => self.bit_reset(bus, 0, C),
+            0x82 => self.bit_reset(bus, 0, D),
+            0x83 => self.bit_reset(bus, 0, E),
+            0x84 => self.bit_reset(bus, 0, H),
+            0x85 => self.bit_reset(bus, 0, L),
+            0x86 => self.bit_reset(bus, 0, Direct(HL)),
+            0x87 => self.bit_reset(bus, 0, A),
+            0x88 => self.bit_reset(bus, 1, B),
+            0x89 => self.bit_reset(bus, 1, C),
+            0x8A => self.bit_reset(bus, 1, D),
+            0x8B => self.bit_reset(bus, 1, E),
+            0x8C => self.bit_reset(bus, 1, H),
+            0x8D => self.bit_reset(bus, 1, L),
+            0x8E => self.bit_reset(bus, 1, Direct(HL)),
+            0x8F => self.bit_reset(bus, 1, A),
+            0x90 => self.bit_reset(bus, 2, B),
+            0x91 => self.bit_reset(bus, 2, C),
+            0x92 => self.bit_reset(bus, 2, D),
+            0x93 => self.bit_reset(bus, 2, E),
+            0x94 => self.bit_reset(bus, 2, H),
+            0x95 => self.bit_reset(bus, 2, L),
+            0x96 => self.bit_reset(bus, 2, Direct(HL)),
+            0x97 => self.bit_reset(bus, 2, A),
+            0x98 => self.bit_reset(bus, 3, B),
+            0x99 => self.bit_reset(bus, 3, C),
+            0x9A => self.bit_reset(bus, 3, D),
+            0x9B => self.bit_reset(bus, 3, E),
+            0x9C => self.bit_reset(bus, 3, H),
+            0x9D => self.bit_reset(bus, 3, L),
+            0x9E => self.bit_reset(bus, 3, Direct(HL)),
+            0x9F => self.bit_reset(bus, 3, A),
+            0xA0 => self.bit_reset(bus, 4, B),
+            0xA1 => self.bit_reset(bus, 4, C),
+            0xA2 => self.bit_reset(bus, 4, D),
+            0xA3 => self.bit_reset(bus, 4, E),
+            0xA4 => self.bit_reset(bus, 4, H),
+            0xA5 => self.bit_reset(bus, 4, L),
+            0xA6 => self.bit_reset(bus, 4, Direct(HL)),
+            0xA7 => self.bit_reset(bus, 4, A),
+            0xA8 => self.bit_reset(bus, 5, B),
+            0xA9 => self.bit_reset(bus, 5, C),
+            0xAA => self.bit_reset(bus, 5, D),
+            0xAB => self.bit_reset(bus, 5, E),
+            0xAC => self.bit_reset(bus, 5, H),
+            0xAD => self.bit_reset(bus, 5, L),
+            0xAE => self.bit_reset(bus, 5, Direct(HL)),
+            0xAF => self.bit_reset(bus, 5, A),
+            0xB0 => self.bit_reset(bus, 6, B),
+            0xB1 => self.bit_reset(bus, 6, C),
+            0xB2 => self.bit_reset(bus, 6, D),
+            0xB3 => self.bit_reset(bus, 6, E),
+            0xB4 => self.bit_reset(bus, 6, H),
+            0xB5 => self.bit_reset(bus, 6, L),
+            0xB6 => self.bit_reset(bus, 6, Direct(HL)),
+            0xB7 => self.bit_reset(bus, 6, A),
+            0xB8 => self.bit_reset(bus, 7, B),
+            0xB9 => self.bit_reset(bus, 7, C),
+            0xBA => self.bit_reset(bus, 7, D),
+            0xBB => self.bit_reset(bus, 7, E),
+            0xBC => self.bit_reset(bus, 7, H),
+            0xBD => self.bit_reset(bus, 7, L),
+            0xBE => self.bit_reset(bus, 7, Direct(HL)),
+            0xBF => self.bit_reset(bus, 7, A),
             // SET
-            0xC0 => {
-                self.bit_set(bus, 0, B);
-                8
-            }
-            0xC1 => {
-                self.bit_set(bus, 0, C);
-                8
-            }
-            0xC2 => {
-                self.bit_set(bus, 0, D);
-                8
-            }
-            0xC3 => {
-                self.bit_set(bus, 0, E);
-                8
-            }
-            0xC4 => {
-                self.bit_set(bus, 0, H);
-                8
-            }
-            0xC5 => {
-                self.bit_set(bus, 0, L);
-                8
-            }
-            0xC6 => {
-                self.bit_set(bus, 0, Direct(HL));
-                16
-            }
-            0xC7 => {
-                self.bit_set(bus, 0, A);
-                8
-            }
-            0xC8 => {
-                self.bit_set(bus, 1, B);
-                8
-            }
-            0xC9 => {
-                self.bit_set(bus, 1, C);
-                8
-            }
-            0xCA => {
-                self.bit_set(bus, 1, D);
-                8
-            }
-            0xCB => {
-                self.bit_set(bus, 1, E);
-                8
-            }
-            0xCC => {
-                self.bit_set(bus, 1, H);
-                8
-            }
-            0xCD => {
-                self.bit_set(bus, 1, L);
-                8
-            }
-            0xCE => {
-                self.bit_set(bus, 1, Direct(HL));
-                16
-            }
-            0xCF => {
-                self.bit_set(bus, 1, A);
-                8
-            }
-            0xD0 => {
-                self.bit_set(bus, 2, B);
-                8
-            }
-            0xD1 => {
-                self.bit_set(bus, 2, C);
-                8
-            }
-            0xD2 => {
-                self.bit_set(bus, 2, D);
-                8
-            }
-            0xD3 => {
-                self.bit_set(bus, 2, E);
-                8
-            }
-            0xD4 => {
-                self.bit_set(bus, 2, H);
-                8
-            }
-            0xD5 => {
-                self.bit_set(bus, 2, L);
-                8
-            }
-            0xD6 => {
-                self.bit_set(bus, 2, Direct(HL));
-                16
-            }
-            0xD7 => {
-                self.bit_set(bus, 2, A);
-                8
-            }
-            0xD8 => {
-                self.bit_set(bus, 3, B);
-                8
-            }
-            0xD9 => {
-                self.bit_set(bus, 3, C);
-                8
-            }
-            0xDA => {
-                self.bit_set(bus, 3, D);
-                8
-            }
-            0xDB => {
-                self.bit_set(bus, 3, E);
-                8
-            }
-            0xDC => {
-                self.bit_set(bus, 3, H);
-                8
-            }
-            0xDD => {
-                self.bit_set(bus, 3, L);
-                8
-            }
-            0xDE => {
-                self.bit_set(bus, 3, Direct(HL));
-                16
-            }
-            0xDF => {
-                self.bit_set(bus, 3, A);
-                8
-            }
-            0xE0 => {
-                self.bit_set(bus, 4, B);
-                8
-            }
-            0xE1 => {
-                self.bit_set(bus, 4, C);
-                8
-            }
-            0xE2 => {
-                self.bit_set(bus, 4, D);
-                8
-            }
-            0xE3 => {
-                self.bit_set(bus, 4, E);
-                8
-            }
-            0xE4 => {
-                self.bit_set(bus, 4, H);
-                8
-            }
-            0xE5 => {
-                self.bit_set(bus, 4, L);
-                8
-            }
-            0xE6 => {
-                self.bit_set(bus, 4, Direct(HL));
-                16
-            }
-            0xE7 => {
-                self.bit_set(bus, 4, A);
-                8
-            }
-            0xE8 => {
-                self.bit_set(bus, 5, B);
-                8
-            }
-            0xE9 => {
-                self.bit_set(bus, 5, C);
-                8
-            }
-            0xEA => {
-                self.bit_set(bus, 5, D);
-                8
-            }
-            0xEB => {
-                self.bit_set(bus, 5, E);
-                8
-            }
-            0xEC => {
-                self.bit_set(bus, 5, H);
-                8
-            }
-            0xED => {
-                self.bit_set(bus, 5, L);
-                8
-            }
-            0xEE => {
-                self.bit_set(bus, 5, Direct(HL));
-                16
-            }
-            0xEF => {
-                self.bit_set(bus, 5, A);
-                8
-            }
-            0xF0 => {
-                self.bit_set(bus, 6, B);
-                8
-            }
-            0xF1 => {
-                self.bit_set(bus, 6, C);
-                8
-            }
-            0xF2 => {
-                self.bit_set(bus, 6, D);
-                8
-            }
-            0xF3 => {
-                self.bit_set(bus, 6, E);
-                8
-            }
-            0xF4 => {
-                self.bit_set(bus, 6, H);
-                8
-            }
-            0xF5 => {
-                self.bit_set(bus, 6, L);
-                8
-            }
-            0xF6 => {
-                self.bit_set(bus, 6, Direct(HL));
-                16
-            }
-            0xF7 => {
-                self.bit_set(bus, 6, A);
-                8
-            }
-            0xF8 => {
-                self.bit_set(bus, 7, B);
-                8
-            }
-            0xF9 => {
-                self.bit_set(bus, 7, C);
-                8
-            }
-            0xFA => {
-                self.bit_set(bus, 7, D);
-                8
-            }
-            0xFB => {
-                self.bit_set(bus, 7, E);
-                8
-            }
-            0xFC => {
-                self.bit_set(bus, 7, H);
-                8
-            }
-            0xFD => {
-                self.bit_set(bus, 7, L);
-                8
-            }
-            0xFE => {
-                self.bit_set(bus, 7, Direct(HL));
-                16
-            }
-            0xFF => {
-                self.bit_set(bus, 7, A);
-                8
-            }
+            0xC0 => self.bit_set(bus, 0, B),
+            0xC1 => self.bit_set(bus, 0, C),
+            0xC2 => self.bit_set(bus, 0, D),
+            0xC3 => self.bit_set(bus, 0, E),
+            0xC4 => self.bit_set(bus, 0, H),
+            0xC5 => self.bit_set(bus, 0, L),
+            0xC6 => self.bit_set(bus, 0, Direct(HL)),
+            0xC7 => self.bit_set(bus, 0, A),
+            0xC8 => self.bit_set(bus, 1, B),
+            0xC9 => self.bit_set(bus, 1, C),
+            0xCA => self.bit_set(bus, 1, D),
+            0xCB => self.bit_set(bus, 1, E),
+            0xCC => self.bit_set(bus, 1, H),
+            0xCD => self.bit_set(bus, 1, L),
+            0xCE => self.bit_set(bus, 1, Direct(HL)),
+            0xCF => self.bit_set(bus, 1, A),
+            0xD0 => self.bit_set(bus, 2, B),
+            0xD1 => self.bit_set(bus, 2, C),
+            0xD2 => self.bit_set(bus, 2, D),
+            0xD3 => self.bit_set(bus, 2, E),
+            0xD4 => self.bit_set(bus, 2, H),
+            0xD5 => self.bit_set(bus, 2, L),
+            0xD6 => self.bit_set(bus, 2, Direct(HL)),
+            0xD7 => self.bit_set(bus, 2, A),
+            0xD8 => self.bit_set(bus, 3, B),
+            0xD9 => self.bit_set(bus, 3, C),
+            0xDA => self.bit_set(bus, 3, D),
+            0xDB => self.bit_set(bus, 3, E),
+            0xDC => self.bit_set(bus, 3, H),
+            0xDD => self.bit_set(bus, 3, L),
+            0xDE => self.bit_set(bus, 3, Direct(HL)),
+            0xDF => self.bit_set(bus, 3, A),
+            0xE0 => self.bit_set(bus, 4, B),
+            0xE1 => self.bit_set(bus, 4, C),
+            0xE2 => self.bit_set(bus, 4, D),
+            0xE3 => self.bit_set(bus, 4, E),
+            0xE4 => self.bit_set(bus, 4, H),
+            0xE5 => self.bit_set(bus, 4, L),
+            0xE6 => self.bit_set(bus, 4, Direct(HL)),
+            0xE7 => self.bit_set(bus, 4, A),
+            0xE8 => self.bit_set(bus, 5, B),
+            0xE9 => self.bit_set(bus, 5, C),
+            0xEA => self.bit_set(bus, 5, D),
+            0xEB => self.bit_set(bus, 5, E),
+            0xEC => self.bit_set(bus, 5, H),
+            0xED => self.bit_set(bus, 5, L),
+            0xEE => self.bit_set(bus, 5, Direct(HL)),
+            0xEF => self.bit_set(bus, 5, A),
+            0xF0 => self.bit_set(bus, 6, B),
+            0xF1 => self.bit_set(bus, 6, C),
+            0xF2 => self.bit_set(bus, 6, D),
+            0xF3 => self.bit_set(bus, 6, E),
+            0xF4 => self.bit_set(bus, 6, H),
+            0xF5 => self.bit_set(bus, 6, L),
+            0xF6 => self.bit_set(bus, 6, Direct(HL)),
+            0xF7 => self.bit_set(bus, 6, A),
+            0xF8 => self.bit_set(bus, 7, B),
+            0xF9 => self.bit_set(bus, 7, C),
+            0xFA => self.bit_set(bus, 7, D),
+            0xFB => self.bit_set(bus, 7, E),
+            0xFC => self.bit_set(bus, 7, H),
+            0xFD => self.bit_set(bus, 7, L),
+            0xFE => self.bit_set(bus, 7, Direct(HL)),
+            0xFF => self.bit_set(bus, 7, A),
         }
     }
 }

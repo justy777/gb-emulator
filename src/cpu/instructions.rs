@@ -1,5 +1,6 @@
 use crate::cpu::{
-    Cpu, FlagsRegister, JumpCondition, AccessReadByte, AccessReadWord, Register16, AccessWriteByte, AccessWriteWord,
+    AccessReadByte, AccessReadWord, AccessWriteByte, AccessWriteWord, Cpu, FlagsRegister,
+    Immediate, JumpCondition, Register16,
 };
 use crate::hardware::AddressBus;
 
@@ -9,14 +10,17 @@ impl Cpu {
     /// - - - -
     ///
     /// Nothing happens.
-    pub(crate) const fn no_operation() {}
+    pub(crate) fn no_operation(bus: &mut AddressBus) {
+        bus.tick();
+    }
 
     /// STOP n8
     /// 2 4
     /// - - - -
     ///
     /// Stop CPU & display until button pressed.
-    pub(crate) fn stop(&mut self, bus: &AddressBus) {
+    pub(crate) fn stop(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let _ = self.read_next_byte(bus);
         loop {
             // TODO: Add sleeping to save CPU usage
@@ -33,7 +37,8 @@ impl Cpu {
     /// - - - -
     ///
     /// Halt CPU until an interrupt occurs.
-    pub(crate) fn halt(&mut self) {
+    pub(crate) fn halt(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         self.halted = true;
         // TODO: Look into halt bug
     }
@@ -42,39 +47,30 @@ impl Cpu {
     /// 1 4
     /// - - - -
     ///
-    /// Load src (right) and copy into dst (left).
-    pub(crate) fn load<D, S>(&mut self, bus: &mut AddressBus, dst: D, src: S)
+    /// LD
+    ///
+    /// Load src (right) and copy into dest (left).
+    pub(crate) fn load<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         Self: AccessReadByte<S> + AccessWriteByte<D>,
     {
+        bus.tick();
         let value = self.read_byte(bus, src);
-        self.write_byte(bus, dst, value);
+        self.write_byte(bus, dest, value);
     }
 
     /// LD r16, n16
     /// 3 12
     /// - - - -
     ///
-    /// Load src (right) and copy into dst (left).
-    pub(crate) fn load16<D, S>(&mut self, bus: &AddressBus, dst: D, src: S)
+    /// Load src (right) and copy into dest (left).
+    pub(crate) fn load16<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         Self: AccessReadWord<S> + AccessWriteWord<D>,
     {
+        bus.tick();
         let value = self.read_word(bus, src);
-        self.write_word(dst, value);
-    }
-
-    /// LD \[a16\], SP
-    /// 3 20
-    /// - - - -
-    ///
-    /// Load SP at address a16.
-    pub(crate) fn load16_a16_sp(&mut self, bus: &mut AddressBus) {
-        let value = self.registers.sp;
-        let [low, high] = value.to_le_bytes();
-        let addr = self.read_next_word(bus);
-        bus.write_byte(addr, low);
-        bus.write_byte(addr.wrapping_add(1), high);
+        self.write_word(bus, dest, value);
     }
 
     /// LD HL, SP + e8
@@ -82,9 +78,13 @@ impl Cpu {
     /// 0 0 H C
     ///
     /// Add the signed value e8 to SP and store the result in HL.
-    pub(crate) fn load16_hl_sp(&mut self, bus: &AddressBus) {
+    pub(crate) fn load16_hl_sp_e(&mut self, bus: &mut AddressBus) {
+        bus.tick();
+
         let sp = self.registers.sp;
         let offset = self.read_next_byte_signed(bus) as i16;
+        bus.tick();
+
         self.registers.f.set(FlagsRegister::ZERO, false);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         // Half-carry from bit 3, carry from bit 7
@@ -93,8 +93,10 @@ impl Cpu {
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
         let carry = (sp & 0xFF).wrapping_add_signed(offset & 0xFF) > 0xFF;
         self.registers.f.set(FlagsRegister::CARRY, carry);
+
         let new_value = sp.wrapping_add_signed(offset);
         self.registers.write_word(Register16::HL, new_value);
+        bus.tick();
     }
 
     /// ADD A, r8
@@ -102,22 +104,24 @@ impl Cpu {
     /// Z 0 H C
     ///
     /// Add the value in r8 to register A.
-    pub(crate) fn add<S>(&mut self, bus: &AddressBus, src: S)
+    pub(crate) fn add<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S>,
+        D: Copy,
+        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
     {
-        let value = self.read_byte(bus, src);
-        let a = self.registers.a;
-        let (new_value, did_overflow) = a.overflowing_add(value);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        bus.tick();
+        let lhs = self.read_byte(bus, dest);
+        let rhs = self.read_byte(bus, src);
+        let (result, did_overflow) = lhs.overflowing_add(rhs);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         // Half carry is set if adding the lower bits (0-3) of the value and register A
         // together result in overflowing to bit 4. If the result is larger than 0xF
         // than the addition caused a carry from bit 3 to bit 4.
-        let half_carry = (a & 0xF) + (value & 0xF) > 0xF;
+        let half_carry = (lhs & 0xF) + (rhs & 0xF) > 0xF;
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
         self.registers.f.set(FlagsRegister::CARRY, did_overflow);
-        self.registers.a = new_value;
+        self.write_byte(bus, dest, result);
     }
 
     /// ADC A, r8
@@ -125,21 +129,23 @@ impl Cpu {
     /// Z 0 H C
     ///
     /// Add the value in r8 plus the carry flag to register A.
-    pub(crate) fn add_with_carry<S>(&mut self, bus: &AddressBus, src: S)
+    pub(crate) fn add_with_carry<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S>,
+        D: Copy,
+        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
     {
-        let value = self.read_byte(bus, src);
-        let a = self.registers.a;
+        bus.tick();
+        let lhs = self.read_byte(bus, dest);
+        let rhs = self.read_byte(bus, src);
         let cf = self.registers.f.contains(FlagsRegister::CARRY) as u8;
-        let new_value = a.wrapping_add(value).wrapping_add(cf);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = lhs.wrapping_add(rhs).wrapping_add(cf);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
-        let half_carry = (a & 0xF) + (value & 0xF) + cf > 0xF;
+        let half_carry = (lhs & 0xF) + (rhs & 0xF) + cf > 0xF;
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
-        let carry = a as u16 + value as u16 + cf as u16 > 0xFF;
+        let carry = lhs as u16 + rhs as u16 + cf as u16 > 0xFF;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.registers.a = new_value;
+        self.write_byte(bus, dest, result);
     }
 
     /// SUB A, r8
@@ -147,19 +153,21 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 from register A.
-    pub(crate) fn subtract<S>(&mut self, bus: &AddressBus, src: S)
+    pub(crate) fn subtract<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S>,
+        D: Copy,
+        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
     {
-        let value = self.read_byte(bus, src);
-        let a = self.registers.a;
-        let (new_value, did_overflow) = a.overflowing_sub(value);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        bus.tick();
+        let lhs = self.read_byte(bus, dest);
+        let rhs = self.read_byte(bus, src);
+        let (result, did_overflow) = lhs.overflowing_sub(rhs);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, true);
-        let half_carry = (a & 0xF) < (value & 0xF);
+        let half_carry = (lhs & 0xF) < (rhs & 0xF);
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
         self.registers.f.set(FlagsRegister::CARRY, did_overflow);
-        self.registers.a = new_value;
+        self.write_byte(bus, dest, result);
     }
 
     /// SBC A, r8
@@ -167,21 +175,23 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 and the carry flag from register A.
-    pub(crate) fn subtract_with_carry<S>(&mut self, bus: &AddressBus, src: S)
+    pub(crate) fn subtract_with_carry<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S>,
+        D: Copy,
+        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
     {
-        let value = self.read_byte(bus, src);
-        let a = self.registers.a;
+        bus.tick();
+        let lhs = self.read_byte(bus, dest);
+        let rhs = self.read_byte(bus, src);
         let cf = self.registers.f.contains(FlagsRegister::CARRY) as u8;
-        let new_value = a.wrapping_sub(value).wrapping_sub(cf);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = lhs.wrapping_sub(rhs).wrapping_sub(cf);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, true);
-        let half_carry = (a & 0xF) < (value & 0xF) + cf;
+        let half_carry = (lhs & 0xF) < (rhs & 0xF) + cf;
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
-        let carry = (a as u16) < (value as u16) + (cf as u16);
+        let carry = (lhs as u16) < (rhs as u16) + (cf as u16);
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.registers.a = new_value;
+        self.write_byte(bus, dest, result);
     }
 
     /// AND A, r8
@@ -189,17 +199,20 @@ impl Cpu {
     /// Z 0 1 0
     ///
     /// Bitwise AND between the value in r8 and register A.
-    pub(crate) fn and<S>(&mut self, bus: &AddressBus, src: S)
+    pub(crate) fn and<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S>,
+        D: Copy,
+        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
     {
-        let value = self.read_byte(bus, src);
-        let new_value = self.registers.a & value;
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        bus.tick();
+        let lhs = self.read_byte(bus, dest);
+        let rhs = self.read_byte(bus, src);
+        let result = lhs & rhs;
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, true);
         self.registers.f.set(FlagsRegister::CARRY, false);
-        self.registers.a = new_value;
+        self.write_byte(bus, dest, result);
     }
 
     /// XOR A, r8
@@ -207,17 +220,20 @@ impl Cpu {
     /// Z 0 0 0
     ///
     /// Bitwise XOR between the value in r8 and register A.
-    pub(crate) fn xor<S>(&mut self, bus: &AddressBus, src: S)
+    pub(crate) fn xor<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S>,
+        D: Copy,
+        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
     {
-        let value = self.read_byte(bus, src);
-        let new_value = self.registers.a ^ value;
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        bus.tick();
+        let lhs = self.read_byte(bus, dest);
+        let rhs = self.read_byte(bus, src);
+        let result = lhs ^ rhs;
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         self.registers.f.set(FlagsRegister::CARRY, false);
-        self.registers.a = new_value;
+        self.write_byte(bus, dest, result);
     }
 
     /// OR A, r8
@@ -225,17 +241,20 @@ impl Cpu {
     /// Z 0 0 0
     ///
     /// Bitwise OR between the value in r8 and register A.
-    pub(crate) fn or<S>(&mut self, bus: &AddressBus, src: S)
+    pub(crate) fn or<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S>,
+        D: Copy,
+        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
     {
-        let value = self.read_byte(bus, src);
-        let new_value = self.registers.a | value;
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        bus.tick();
+        let lhs = self.read_byte(bus, dest);
+        let rhs = self.read_byte(bus, src);
+        let result = lhs | rhs;
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         self.registers.f.set(FlagsRegister::CARRY, false);
-        self.registers.a = new_value;
+        self.write_byte(bus, dest, result);
     }
 
     /// CP A, r8
@@ -243,16 +262,17 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 from register A and set flags accordingly, but don't store the result.
-    pub(crate) fn compare<S>(&mut self, bus: &AddressBus, src: S)
+    pub(crate) fn compare<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S>,
+        Self: AccessReadByte<S> + AccessReadByte<D>,
     {
-        let value = self.read_byte(bus, src);
-        let a = self.registers.a;
-        let (new_value, did_overflow) = a.overflowing_sub(value);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        bus.tick();
+        let lhs = self.read_byte(bus, dest);
+        let rhs = self.read_byte(bus, src);
+        let (result, did_overflow) = lhs.overflowing_sub(rhs);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, true);
-        let half_carry = (a & 0xF) < (value & 0xF);
+        let half_carry = (lhs & 0xF) < (rhs & 0xF);
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
         self.registers.f.set(FlagsRegister::CARRY, did_overflow);
     }
@@ -267,14 +287,15 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value.wrapping_add(1);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = value.wrapping_add(1);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         let half_carry = value & 0xF == 0xF;
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
         // CARRY is left untouched
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// DEC r8
@@ -287,14 +308,15 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value.wrapping_sub(1);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = value.wrapping_sub(1);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, true);
         let half_carry = value & 0xF == 0;
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
         // CARRY is left untouched
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// ADD HL, r16
@@ -302,18 +324,24 @@ impl Cpu {
     /// - 0 H C
     ///
     /// Add the value in r16 to register HL.
-    pub(crate) fn add16_hl(&mut self, src: Register16) {
-        let value = self.registers.read_word(src);
-        let hl = self.registers.read_word(Register16::HL);
-        let (new_value, did_overflow) = hl.overflowing_add(value);
+    pub(crate) fn add16<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    where
+        D: Copy,
+        Self: AccessReadWord<S> + AccessReadWord<D> + AccessWriteWord<D>,
+    {
+        bus.tick();
+        let lhs = self.read_word(bus, dest);
+        let rhs = self.read_word(bus, src);
+        let (result, did_overflow) = lhs.overflowing_add(rhs);
         // ZERO is left untouched
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         // Half-carry from bit 11, carry from bit 15
         // Bits are labeled from 0-15 from least to most significant.
-        let half_carry = (hl & 0xFFF) + (value & 0xFFF) > 0xFFF;
+        let half_carry = (lhs & 0xFFF) + (rhs & 0xFFF) > 0xFFF;
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
         self.registers.f.set(FlagsRegister::CARRY, did_overflow);
-        self.registers.write_word(Register16::HL, new_value);
+        self.write_word(bus, dest, result);
+        bus.tick();
     }
 
     /// ADD SP, e8
@@ -321,9 +349,11 @@ impl Cpu {
     /// 0 0 H C
     ///
     /// Add the signed value e8 to SP.
-    pub(crate) fn add16_sp(&mut self, bus: &AddressBus) {
-        let offset = self.read_next_byte_signed(bus) as i16;
+    pub(crate) fn add16_sp_e(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let sp = self.registers.sp;
+        let offset = self.read_next_byte_signed(bus) as i16;
+        bus.tick();
         self.registers.f.set(FlagsRegister::ZERO, false);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         // Half-carry from bit 3, carry from bit 7
@@ -332,8 +362,10 @@ impl Cpu {
         self.registers.f.set(FlagsRegister::HALF_CARRY, half_carry);
         let carry = (sp & 0xFF).wrapping_add_signed(offset & 0xFF) > 0xFF;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        let new_value = sp.wrapping_add_signed(offset);
-        self.registers.sp = new_value;
+        let result = sp.wrapping_add_signed(offset);
+        self.registers.sp = result;
+        bus.tick();
+        bus.tick();
     }
 
     /// INC r16
@@ -341,10 +373,12 @@ impl Cpu {
     /// - - - -
     ///
     /// Increment value in register r16 by 1.
-    pub(crate) fn increment16(&mut self, src: Register16) {
+    pub(crate) fn increment16(&mut self, bus: &mut AddressBus, src: Register16) {
+        bus.tick();
         let value = self.registers.read_word(src);
-        let new_value = value.wrapping_add(1);
-        self.registers.write_word(src, new_value);
+        let result = value.wrapping_add(1);
+        self.registers.write_word(src, result);
+        bus.tick();
     }
 
     /// DEC r16
@@ -352,10 +386,12 @@ impl Cpu {
     /// - - - -
     ///
     /// Decrement value in register r16 by 1.
-    pub(crate) fn decrement16(&mut self, src: Register16) {
+    pub(crate) fn decrement16(&mut self, bus: &mut AddressBus, src: Register16) {
+        bus.tick();
         let value = self.registers.read_word(src);
-        let new_value = value.wrapping_sub(1);
-        self.registers.write_word(src, new_value);
+        let result = value.wrapping_sub(1);
+        self.registers.write_word(src, result);
+        bus.tick();
     }
 
     /// RLCA
@@ -363,15 +399,16 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A left.
-    pub(crate) fn rotate_left_circular_accumulator(&mut self) {
+    pub(crate) fn rotate_left_circular_accumulator(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let value = self.registers.a;
-        let new_value = self.registers.a.rotate_left(1);
+        let result = value.rotate_left(1);
         self.registers.f.set(FlagsRegister::ZERO, false);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.registers.a = new_value;
+        self.registers.a = result;
     }
 
     /// RLA
@@ -379,16 +416,17 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A left, through the carry flag.
-    pub(crate) fn rotate_left_accumulator(&mut self) {
+    pub(crate) fn rotate_left_accumulator(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let value = self.registers.a;
         let cf = self.registers.f.contains(FlagsRegister::CARRY) as u8;
-        let new_value = (value << 1) | cf;
+        let result = (value << 1) | cf;
         self.registers.f.set(FlagsRegister::ZERO, false);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.registers.a = new_value;
+        self.registers.a = result;
     }
 
     /// RRCA
@@ -396,15 +434,16 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A right.
-    pub(crate) fn rotate_right_circular_accumulator(&mut self) {
+    pub(crate) fn rotate_right_circular_accumulator(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let value = self.registers.a;
-        let new_value = self.registers.a.rotate_right(1);
+        let result = value.rotate_right(1);
         self.registers.f.set(FlagsRegister::ZERO, false);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.registers.a = new_value;
+        self.registers.a = result;
     }
 
     /// RRA
@@ -412,16 +451,17 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A right, through the carry flag.
-    pub(crate) fn rotate_right_accumulator(&mut self) {
+    pub(crate) fn rotate_right_accumulator(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let value = self.registers.a;
         let cf = self.registers.f.contains(FlagsRegister::CARRY) as u8;
-        let new_value = (value >> 1) | (cf << 7);
+        let result = (value >> 1) | (cf << 7);
         self.registers.f.set(FlagsRegister::ZERO, false);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.registers.a = new_value;
+        self.registers.a = result;
     }
 
     /// SCF
@@ -429,7 +469,8 @@ impl Cpu {
     /// - 0 0 1
     ///
     /// Set the carry flag.
-    pub(crate) fn set_carry_flag(&mut self) {
+    pub(crate) fn set_carry_flag(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         // ZERO left untouched
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
@@ -441,7 +482,8 @@ impl Cpu {
     /// - 1 1 -
     ///
     /// Flip the bits in register A.
-    pub(crate) fn complement_accumulator(&mut self) {
+    pub(crate) fn complement_accumulator(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let value = self.registers.a;
         // ZERO left untouched
         self.registers.f.set(FlagsRegister::SUBTRACT, true);
@@ -455,7 +497,8 @@ impl Cpu {
     /// - 0 0 C
     ///
     /// Complement the carry flag.
-    pub(crate) fn complement_carry_flag(&mut self) {
+    pub(crate) fn complement_carry_flag(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let cf = self.registers.f.contains(FlagsRegister::CARRY);
         // ZERO left untouched
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
@@ -468,7 +511,8 @@ impl Cpu {
     /// Z - 0 C
     ///
     /// Decimal Adjust register A to get a correct BCD representation after an arithmetic instruction.
-    pub(crate) fn decimal_adjust_accumulator(&mut self) {
+    pub(crate) fn decimal_adjust_accumulator(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         let mut value = self.registers.a;
 
         let nf = self.registers.f.contains(FlagsRegister::SUBTRACT);
@@ -512,14 +556,16 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value.rotate_left(1);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = value.rotate_left(1);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// RRC r8
@@ -532,14 +578,16 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value.rotate_right(1);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = value.rotate_right(1);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// RL r8
@@ -552,15 +600,17 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
         let cf = self.registers.f.contains(FlagsRegister::CARRY) as u8;
-        let new_value = (value << 1) | cf;
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = (value << 1) | cf;
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// RR r8
@@ -573,15 +623,17 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
         let cf = self.registers.f.contains(FlagsRegister::CARRY) as u8;
-        let new_value = (value >> 1) | (cf << 7);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = (value >> 1) | (cf << 7);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// SLA r8
@@ -594,14 +646,16 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value << 1;
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = value << 1;
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x80 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// SRA r8
@@ -614,14 +668,16 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = (value >> 1) | (value & 0x80);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = (value >> 1) | (value & 0x80);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// SWAP r8
@@ -634,14 +690,16 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
         // Rotating by 4 swaps the upper bits with the lower bits
-        let new_value = value.rotate_left(4);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = value.rotate_left(4);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         self.registers.f.set(FlagsRegister::CARRY, false);
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// SRL r8
@@ -654,14 +712,16 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value >> 1;
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = value >> 1;
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
         let carry = value & 0x01 != 0;
         self.registers.f.set(FlagsRegister::CARRY, carry);
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// BIT u3, r8
@@ -669,13 +729,15 @@ impl Cpu {
     /// Z 0 1 -
     ///
     /// Test bit u3 in register r8, set the zero flag if bit not set.
-    pub(crate) fn bit_test<S>(&mut self, bus: &AddressBus, bit: u8, src: S)
+    pub(crate) fn bit_test<S>(&mut self, bus: &mut AddressBus, bit: u8, src: S)
     where
         Self: AccessReadByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value & (1 << bit);
-        self.registers.f.set(FlagsRegister::ZERO, new_value == 0);
+        let result = value & (1 << bit);
+        self.registers.f.set(FlagsRegister::ZERO, result == 0);
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, true);
         // CARRY left untouched
@@ -691,10 +753,12 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value & !(1 << bit);
+        let result = value & !(1 << bit);
         // Flags left untouched
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// SET u3, r8
@@ -707,10 +771,12 @@ impl Cpu {
         S: Copy,
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
+        bus.tick();
+        bus.tick();
         let value = self.read_byte(bus, src);
-        let new_value = value | (1 << bit);
+        let result = value | (1 << bit);
         // Flags left untouched
-        self.write_byte(bus, src, new_value);
+        self.write_byte(bus, src, result);
     }
 
     /// JP HL
@@ -718,7 +784,8 @@ impl Cpu {
     /// - - - -
     ///
     /// Jump to address in HL; effectively, load PC with value in register HL.
-    pub(crate) fn jump_to_hl(&mut self) {
+    pub(crate) fn jump_hl(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         self.registers.pc = self.registers.read_word(Register16::HL);
     }
 
@@ -727,14 +794,14 @@ impl Cpu {
     /// - - - -
     ///
     /// Jump to address n16 if condition cc is met.
-    pub(crate) fn jump(&mut self, bus: &AddressBus, condition: JumpCondition) -> usize {
+    pub(crate) fn jump(&mut self, bus: &mut AddressBus, condition: JumpCondition) {
+        bus.tick();
         let should_jump = self.registers.f.test(condition);
-        let addr = self.read_next_word(bus);
+        let addr = self.read_word(bus, Immediate);
         if should_jump {
             self.registers.pc = addr;
-            return 16;
+            bus.tick();
         }
-        12
     }
 
     /// JR cc, e8
@@ -742,14 +809,15 @@ impl Cpu {
     /// - - - -
     ///
     /// Relative Jump to current address plus e8 offset if condition cc is met.
-    pub(crate) fn jump_relative(&mut self, bus: &AddressBus, condition: JumpCondition) -> usize {
+    pub(crate) fn jump_relative(&mut self, bus: &mut AddressBus, condition: JumpCondition) {
+        bus.tick();
         let should_jump = self.registers.f.test(condition);
         let offset = self.read_next_byte_signed(bus) as i16;
+        bus.tick();
         if should_jump {
             self.registers.pc = self.registers.pc.wrapping_add_signed(offset);
-            return 12;
+            bus.tick();
         }
-        8
     }
 
     /// PUSH r16
@@ -758,13 +826,17 @@ impl Cpu {
     ///
     /// Push register r16 into the stack.
     pub(crate) fn push(&mut self, bus: &mut AddressBus, register: Register16) {
+        bus.tick();
+        bus.tick();
         let value = self.registers.read_word(register);
         let [low, high] = value.to_le_bytes();
         self.registers.sp = self.registers.sp.wrapping_sub(1);
         bus.write_byte(self.registers.sp, high);
+        bus.tick();
 
         self.registers.sp = self.registers.sp.wrapping_sub(1);
         bus.write_byte(self.registers.sp, low);
+        bus.tick();
     }
 
     /// POP r16
@@ -774,12 +846,16 @@ impl Cpu {
     /// Pop register r16 from the stack.
     ///
     /// NOTE: POP AF affects all flags.
-    pub(crate) fn pop(&mut self, bus: &AddressBus, register: Register16) {
+    pub(crate) fn pop(&mut self, bus: &mut AddressBus, register: Register16) {
+        bus.tick();
+
         let low = bus.read_byte(self.registers.sp);
         self.registers.sp = self.registers.sp.wrapping_add(1);
+        bus.tick();
 
         let high = bus.read_byte(self.registers.sp);
         self.registers.sp = self.registers.sp.wrapping_add(1);
+        bus.tick();
 
         let value = u16::from_le_bytes([low, high]);
         self.registers.write_word(register, value);
@@ -790,15 +866,47 @@ impl Cpu {
     /// - - - -
     ///
     /// Call address n16 if condition cc is met.
-    pub(crate) fn call(&mut self, bus: &mut AddressBus, condition: JumpCondition) -> usize {
+    pub(crate) fn call(&mut self, bus: &mut AddressBus, condition: JumpCondition) {
+        bus.tick();
         let should_jump = self.registers.f.test(condition);
-        let addr = self.read_next_word(bus);
+        let addr = self.read_word(bus, Immediate);
         if should_jump {
-            self.push(bus, Register16::PC);
+            bus.tick();
+
+            let value = self.registers.read_word(Register16::PC);
+            let [low, high] = value.to_le_bytes();
+
+            self.registers.sp = self.registers.sp.wrapping_sub(1);
+            bus.write_byte(self.registers.sp, high);
+            bus.tick();
+
+            self.registers.sp = self.registers.sp.wrapping_sub(1);
+            bus.write_byte(self.registers.sp, low);
+            bus.tick();
+
             self.registers.pc = addr;
-            return 24;
         }
-        12
+    }
+
+    /// RET
+    /// 1 16
+    /// - - - -
+    ///
+    /// Return from subroutine.
+    pub(crate) fn return_(&mut self, bus: &mut AddressBus) {
+        bus.tick();
+
+        let low = bus.read_byte(self.registers.sp);
+        self.registers.sp = self.registers.sp.wrapping_add(1);
+        bus.tick();
+
+        let high = bus.read_byte(self.registers.sp);
+        self.registers.sp = self.registers.sp.wrapping_add(1);
+        bus.tick();
+
+        let value = u16::from_le_bytes([low, high]);
+        self.registers.write_word(Register16::PC, value);
+        bus.tick();
     }
 
     /// RET cc
@@ -806,13 +914,23 @@ impl Cpu {
     /// - - - -
     ///
     /// Return from subroutine if condition cc is met.
-    pub(crate) fn return_(&mut self, bus: &AddressBus, condition: JumpCondition) -> usize {
+    pub(crate) fn return_if(&mut self, bus: &mut AddressBus, condition: JumpCondition) {
+        bus.tick();
         let should_jump = self.registers.f.test(condition);
+        bus.tick();
         if should_jump {
-            self.pop(bus, Register16::PC);
-            return 20;
+            let low = bus.read_byte(self.registers.sp);
+            self.registers.sp = self.registers.sp.wrapping_add(1);
+            bus.tick();
+
+            let high = bus.read_byte(self.registers.sp);
+            self.registers.sp = self.registers.sp.wrapping_add(1);
+            bus.tick();
+
+            let value = u16::from_le_bytes([low, high]);
+            self.registers.write_word(Register16::PC, value);
+            bus.tick();
         }
-        8
     }
 
     /// RETI
@@ -821,8 +939,8 @@ impl Cpu {
     ///
     /// Return from subroutine and enable interrupts.
     /// This is basically equivalent to executing EI then RET, meaning that IME is set right after this instruction.
-    pub(crate) fn return_from_interrupt_handler(&mut self, bus: &AddressBus) {
-        self.return_(bus, JumpCondition::Always);
+    pub(crate) fn return_from_interrupt_handler(&mut self, bus: &mut AddressBus) {
+        self.return_(bus);
         self.ime = true;
     }
 
@@ -832,8 +950,18 @@ impl Cpu {
     ///
     /// Push current address onto stack, and jump to address u8.
     pub(crate) fn restart(&mut self, bus: &mut AddressBus, addr: u16) {
-        self.push(bus, Register16::PC);
+        bus.tick();
+        bus.tick();
+        let value = self.registers.read_word(Register16::PC);
+        let [low, high] = value.to_le_bytes();
+        self.registers.sp = self.registers.sp.wrapping_sub(1);
+        bus.write_byte(self.registers.sp, high);
+        bus.tick();
+
+        self.registers.sp = self.registers.sp.wrapping_sub(1);
+        bus.write_byte(self.registers.sp, low);
         self.registers.pc = addr;
+        bus.tick();
     }
 
     /// DI
@@ -841,7 +969,8 @@ impl Cpu {
     /// - - - -
     ///
     /// Disable Interrupts by clearing the IME flag.
-    pub(crate) fn disable_interrupt(&mut self) {
+    pub(crate) fn disable_interrupt(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         self.ime_delay_counter = None;
         self.ime = false;
     }
@@ -852,7 +981,8 @@ impl Cpu {
     ///
     /// Enable Interrupts by setting the IME flag.
     /// The flag is only set after the instruction following EI.
-    pub(crate) fn enable_interrupt(&mut self) {
+    pub(crate) fn enable_interrupt(&mut self, bus: &mut AddressBus) {
+        bus.tick();
         self.ime_delay_counter = Some(2);
     }
 }

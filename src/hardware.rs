@@ -70,11 +70,7 @@ impl GameboyHardware {
             interrupt_enable: &mut self.interrupt_enable,
         };
 
-        let cycles = self.cpu.step(&mut bus);
-        for _ in 0..(cycles / 4) {
-            self.timer.tick(&mut self.interrupt_flag);
-        }
-        self.serial_port.step();
+        self.cpu.step(&mut bus);
     }
 }
 
@@ -205,6 +201,11 @@ impl AddressBus<'_> {
             0xFF40..=0xFF4B => self.ppu.write_display(addr, value),
             _ => println!("Warning: Address {addr:#X} is not mapped to an I/O register."),
         }
+    }
+
+    pub(crate) fn tick(&mut self) {
+        self.timer.tick(self.interrupt_flag);
+        self.serial_port.step();
     }
 
     pub(crate) const fn get_joypad(&self) -> Joypad {
