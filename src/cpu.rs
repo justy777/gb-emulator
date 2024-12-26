@@ -3,7 +3,7 @@ mod execute;
 mod instructions;
 
 use crate::hardware::AddressBus;
-use crate::interrupts::InterruptFlags;
+use crate::interrupts::Interrupt;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Registers {
@@ -345,7 +345,7 @@ pub struct Cpu {
     registers: Registers,
     halted: bool,
     // IME: Interrupt Master Enable
-    ime: bool,
+    interrupt_enabled: bool,
     // Used to delay setting IME after calling EI
     ime_delay_counter: Option<u8>,
 }
@@ -356,7 +356,7 @@ impl Cpu {
         Self {
             registers: Registers::new(),
             halted: false,
-            ime: false,
+            interrupt_enabled: false,
             ime_delay_counter: None,
         }
     }
@@ -365,22 +365,19 @@ impl Cpu {
         // Checks for next instruction after EI is called
         self.ime_delay_counter = self.ime_delay_counter.map(|n| n - 1);
         if self.ime_delay_counter.is_some_and(|n| n == 0) {
-            self.ime = true;
+            self.interrupt_enabled = true;
             self.ime_delay_counter = None;
         }
 
-        if self.ime {
-            // Checks for pending interrupts
-            let interrupt_pending = bus.get_interrupts_pending();
-
-            for flag in InterruptFlags::flags() {
-                if interrupt_pending.contains(flag.bits()) {
+        if self.interrupt_enabled {
+            for interrupt in Interrupt::iter() {
+                if bus.is_interrupt_pending(*interrupt) {
                     self.halted = false;
+                    self.interrupt_enabled = false;
+                    bus.interrupt_flags().set(*interrupt, false);
                     // Calls interrupt handler
-                    self.ime = false;
-                    bus.interrupt_flag().set(flag.bits(), false);
                     self.push(bus, Register16::PC);
-                    self.registers.pc = flag.handler_addr();
+                    self.registers.pc = interrupt.handler_addr();
                     break;
                 }
             }

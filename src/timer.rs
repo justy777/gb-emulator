@@ -1,4 +1,4 @@
-use crate::interrupts::InterruptFlags;
+use crate::interrupts::{Interrupt, InterruptFlags};
 
 const MEM_DIV: u16 = 0xFF04;
 const MEM_TIMA: u16 = 0xFF05;
@@ -94,7 +94,7 @@ impl Timer {
         }
     }
 
-    pub fn tick(&mut self, interrupt_flag: &mut InterruptFlags) {
+    pub fn tick(&mut self, interrupt_flags: &mut InterruptFlags) {
         self.system_counter = self.system_counter.wrapping_add(1);
 
         let new_signal = self.counter_bit() && self.control.is_enabled();
@@ -113,7 +113,7 @@ impl Timer {
         self.overflow_delay_counter = self.overflow_delay_counter.map(|n| n - 1);
         if self.overflow_delay_counter.is_some_and(|n| n == 0) {
             self.counter = self.modulo;
-            interrupt_flag.set(InterruptFlags::TIMER, true);
+            interrupt_flags.set(Interrupt::Timer, true);
             self.overflow_delay_counter = None;
         }
     }

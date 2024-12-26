@@ -1,7 +1,7 @@
 use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::cpu::Cpu;
-use crate::interrupts::InterruptFlags;
+use crate::interrupts::{Interrupt, InterruptEnable, InterruptFlags};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
 use crate::serial_port::SerialPort;
@@ -26,14 +26,14 @@ pub struct GameboyHardware {
     serial_port: SerialPort,
     timer: Timer,
     // IF
-    interrupt_flag: InterruptFlags,
+    interrupt_flags: InterruptFlags,
     // Audio Processing Unit
     apu: Apu,
     wave_pattern_ram: [u8; WAVE_PATTERN_RAM_SIZE],
     // HRAM
     high_ram: [u8; HIGH_RAM_SIZE],
     // IE
-    interrupt_enable: InterruptFlags,
+    interrupt_enable: InterruptEnable,
 }
 
 impl GameboyHardware {
@@ -47,11 +47,11 @@ impl GameboyHardware {
             joypad: Joypad::new(),
             serial_port: SerialPort::new(),
             timer: Timer::new(),
-            interrupt_flag: InterruptFlags::from_bits(InterruptFlags::VBLANK),
+            interrupt_flags: InterruptFlags::from_interrupt(Interrupt::VBlank),
             apu: Apu::new(),
             wave_pattern_ram: [0xFF; WAVE_PATTERN_RAM_SIZE],
             high_ram: [0; HIGH_RAM_SIZE],
-            interrupt_enable: InterruptFlags::empty(),
+            interrupt_enable: InterruptEnable::empty(),
         }
     }
 
@@ -63,7 +63,7 @@ impl GameboyHardware {
             joypad: &mut self.joypad,
             serial_port: &mut self.serial_port,
             timer: &mut self.timer,
-            interrupt_flag: &mut self.interrupt_flag,
+            interrupt_flags: &mut self.interrupt_flags,
             apu: &mut self.apu,
             wave_pattern_ram: &mut self.wave_pattern_ram,
             high_ram: &mut self.high_ram,
@@ -87,14 +87,14 @@ pub(crate) struct AddressBus<'a> {
     serial_port: &'a mut SerialPort,
     timer: &'a mut Timer,
     // IF
-    interrupt_flag: &'a mut InterruptFlags,
+    interrupt_flags: &'a mut InterruptFlags,
     // Audio Processing Unit
     apu: &'a mut Apu,
     wave_pattern_ram: &'a mut [u8],
     // HRAM
     high_ram: &'a mut [u8],
     // IE
-    interrupt_enable: &'a mut InterruptFlags,
+    interrupt_enable: &'a mut InterruptEnable,
 }
 
 impl AddressBus<'_> {
@@ -138,7 +138,7 @@ impl AddressBus<'_> {
             0xFF00 => self.joypad.bits(),
             0xFF01..=0xFF02 => self.serial_port.read_byte(addr),
             0xFF04..=0xFF07 => self.timer.read_byte(addr),
-            0xFF0F => self.interrupt_flag.bits(),
+            0xFF0F => self.interrupt_flags.bits(),
             0xFF10..=0xFF26 => self.apu.read_audio(addr),
             0xFF30..=0xFF3F => {
                 let offset = (addr - 0xFF30) as usize;
@@ -179,7 +179,7 @@ impl AddressBus<'_> {
                 self.high_ram[offset] = value;
             }
             0xFFFF => {
-                *self.interrupt_enable = InterruptFlags::from_bits(value);
+                *self.interrupt_enable = InterruptEnable::from_bits(value);
             }
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
                 panic!("Use of this area is prohibited {addr:#X}")
@@ -192,7 +192,7 @@ impl AddressBus<'_> {
             0xFF00 => *self.joypad = Joypad::from_bits(value),
             0xFF01..=0xFF02 => self.serial_port.write_byte(addr, value),
             0xFF04..=0xFF07 => self.timer.write_byte(addr, value),
-            0xFF0F => *self.interrupt_flag = InterruptFlags::from_bits(value),
+            0xFF0F => *self.interrupt_flags = InterruptFlags::from_bits(value),
             0xFF10..=0xFF26 => self.apu.write_audio(addr, value),
             0xFF30..=0xFF3F => {
                 let offset = (addr - 0xFF30) as usize;
@@ -204,7 +204,7 @@ impl AddressBus<'_> {
     }
 
     pub(crate) fn tick(&mut self) {
-        self.timer.tick(self.interrupt_flag);
+        self.timer.tick(self.interrupt_flags);
         self.serial_port.step();
     }
 
@@ -212,11 +212,11 @@ impl AddressBus<'_> {
         *self.joypad
     }
 
-    pub(crate) const fn interrupt_flag(&mut self) -> &mut InterruptFlags {
-        self.interrupt_flag
+    pub(crate) const fn interrupt_flags(&mut self) -> &mut InterruptFlags {
+        self.interrupt_flags
     }
 
-    pub(crate) fn get_interrupts_pending(&self) -> InterruptFlags {
-        (*self.interrupt_enable & *self.interrupt_flag) & !InterruptFlags::empty()
+    pub(crate) const fn is_interrupt_pending(&self, interrupt: Interrupt) -> bool {
+        self.interrupt_enable.contains(interrupt) && self.interrupt_flags.contains(interrupt)
     }
 }

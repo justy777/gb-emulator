@@ -941,7 +941,7 @@ impl Cpu {
     /// This is basically equivalent to executing EI then RET, meaning that IME is set right after this instruction.
     pub(crate) fn return_from_interrupt_handler(&mut self, bus: &mut AddressBus) {
         self.return_(bus);
-        self.ime = true;
+        self.interrupt_enabled = true;
     }
 
     /// RST u8
@@ -972,7 +972,7 @@ impl Cpu {
     pub(crate) fn disable_interrupt(&mut self, bus: &mut AddressBus) {
         bus.tick();
         self.ime_delay_counter = None;
-        self.ime = false;
+        self.interrupt_enabled = false;
     }
 
     /// EI

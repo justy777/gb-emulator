@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, Not};
+use std::slice::Iter;
 
 const PC_VBLANK_HANDLER: u16 = 0x40;
 const PC_STAT_HANDLER: u16 = 0x48;
@@ -6,41 +6,59 @@ const PC_TIMER_HANDLER: u16 = 0x50;
 const PC_SERIAL_HANDLER: u16 = 0x58;
 const PC_JOYPAD_HANDLER: u16 = 0x60;
 
+#[derive(Debug, Copy, Clone)]
+pub enum Interrupt {
+    VBlank = 0b0000_0001,
+    Stat = 0b0000_0010,
+    Timer = 0b0000_0100,
+    Serial = 0b0000_1000,
+    Joypad = 0b0001_0000,
+}
+
+impl Interrupt {
+    pub fn iter() -> Iter<'static, Self> {
+        // Ordered from highest to lowest priority
+        [
+            Self::VBlank,
+            Self::Stat,
+            Self::Timer,
+            Self::Serial,
+            Self::Joypad,
+        ]
+        .iter()
+    }
+
+    pub const fn handler_addr(self) -> u16 {
+        match self {
+            Self::VBlank => PC_VBLANK_HANDLER,
+            Self::Stat => PC_STAT_HANDLER,
+            Self::Timer => PC_TIMER_HANDLER,
+            Self::Serial => PC_SERIAL_HANDLER,
+            Self::Joypad => PC_JOYPAD_HANDLER,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct InterruptFlags(u8);
 
 impl InterruptFlags {
-    pub const VBLANK: u8 = 0b0000_0001;
-    pub const STAT: u8 = 0b0000_0010;
-    pub const TIMER: u8 = 0b0000_0100;
-    pub const SERIAL: u8 = 0b0000_1000;
-    pub const JOYPAD: u8 = 0b0001_0000;
     const UNUSED: u8 = 0b1110_0000;
-
-    pub const fn empty() -> Self {
-        Self::from_bits(0)
-    }
 
     pub const fn from_bits(bits: u8) -> Self {
         Self(bits | Self::UNUSED)
     }
 
-    pub const fn flags() -> [Self; 5] {
-        // Ordered from highest to lowest priority
-        [
-            Self::from_bits(Self::VBLANK),
-            Self::from_bits(Self::STAT),
-            Self::from_bits(Self::TIMER),
-            Self::from_bits(Self::SERIAL),
-            Self::from_bits(Self::JOYPAD),
-        ]
+    pub const fn from_interrupt(interrupt: Interrupt) -> Self {
+        Self::from_bits(interrupt as u8)
     }
 
     pub const fn bits(self) -> u8 {
         self.0
     }
 
-    pub fn set(&mut self, bits: u8, enable: bool) {
+    pub fn set(&mut self, interrupt: Interrupt, enable: bool) {
+        let bits = interrupt as u8;
         if enable {
             self.0 |= bits;
         } else {
@@ -49,34 +67,30 @@ impl InterruptFlags {
         self.0 |= Self::UNUSED;
     }
 
-    pub const fn contains(self, bits: u8) -> bool {
+    pub const fn contains(self, interrupt: Interrupt) -> bool {
+        let bits = interrupt as u8;
         (self.0 & bits) == bits
     }
-
-    pub(crate) fn handler_addr(self) -> u16 {
-        match self.0 {
-            Self::VBLANK => PC_VBLANK_HANDLER,
-            Self::STAT => PC_STAT_HANDLER,
-            Self::TIMER => PC_TIMER_HANDLER,
-            Self::SERIAL => PC_SERIAL_HANDLER,
-            Self::JOYPAD => PC_JOYPAD_HANDLER,
-            _ => panic!("Error: No interrupt handler for {:0b}", self.0),
-        }
-    }
 }
 
-impl BitAnd for InterruptFlags {
-    type Output = Self;
+#[derive(Debug, Copy, Clone)]
+pub struct InterruptEnable(u8);
 
-    fn bitand(self, other: Self) -> Self {
-        Self(self.0 & other.0)
+impl InterruptEnable {
+    pub const fn empty() -> Self {
+        Self::from_bits(0)
     }
-}
 
-impl Not for InterruptFlags {
-    type Output = Self;
+    pub const fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
 
-    fn not(self) -> Self {
-        Self(!self.0)
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+
+    pub const fn contains(self, interrupt: Interrupt) -> bool {
+        let bits = interrupt as u8;
+        (self.0 & bits) == bits
     }
 }
