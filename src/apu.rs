@@ -270,7 +270,7 @@ impl AudioMasterControl {
     const UNUSED: u8 = 0b0111_0000;
 
     const fn new() -> Self {
-        Self::from_bits(Self::AUDIO_ENABLE | Self::CHANNEL_4_ENABLE)
+        Self::from_bits(Self::AUDIO_ENABLE | Self::CHANNEL_1_ENABLE)
     }
 
     const fn from_bits(bits: u8) -> Self {

@@ -58,8 +58,8 @@ impl DisplayStatus {
     const PPU_MODE: u8 = 0b0000_0011;
     const UNUSED: u8 = 0b1000_0000;
 
-    const fn new() -> Self {
-        Self::from_bits(Self::LYC_EQ_LY | 0b01)
+    const fn empty() -> Self {
+        Self::from_bits(0)
     }
 
     const fn from_bits(bits: u8) -> Self {
@@ -141,10 +141,10 @@ impl Ppu {
             video_ram: [0; VIDEO_RAM_SIZE],
             sprite_ram: [0; SPRITE_RAM_SIZE],
             control: DisplayControl::new(),
-            status: DisplayStatus::new(),
+            status: DisplayStatus::empty(),
             scroll_y: 0,
             scroll_x: 0,
-            ly: 0,
+            ly: 0x0A,
             lyc: 0,
             transfer_and_start_address: 0xFF,
             background_palette_data: 0xFC,
