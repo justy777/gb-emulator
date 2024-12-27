@@ -122,7 +122,7 @@ pub struct Ppu {
     // LYC
     lyc: u8,
     // DMA
-    transfer_and_start_address: u8,
+    sprite_transfer_addr: u16,
     // BGP
     background_palette_data: u8,
     // OBP0
@@ -146,7 +146,7 @@ impl Ppu {
             scroll_x: 0,
             ly: 0x0A,
             lyc: 0,
-            transfer_and_start_address: 0xFF,
+            sprite_transfer_addr: 0xFF,
             background_palette_data: 0xFC,
             object_palette_0_data: 0xFF,
             object_palette_1_data: 0xFF,
@@ -171,6 +171,14 @@ impl Ppu {
         self.sprite_ram[addr as usize] = data;
     }
 
+    pub(crate) const fn get_sprite_transfer_addr(&self) -> u16 {
+        self.sprite_transfer_addr
+    }
+
+    pub(crate) fn set_sprite_transfer_addr(&mut self, addr: u16) {
+        self.sprite_transfer_addr = addr;
+    }
+
     pub const fn read_display(&self, addr: u16) -> u8 {
         match addr {
             MEM_DISPLAY_CONTROL => self.control.bits(),
@@ -179,7 +187,7 @@ impl Ppu {
             MEM_SCROLL_X => self.scroll_x,
             MEM_LY => self.ly,
             MEM_LYC => self.lyc,
-            MEM_TRANSFER_AND_START_ADDRESS => self.transfer_and_start_address,
+            MEM_TRANSFER_AND_START_ADDRESS => (self.sprite_transfer_addr >> 8) as u8,
             MEM_BACKGROUND_PALETTE_DATA => self.background_palette_data,
             MEM_OBJECT_PALETTE_0_DATA => self.object_palette_0_data,
             MEM_OBJECT_PALETTE_1_DATA => self.object_palette_1_data,
@@ -197,7 +205,7 @@ impl Ppu {
             MEM_SCROLL_X => self.scroll_x = value,
             MEM_LY => self.ly = value,
             MEM_LYC => self.lyc = value,
-            MEM_TRANSFER_AND_START_ADDRESS => self.transfer_and_start_address = value,
+            MEM_TRANSFER_AND_START_ADDRESS => self.sprite_transfer_addr = (value as u16) << 8,
             MEM_BACKGROUND_PALETTE_DATA => self.background_palette_data = value,
             MEM_OBJECT_PALETTE_0_DATA => self.object_palette_0_data = value,
             MEM_OBJECT_PALETTE_1_DATA => self.object_palette_1_data = value,

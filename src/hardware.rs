@@ -205,7 +205,18 @@ impl AddressBus<'_> {
 
     pub(crate) fn tick(&mut self) {
         self.timer.tick(self.interrupt_flags);
+        self.sprite_dma_transfer();
         self.serial_port.step();
+    }
+
+    fn sprite_dma_transfer(&mut self) {
+        let src_addr = self.ppu.get_sprite_transfer_addr();
+        if (src_addr & 0xFF00) <= 0xDF00 && (src_addr & 0xFF) <= 0x9F {
+            let value = self.read_byte(src_addr);
+            let dest_addr = 0xFE00 | (src_addr & 0xFF);
+            self.write_byte(dest_addr, value);
+            self.ppu.set_sprite_transfer_addr(src_addr + 1);
+        }
     }
 
     pub(crate) const fn get_joypad(&self) -> Joypad {
