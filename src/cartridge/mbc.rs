@@ -1,5 +1,3 @@
-use crate::util::bits_needed;
-
 pub trait MemoryBankController {
     fn get_rom_bank0(&self) -> usize;
     fn get_rom_bank1(&self) -> usize;
@@ -62,32 +60,34 @@ impl MBC1 {
 
 impl MemoryBankController for MBC1 {
     fn get_rom_bank0(&self) -> usize {
-        if self.banking_mode {
-            let max_bits = bits_needed(self.rom_bank_max);
-            ((self.ram_bank_number << 5) & u8::MAX >> (8 - max_bits)) as usize
-        } else {
-            0
-        }
+        let bank = if self.banking_mode { self.ram_bank_number << 5 } else { 0 };
+
+        #[allow(clippy::cast_possible_truncation)]
+        let leading_zeroes = ((self.rom_bank_max - 1) as u8).leading_zeros();
+        let mask = u8::MAX.checked_shr(leading_zeroes).unwrap_or(0);
+        (bank & mask) as usize
     }
 
     fn get_rom_bank1(&self) -> usize {
-        let max_bits = bits_needed(self.rom_bank_max);
-        let value = (((self.ram_bank_number << 5) | self.rom_bank_number)
-            & (u8::MAX >> (8 - max_bits))) as usize;
+        let mut bank = self.ram_bank_number << 5 | self.rom_bank_number;
+
         if self.rom_bank_number == 0 {
-            value + 1
-        } else {
-            value
+            bank += 1;
         }
+
+        #[allow(clippy::cast_possible_truncation)]
+        let leading_zeroes = ((self.rom_bank_max - 1) as u8).leading_zeros();
+        let mask = u8::MAX.checked_shr(leading_zeroes).unwrap_or(0);
+        (bank & mask) as usize
     }
 
     fn get_ram_bank(&self) -> usize {
-        if self.banking_mode {
-            let max_bits = bits_needed(self.ram_bank_max);
-            (self.ram_bank_number & u8::MAX >> (8 - max_bits)) as usize
-        } else {
-            0
-        }
+        let bank = if self.banking_mode { self.ram_bank_number } else { 0 };
+
+        #[allow(clippy::cast_possible_truncation)]
+        let leading_zeroes = ((self.ram_bank_max - 1) as u8).leading_zeros();
+        let mask = u8::MAX.checked_shr(leading_zeroes).unwrap_or(0);
+        (bank & mask) as usize
     }
 
     fn is_ram_enabled(&self) -> bool {

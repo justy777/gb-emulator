@@ -22,7 +22,7 @@ impl Cartridge {
 
         let mbc: Box<dyn MemoryBankController> = match metadata.mbc_number {
             0 => Box::new(NoMBC::new()),
-            1 => Box::new(MBC1::new(metadata.rom_bank_count, metadata.rom_bank_count)),
+            1 => Box::new(MBC1::new(metadata.rom_bank_count, metadata.ram_bank_count)),
             3 => Box::new(MBC3::new()),
             5 => Box::new(MBC5::new()),
             _ => unreachable!(),
