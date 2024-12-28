@@ -53,7 +53,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::util::{Delay};
+    use crate::util::Delay;
 
     #[test]
     fn test_delay() {

@@ -22,14 +22,14 @@ impl Cartridge {
 
         let mbc: Box<dyn MemoryBankController> = match metadata.mbc_number {
             0 => Box::new(NoMBC::new()),
-            1 => Box::new(MBC1::new(metadata.rom_bank_count, metadata.ram_bank_count)),
-            3 => Box::new(MBC3::new()),
-            5 => Box::new(MBC5::new()),
+            1 => Box::new(MBC1::new(metadata.rom_banks, metadata.ram_banks)),
+            3 => Box::new(MBC3::new(metadata.rom_banks, metadata.ram_banks)),
+            5 => Box::new(MBC5::new(metadata.rom_banks, metadata.ram_banks)),
             _ => unreachable!(),
         };
 
         let ram = if metadata.has_ram {
-            let capacity = RAM_BANK_SIZE * metadata.ram_bank_count;
+            let capacity = RAM_BANK_SIZE * metadata.ram_banks;
             let vec = vec![0; capacity];
             Some(vec)
         } else {
@@ -91,20 +91,20 @@ impl Cartridge {
 
     #[must_use]
     pub const fn get_rom_size(&self) -> usize {
-        ROM_BANK_SIZE * self.get_rom_bank_count()
+        ROM_BANK_SIZE * self.get_rom_banks()
     }
 
-    pub(crate) const fn get_rom_bank_count(&self) -> usize {
-        self.metadata.rom_bank_count
+    pub(crate) const fn get_rom_banks(&self) -> usize {
+        self.metadata.rom_banks
     }
 
     #[must_use]
     pub const fn get_ram_size(&self) -> usize {
-        RAM_BANK_SIZE * self.get_ram_bank_count()
+        RAM_BANK_SIZE * self.get_ram_banks()
     }
 
-    pub(crate) const fn get_ram_bank_count(&self) -> usize {
-        self.metadata.ram_bank_count
+    pub(crate) const fn get_ram_banks(&self) -> usize {
+        self.metadata.ram_banks
     }
 
     #[must_use]

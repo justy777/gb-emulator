@@ -14,8 +14,8 @@ pub struct Metadata {
     pub mbc_number: u8,
     pub has_ram: bool,
     pub has_battery: bool,
-    pub rom_bank_count: usize,
-    pub ram_bank_count: usize,
+    pub rom_banks: usize,
+    pub ram_banks: usize,
     pub passed_header_check: bool,
     pub passed_global_check: bool,
 }
@@ -61,12 +61,12 @@ impl Metadata {
             0x03 | 0x06 | 0x09 | 0x0D | 0x0F | 0x10 | 0x13 | 0x1B | 0x1E | 0x22 | 0xFF
         );
 
-        let rom_bank_count = match rom[CART_ROM_SIZE] {
+        let rom_banks = match rom[CART_ROM_SIZE] {
             n @ 0x00..=0x08 => 1 << (n + 1),
             val => panic!("Invalid value {val:#X} for ROM size in cartridge header."),
         };
 
-        let ram_bank_count = match rom[CART_RAM_SIZE] {
+        let ram_banks = match rom[CART_RAM_SIZE] {
             0x00 => 0,
             0x02 => 1,
             0x03 => 4,
@@ -86,8 +86,8 @@ impl Metadata {
             mbc_number,
             has_ram,
             has_battery,
-            rom_bank_count,
-            ram_bank_count,
+            rom_banks,
+            ram_banks,
             passed_header_check,
             passed_global_check,
         }
