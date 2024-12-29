@@ -317,7 +317,7 @@ where
 }
 
 /// New type to represent Indexed memory access.
-/// offset from High RAM (0xFF00)
+/// Indexed from High RAM (0xFF00)
 #[derive(Debug, Clone, Copy)]
 pub struct HighIndexed<T>(T);
 

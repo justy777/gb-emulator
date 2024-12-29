@@ -45,13 +45,13 @@ impl Cartridge {
     }
 
     pub(crate) fn read_rom_bank0(&self, addr: u16) -> u8 {
-        let offset = ROM_BANK_SIZE * self.mbc.get_rom_bank0();
-        self.rom[(addr as usize) + offset]
+        let index = (ROM_BANK_SIZE * self.mbc.get_rom_bank0()) + (addr as usize);
+        self.rom[index]
     }
 
     pub(crate) fn read_rom_bank1(&self, addr: u16) -> u8 {
-        let offset = ROM_BANK_SIZE * self.mbc.get_rom_bank1();
-        self.rom[(addr as usize) + offset]
+        let index = (ROM_BANK_SIZE * self.mbc.get_rom_bank1()) + (addr as usize);
+        self.rom[index]
     }
 
     pub(crate) fn write_rom(&mut self, addr: u16, value: u8) {
@@ -64,8 +64,8 @@ impl Cartridge {
         }
 
         if let Some(ram) = &self.ram {
-            let offset = RAM_BANK_SIZE * self.mbc.get_ram_bank();
-            ram[(addr as usize) + offset]
+            let index = (RAM_BANK_SIZE * self.mbc.get_ram_bank()) + (addr as usize);
+            ram[index]
         } else {
             panic!("Unable to read from cartridge RAM. No RAM included in cartridge.");
         }
@@ -77,8 +77,8 @@ impl Cartridge {
         }
 
         if let Some(ram) = &mut self.ram {
-            let offset = RAM_BANK_SIZE * self.mbc.get_ram_bank();
-            ram[(addr as usize) + offset] = value;
+            let index = (RAM_BANK_SIZE * self.mbc.get_ram_bank()) + (addr as usize);
+            ram[index] = value;
         } else {
             panic!("Unable to write to cartridge RAM. No RAM included in cartridge.")
         }

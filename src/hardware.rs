@@ -101,31 +101,13 @@ impl AddressBus<'_> {
     pub(crate) fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x3FFF => self.cartridge.read_rom_bank0(addr),
-            0x4000..=0x7FFF => {
-                let offset = addr - 0x4000;
-                self.cartridge.read_rom_bank1(offset)
-            }
-            0x8000..=0x9FFF => {
-                let offset = addr - 0x8000;
-                self.ppu.read_vram(offset)
-            }
-            0xA000..=0xBFFF => {
-                let offset = addr - 0xA000;
-                self.cartridge.read_ram(offset)
-            }
-            0xC000..=0xDFFF => {
-                let offset = (addr - 0xC000) as usize;
-                self.work_ram[offset]
-            }
-            0xFE00..=0xFE9F => {
-                let offset = addr - 0xFE00;
-                self.ppu.read_sprite(offset)
-            }
+            0x4000..=0x7FFF => self.cartridge.read_rom_bank1(addr - 0x4000),
+            0x8000..=0x9FFF => self.ppu.read_vram(addr - 0x8000),
+            0xA000..=0xBFFF => self.cartridge.read_ram(addr - 0xA000),
+            0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize],
+            0xFE00..=0xFE9F => self.ppu.read_sprite(addr - 0xFE00),
             0xFF00..=0xFF7F => self.read_io(addr),
-            0xFF80..=0xFFFE => {
-                let offset = (addr - 0xFF80) as usize;
-                self.high_ram[offset]
-            }
+            0xFF80..=0xFFFE => self.high_ram[(addr - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable.bits(),
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
                 panic!("Use of this area is prohibited {addr:#X}")
@@ -140,10 +122,7 @@ impl AddressBus<'_> {
             0xFF04..=0xFF07 => self.timer.read_byte(addr),
             0xFF0F => self.interrupt_flags.bits(),
             0xFF10..=0xFF26 => self.apu.read_audio(addr),
-            0xFF30..=0xFF3F => {
-                let offset = (addr - 0xFF30) as usize;
-                self.wave_pattern_ram[offset]
-            }
+            0xFF30..=0xFF3F => self.wave_pattern_ram[(addr - 0xFF30) as usize],
             0xFF40..=0xFF4B => self.ppu.read_display(addr),
             _ => {
                 println!("Warning: Address {addr:#X} is not mapped to an I/O register.");
@@ -155,32 +134,13 @@ impl AddressBus<'_> {
     pub(crate) fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
             0x0000..=0x7FFF => self.cartridge.write_rom(addr, value),
-            0x8000..=0x9FFF => {
-                let offset = addr - 0x8000;
-                self.ppu.write_vram(offset, value);
-            }
-            0xA000..=0xBFFF => {
-                let offset = addr - 0xA000;
-                self.cartridge.write_ram(offset, value);
-            }
-            0xC000..=0xDFFF => {
-                let offset = (addr - 0xC000) as usize;
-                self.work_ram[offset] = value;
-            }
-            0xFE00..=0xFE9F => {
-                let offset = addr - 0xFE00;
-                self.ppu.write_sprite(offset, value);
-            }
-            0xFF00..=0xFF7F => {
-                self.write_io(addr, value);
-            }
-            0xFF80..=0xFFFE => {
-                let offset = (addr - 0xFF80) as usize;
-                self.high_ram[offset] = value;
-            }
-            0xFFFF => {
-                *self.interrupt_enable = InterruptEnable::from_bits(value);
-            }
+            0x8000..=0x9FFF => self.ppu.write_vram(addr - 0x8000, value),
+            0xA000..=0xBFFF => self.cartridge.write_ram(addr - 0xA000, value),
+            0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize] = value,
+            0xFE00..=0xFE9F => self.ppu.write_sprite(addr - 0xFE00, value),
+            0xFF00..=0xFF7F => self.write_io(addr, value),
+            0xFF80..=0xFFFE => self.high_ram[(addr - 0xFF80) as usize] = value,
+            0xFFFF => *self.interrupt_enable = InterruptEnable::from_bits(value),
             0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
                 panic!("Use of this area is prohibited {addr:#X}")
             }
@@ -194,10 +154,7 @@ impl AddressBus<'_> {
             0xFF04..=0xFF07 => self.timer.write_byte(addr, value),
             0xFF0F => *self.interrupt_flags = InterruptFlags::from_bits(value),
             0xFF10..=0xFF26 => self.apu.write_audio(addr, value),
-            0xFF30..=0xFF3F => {
-                let offset = (addr - 0xFF30) as usize;
-                self.wave_pattern_ram[offset] = value;
-            }
+            0xFF30..=0xFF3F => self.wave_pattern_ram[(addr - 0xFF30) as usize] = value,
             0xFF40..=0xFF4B => self.ppu.write_display(addr, value),
             _ => println!("Warning: Address {addr:#X} is not mapped to an I/O register."),
         }
