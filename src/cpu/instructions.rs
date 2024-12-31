@@ -21,15 +21,9 @@ impl Cpu {
     /// Stop CPU & display until button pressed.
     pub(crate) fn stop(&mut self, bus: &mut AddressBus) {
         bus.tick();
-        let _ = self.read_next_byte(bus);
-        loop {
-            // TODO: Add sleeping to save CPU usage
-            let joypad = bus.get_joypad();
-            if joypad.is_any_pressed() {
-                break;
-            }
-        }
-        // TODO: look into strange stop behavior
+        // No licensed Game Boy games use this instruction
+        // It's only used for speed switching Game Boy Color games
+        panic!("STOP instruction not implemented");
     }
 
     /// HALT
