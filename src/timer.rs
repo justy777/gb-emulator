@@ -60,8 +60,7 @@ pub struct Timer {
 impl Timer {
     pub const fn new() -> Self {
         Self {
-            // TODO: between 0x2C and 0x3F
-            system_counter: (0xAB << 6) + 0x2C,
+            system_counter: (0xAB << 6) + 0x33,
             counter: 0,
             modulo: 0,
             control: TimerControl::empty(),
