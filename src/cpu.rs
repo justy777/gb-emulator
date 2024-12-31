@@ -222,18 +222,14 @@ pub struct Immediate;
 
 impl AccessReadByte<Immediate> for Cpu {
     fn read_byte(&mut self, bus: &mut AddressBus, _: Immediate) -> u8 {
-        let byte = self.read_next_byte(bus);
-        bus.tick();
-        byte
+        self.read_next_byte(bus)
     }
 }
 
 impl AccessReadWord<Immediate> for Cpu {
     fn read_word(&mut self, bus: &mut AddressBus, _: Immediate) -> u16 {
         let low = self.read_next_byte(bus);
-        bus.tick();
         let high = self.read_next_byte(bus);
-        bus.tick();
         u16::from_le_bytes([low, high])
     }
 }
@@ -392,14 +388,15 @@ impl Cpu {
         self.execute(bus, opcode);
     }
 
-    fn read_next_byte(&mut self, bus: &AddressBus) -> u8 {
+    fn read_next_byte(&mut self, bus: &mut AddressBus) -> u8 {
         let byte = bus.read_byte(self.registers.pc);
         self.registers.pc = self.registers.pc.wrapping_add(1);
+        bus.tick();
         byte
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn read_next_byte_signed(&mut self, bus: &AddressBus) -> i8 {
+    fn read_next_byte_signed(&mut self, bus: &mut AddressBus) -> i8 {
         self.read_next_byte(bus) as i8
     }
 }

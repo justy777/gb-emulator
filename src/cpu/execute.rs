@@ -108,13 +108,13 @@ impl Cpu {
             0x2D => self.decrement(bus, L),
             0x35 => self.decrement(bus, Direct(HL)),
             // DAA
-            0x27 => self.decimal_adjust_accumulator(bus),
+            0x27 => self.decimal_adjust_accumulator(),
             // SCF
-            0x37 => self.set_carry_flag(bus),
+            0x37 => self.set_carry_flag(),
             // CPL
-            0x2F => self.complement_accumulator(bus),
+            0x2F => self.complement_accumulator(),
             // CCF
-            0x3F => self.complement_carry_flag(bus),
+            0x3F => self.complement_carry_flag(),
             // ---- 16-bit Arithmetic
             // ADD
             0x09 => self.add16(bus, HL, BC),
@@ -134,13 +134,13 @@ impl Cpu {
             0x3B => self.decrement16(bus, SP),
             // ---- Bit Shift
             // RLCA
-            0x07 => self.rotate_left_circular_accumulator(bus),
+            0x07 => self.rotate_left_circular_accumulator(),
             // RRCA
-            0x0F => self.rotate_right_circular_accumulator(bus),
+            0x0F => self.rotate_right_circular_accumulator(),
             // RLA
-            0x17 => self.rotate_left_accumulator(bus),
+            0x17 => self.rotate_left_accumulator(),
             // RRA
-            0x1F => self.rotate_right_accumulator(bus),
+            0x1F => self.rotate_right_accumulator(),
             // ---- 8-bit Load
             // LD
             0x47 => self.load(bus, B, A),
@@ -253,7 +253,7 @@ impl Cpu {
             0xF1 => self.pop(bus, AF),
             // ---- Jumps
             // JP
-            0xE9 => self.jump_hl(bus),
+            0xE9 => self.jump_hl(),
             0xC3 => self.jump(bus, JumpCondition::Always),
             0xC2 => self.jump(bus, JumpCondition::NotZero),
             0xCA => self.jump(bus, JumpCondition::Zero),
@@ -290,20 +290,20 @@ impl Cpu {
             0xFF => self.restart(bus, 0x38),
             // ---- Control
             //NOP
-            0x00 => Self::no_operation(bus),
+            0x00 => Self::no_operation(),
             // STOP
-            0x10 => self.stop(bus),
+            0x10 => Self::stop(),
             // HALT
-            0x76 => self.halt(bus),
+            0x76 => self.halt(),
             // PREFIX
             0xCB => {
                 let next_opcode = self.read_next_byte(bus);
                 self.execute_prefixed(bus, next_opcode);
             }
             // DI
-            0xF3 => self.disable_interrupt(bus),
+            0xF3 => self.disable_interrupt(),
             // EI
-            0xFB => self.enable_interrupt(bus),
+            0xFB => self.enable_interrupt(),
             // ---- Undefined
             byte @ (0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD) => {
                 panic!("Error: Trying to run undefined instruction {byte:#02X}")
