@@ -34,10 +34,6 @@ impl Joypad {
         self.0
     }
 
-    pub const fn is_any_pressed(self) -> bool {
-        self.0 & 0xF != 0xF
-    }
-
     pub const fn is_pressed(self, button: Button) -> bool {
         match button {
             Button::A => self.0 & (Self::SELECT_BUTTONS | Self::A_RIGHT) == 0x00,

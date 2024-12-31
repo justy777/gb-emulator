@@ -176,10 +176,6 @@ impl AddressBus<'_> {
         }
     }
 
-    pub(crate) const fn get_joypad(&self) -> Joypad {
-        *self.joypad
-    }
-
     pub(crate) const fn interrupt_flags(&mut self) -> &mut InterruptFlags {
         self.interrupt_flags
     }
