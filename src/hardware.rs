@@ -103,7 +103,7 @@ impl AddressBus<'_> {
             0x0000..=0x3FFF => self.cartridge.read_rom_bank0(addr),
             0x4000..=0x7FFF => self.cartridge.read_rom_bank1(addr - 0x4000),
             0x8000..=0x9FFF => self.ppu.read_vram(addr - 0x8000),
-            0xA000..=0xBFFF => self.cartridge.read_ram(addr - 0xA000),
+            0xA000..=0xBFFF => self.cartridge.read_ram_bank(addr - 0xA000),
             0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize],
             0xFE00..=0xFE9F => self.ppu.read_sprite(addr - 0xFE00),
             0xFF00..=0xFF7F => self.read_io(addr),
@@ -133,9 +133,9 @@ impl AddressBus<'_> {
 
     pub(crate) fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
-            0x0000..=0x7FFF => self.cartridge.write_rom(addr, value),
+            0x0000..=0x7FFF => self.cartridge.write_mbc_register(addr, value),
             0x8000..=0x9FFF => self.ppu.write_vram(addr - 0x8000, value),
-            0xA000..=0xBFFF => self.cartridge.write_ram(addr - 0xA000, value),
+            0xA000..=0xBFFF => self.cartridge.write_ram_bank(addr - 0xA000, value),
             0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize] = value,
             0xFE00..=0xFE9F => self.ppu.write_sprite(addr - 0xFE00, value),
             0xFF00..=0xFF7F => self.write_io(addr, value),

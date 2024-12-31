@@ -22,14 +22,23 @@ impl Cartridge {
 
         let mbc: Box<dyn MemoryBankController> = match metadata.mbc_number {
             0 => Box::new(NoMBC::new()),
-            1 => Box::new(MBC1::new(metadata.rom_banks, metadata.ram_banks)),
-            3 => Box::new(MBC3::new(metadata.rom_banks, metadata.ram_banks)),
-            5 => Box::new(MBC5::new(metadata.rom_banks, metadata.ram_banks)),
+            1 => Box::new(MBC1::new(
+                metadata.get_rom_banks(),
+                metadata.get_ram_banks(),
+            )),
+            3 => Box::new(MBC3::new(
+                metadata.get_rom_banks(),
+                metadata.get_ram_banks(),
+            )),
+            5 => Box::new(MBC5::new(
+                metadata.get_rom_banks(),
+                metadata.get_ram_banks(),
+            )),
             _ => unreachable!(),
         };
 
-        let ram = if metadata.has_ram {
-            let capacity = RAM_BANK_SIZE * metadata.ram_banks;
+        let ram = if metadata.has_ram() {
+            let capacity = RAM_BANK_SIZE * metadata.get_ram_banks();
             let vec = vec![0; capacity];
             Some(vec)
         } else {
@@ -54,11 +63,11 @@ impl Cartridge {
         self.rom[index]
     }
 
-    pub(crate) fn write_rom(&mut self, addr: u16, value: u8) {
-        self.mbc.write_registers(addr, value);
+    pub(crate) fn write_mbc_register(&mut self, addr: u16, value: u8) {
+        self.mbc.write_register(addr, value);
     }
 
-    pub(crate) fn read_ram(&self, addr: u16) -> u8 {
+    pub(crate) fn read_ram_bank(&self, addr: u16) -> u8 {
         if !self.mbc.is_ram_enabled() {
             return 0xFF;
         }
@@ -71,7 +80,7 @@ impl Cartridge {
         }
     }
 
-    pub(crate) fn write_ram(&mut self, addr: u16, value: u8) {
+    pub(crate) fn write_ram_bank(&mut self, addr: u16, value: u8) {
         if !self.mbc.is_ram_enabled() {
             return;
         }
@@ -85,35 +94,7 @@ impl Cartridge {
     }
 
     #[must_use]
-    pub fn get_title(&self) -> &str {
-        &self.metadata.title
-    }
-
-    #[must_use]
-    pub const fn get_rom_size(&self) -> usize {
-        ROM_BANK_SIZE * self.get_rom_banks()
-    }
-
-    pub(crate) const fn get_rom_banks(&self) -> usize {
-        self.metadata.rom_banks
-    }
-
-    #[must_use]
-    pub const fn get_ram_size(&self) -> usize {
-        RAM_BANK_SIZE * self.get_ram_banks()
-    }
-
-    pub(crate) const fn get_ram_banks(&self) -> usize {
-        self.metadata.ram_banks
-    }
-
-    #[must_use]
-    pub const fn passed_header_check(&self) -> bool {
-        self.metadata.passed_header_check
-    }
-
-    #[must_use]
-    pub const fn passed_global_check(&self) -> bool {
-        self.metadata.passed_global_check
+    pub const fn metadata(&self) -> &Metadata {
+        &self.metadata
     }
 }

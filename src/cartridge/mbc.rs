@@ -3,7 +3,7 @@ pub trait MemoryBankController {
     fn get_rom_bank1(&self) -> usize;
     fn get_ram_bank(&self) -> usize;
     fn is_ram_enabled(&self) -> bool;
-    fn write_registers(&mut self, addr: u16, value: u8);
+    fn write_register(&mut self, addr: u16, value: u8);
 }
 
 pub struct NoMBC {}
@@ -31,7 +31,7 @@ impl MemoryBankController for NoMBC {
         true
     }
 
-    fn write_registers(&mut self, _addr: u16, _value: u8) {
+    fn write_register(&mut self, _addr: u16, _value: u8) {
         panic!("Cannot write to Read-Only Memory (ROM) on cartridge.");
     }
 }
@@ -93,7 +93,7 @@ impl MemoryBankController for MBC1 {
         self.ram_enabled
     }
 
-    fn write_registers(&mut self, addr: u16, value: u8) {
+    fn write_register(&mut self, addr: u16, value: u8) {
         match addr {
             0x0000..=0x1FFF => self.ram_enabled = value & 0xF == 0xA,
             0x2000..=0x3FFF => self.rom_bank_number = value & 0x1F,
@@ -150,7 +150,7 @@ impl MemoryBankController for MBC3 {
         self.ram_enabled
     }
 
-    fn write_registers(&mut self, addr: u16, value: u8) {
+    fn write_register(&mut self, addr: u16, value: u8) {
         match addr {
             0x0000..=0x1FFF => self.ram_enabled = value & 0xF == 0xA,
             0x2000..=0x3FFF => self.rom_bank_number = value & 0x7F,
@@ -205,7 +205,7 @@ impl MemoryBankController for MBC5 {
         self.ram_enabled
     }
 
-    fn write_registers(&mut self, addr: u16, value: u8) {
+    fn write_register(&mut self, addr: u16, value: u8) {
         match addr {
             0x0000..=0x1FFF => self.ram_enabled = value & 0xF == 0xA,
             0x2000..=0x2FFF => self.rom_bank_number = value,

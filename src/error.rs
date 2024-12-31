@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::fmt::Display;
 
 #[allow(clippy::module_name_repetitions)]
@@ -11,4 +10,4 @@ impl Display for TryFromUintError {
     }
 }
 
-impl Error for TryFromUintError {}
+impl std::error::Error for TryFromUintError {}
