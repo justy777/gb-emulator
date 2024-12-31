@@ -37,7 +37,7 @@ impl Cartridge {
             _ => unreachable!(),
         };
 
-        let ram = if metadata.has_ram() {
+        let ram = if metadata.has_ram() && metadata.get_ram_banks() > 0 {
             let capacity = RAM_BANK_SIZE * metadata.get_ram_banks();
             let vec = vec![0; capacity];
             Some(vec)
