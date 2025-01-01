@@ -1,4 +1,4 @@
-use crate::interrupts::{Interrupt, InterruptFlags};
+use crate::interrupt::{Interrupt, InterruptFlags};
 
 const MEM_SB: u16 = 0xFF01;
 const MEM_SC: u16 = 0xFF02;

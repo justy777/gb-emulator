@@ -1,10 +1,10 @@
 use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::cpu::Cpu;
-use crate::interrupts::{Interrupt, InterruptEnable, InterruptFlags};
+use crate::interrupt::{Interrupt, InterruptEnable, InterruptFlags};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
-use crate::serial_port::SerialPort;
+use crate::serial::SerialPort;
 use crate::timer::Timer;
 
 const WORK_RAM_SIZE: usize = 8 * 1024;

@@ -1,5 +1,5 @@
 use crate::error::TryFromUintError;
-use crate::interrupts::{Interrupt, InterruptFlags};
+use crate::interrupt::{Interrupt, InterruptFlags};
 
 const VIDEO_RAM_SIZE: usize = 8 * 1024;
 const SPRITE_RAM_SIZE: usize = 0xFE9F - 0xFE00 + 1;

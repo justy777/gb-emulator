@@ -1,9 +1,9 @@
 #[allow(clippy::too_many_lines)]
 mod execute;
-mod instructions;
+mod instruction;
 
 use crate::hardware::AddressBus;
-use crate::interrupts::Interrupt;
+use crate::interrupt::Interrupt;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Registers {
