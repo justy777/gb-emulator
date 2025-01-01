@@ -368,10 +368,11 @@ impl Cpu {
             None => None,
         };
 
-        if self.interrupt_enabled {
-            for interrupt in Interrupt::iter() {
-                if bus.is_interrupt_pending(*interrupt) {
-                    self.halted = false;
+        for interrupt in Interrupt::iter() {
+            if bus.is_interrupt_pending(*interrupt) {
+                // Disables HALT when interrupt is pending
+                self.halted = false;
+                if self.interrupt_enabled {
                     self.interrupt_enabled = false;
                     bus.interrupt_flags().set(*interrupt, false);
                     // Calls interrupt handler
@@ -379,8 +380,8 @@ impl Cpu {
                     self.registers.pc = interrupt.handler_addr();
                     bus.tick();
                     bus.tick();
-                    break;
                 }
+                break;
             }
         }
 
