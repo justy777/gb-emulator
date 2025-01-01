@@ -1,14 +1,15 @@
-const MEM_SERIAL_TRANSFER_DATA: u16 = 0xFF01;
-const MEM_SERIAL_TRANSFER_CONTROL: u16 = 0xFF02;
+use crate::interrupts::{Interrupt, InterruptFlags};
+
+const MEM_SB: u16 = 0xFF01;
+const MEM_SC: u16 = 0xFF02;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SerialTransferControl(u8);
+struct SerialTransferControl(u8);
 
 impl SerialTransferControl {
     const TRANSFER_ENABLE: u8 = 0b1000_0000;
     const CLOCK_SELECT: u8 = 0b0000_0001;
     const UNUSED: u8 = 0b0111_1110;
-    const TRANSFER_REQUESTED: u8 = Self::TRANSFER_ENABLE | Self::CLOCK_SELECT;
 
     const fn empty() -> Self {
         Self::from_bits(0)
@@ -30,17 +31,24 @@ impl SerialTransferControl {
         }
     }
 
-    const fn is_transfer_requested(self) -> bool {
-        self.0 & Self::TRANSFER_REQUESTED == Self::TRANSFER_REQUESTED
+    const fn is_transfer_enabled(self) -> bool {
+        self.0 & Self::TRANSFER_ENABLE == Self::TRANSFER_ENABLE
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TransferState {
+    Idle,
+    Ongoing(u8),
 }
 
 #[derive(Debug, Clone)]
 pub struct SerialPort {
     // SB
-    pub(crate) data: u8,
+    data: u8,
     // SC
-    pub(crate) control: SerialTransferControl,
+    control: SerialTransferControl,
+    state: TransferState,
 }
 
 impl SerialPort {
@@ -48,33 +56,46 @@ impl SerialPort {
         Self {
             data: 0,
             control: SerialTransferControl::empty(),
+            state: TransferState::Idle,
         }
     }
 
-    pub fn step(&mut self) {
-        if self.control.is_transfer_requested() {
-            //let c = char::from(self.data);
-            //print!("{c}");
-            println!("{}", self.data);
-            self.control.set_transfer_enable(false);
+    pub fn step(&mut self, interrupt_flags: &mut InterruptFlags) {
+        if self.control.is_transfer_enabled() {
+            self.state = match self.state {
+                TransferState::Ongoing(8) => {
+                    //let c = char::from(self.data);
+                    //print!("{c}");
+                    println!("{}", self.data);
+                    self.control.set_transfer_enable(false);
+                    interrupt_flags.set(Interrupt::Serial, true);
+
+                    TransferState::Idle
+                }
+                TransferState::Ongoing(n) => TransferState::Ongoing(n + 1),
+                TransferState::Idle => TransferState::Idle,
+            }
         }
     }
 
     pub const fn read_byte(&self, addr: u16) -> u8 {
         match addr {
-            MEM_SERIAL_TRANSFER_DATA => self.data,
-            MEM_SERIAL_TRANSFER_CONTROL => self.control.bits(),
+            MEM_SB => self.data,
+            MEM_SC => self.control.bits(),
             _ => unreachable!(),
         }
     }
 
     pub fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
-            MEM_SERIAL_TRANSFER_DATA => {
-                self.data = value;
-            }
-            MEM_SERIAL_TRANSFER_CONTROL => {
+            MEM_SB => self.data = value,
+            MEM_SC => {
                 self.control = SerialTransferControl::from_bits(value);
+                if self.control.is_transfer_enabled() {
+                    self.state = TransferState::Ongoing(0);
+                } else {
+                    self.state = TransferState::Idle;
+                }
             }
             _ => unreachable!(),
         }

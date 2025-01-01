@@ -336,14 +336,14 @@ pub enum JumpCondition {
     Always,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Cpu {
     registers: Registers,
     halted: bool,
     // IME: Interrupt Master Enable
     interrupt_enabled: bool,
     // Used to delay setting IME after calling EI
-    ime_delay_counter: Option<u8>,
+    interrupt_delay: Option<u8>,
 }
 
 impl Cpu {
@@ -353,17 +353,20 @@ impl Cpu {
             registers: Registers::new(),
             halted: false,
             interrupt_enabled: false,
-            ime_delay_counter: None,
+            interrupt_delay: None,
         }
     }
 
     pub fn step(&mut self, bus: &mut AddressBus) {
         // Checks for next instruction after EI is called
-        self.ime_delay_counter = self.ime_delay_counter.map(|n| n - 1);
-        if self.ime_delay_counter.is_some_and(|n| n == 0) {
-            self.interrupt_enabled = true;
-            self.ime_delay_counter = None;
-        }
+        self.interrupt_delay = match self.interrupt_delay {
+            Some(0) => {
+                self.interrupt_enabled = true;
+                None
+            }
+            Some(n) => Some(n - 1),
+            None => None,
+        };
 
         if self.interrupt_enabled {
             for interrupt in Interrupt::iter() {
@@ -374,6 +377,8 @@ impl Cpu {
                     // Calls interrupt handler
                     self.push(bus, Register16::PC);
                     self.registers.pc = interrupt.handler_addr();
+                    bus.tick();
+                    bus.tick();
                     break;
                 }
             }

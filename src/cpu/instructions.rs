@@ -899,7 +899,6 @@ impl Cpu {
     ///
     /// Disable Interrupts by clearing the IME flag.
     pub(crate) fn disable_interrupt(&mut self) {
-        self.ime_delay_counter = None;
         self.interrupt_enabled = false;
     }
 
@@ -910,6 +909,8 @@ impl Cpu {
     /// Enable Interrupts by setting the IME flag.
     /// The flag is only set after the instruction following EI.
     pub(crate) fn enable_interrupt(&mut self) {
-        self.ime_delay_counter = Some(2);
+        if self.interrupt_delay.is_none() {
+            self.interrupt_delay = Some(1);
+        }
     }
 }

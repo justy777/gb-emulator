@@ -1,4 +1,5 @@
 use crate::error::TryFromUintError;
+use crate::interrupts::{Interrupt, InterruptFlags};
 
 const VIDEO_RAM_SIZE: usize = 8 * 1024;
 const SPRITE_RAM_SIZE: usize = 0xFE9F - 0xFE00 + 1;
@@ -15,6 +16,9 @@ const MEM_OBJECT_PALETTE_0_DATA: u16 = 0xFF48;
 const MEM_OBJECT_PALETTE_1_DATA: u16 = 0xFF49;
 const MEM_WINDOW_Y: u16 = 0xFF4A;
 const MEM_WINDOW_X: u16 = 0xFF4B;
+
+const CYCLES_PER_LINE: usize = 456;
+const CYCLES_PER_FRAME: usize = 70224;
 
 #[derive(Debug, Clone, Copy)]
 struct DisplayControl(u8);
@@ -133,6 +137,7 @@ pub struct Ppu {
     window_y: u8,
     // WX
     window_x: u8,
+    frame_cycles: usize,
 }
 
 impl Ppu {
@@ -144,7 +149,7 @@ impl Ppu {
             status: DisplayStatus::empty(),
             scroll_y: 0,
             scroll_x: 0,
-            ly: 0x0A,
+            ly: 0,
             lyc: 0,
             sprite_transfer_addr: 0xFF,
             background_palette_data: 0xFC,
@@ -152,6 +157,15 @@ impl Ppu {
             object_palette_1_data: 0xFF,
             window_y: 0,
             window_x: 0,
+            frame_cycles: 0,
+        }
+    }
+
+    pub fn step(&mut self, interrupt_flags: &mut InterruptFlags) {
+        self.frame_cycles = (self.frame_cycles + 4) % CYCLES_PER_FRAME;
+        self.ly = (self.frame_cycles / CYCLES_PER_LINE) as u8;
+        if self.frame_cycles == (144 * CYCLES_PER_LINE) {
+            interrupt_flags.set(Interrupt::VBlank, true);
         }
     }
 
