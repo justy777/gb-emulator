@@ -29,7 +29,7 @@ impl TimerControl {
         (self.0 & Self::ENABLE) == Self::ENABLE
     }
 
-    fn counter_mask(self) -> u16 {
+    const fn frequency_mask(self) -> u16 {
         match self.0 & Self::CLOCK_SELECT {
             0b00 => 128,
             0b01 => 2,
@@ -44,7 +44,7 @@ impl TimerControl {
 pub struct Timer {
     // DIV
     // Note: only uses 14 bits
-    system_counter: u16,
+    divider: u16,
     // TIMA
     counter: u8,
     // TMA
@@ -52,27 +52,27 @@ pub struct Timer {
     // TAC
     control: TimerControl,
     // Used to check for falling edge
-    interrupt_signal: bool,
+    tick_signal: bool,
     // Used to delay overflow until the next cycle
-    overflow_delay_counter: Option<u8>,
+    overflow_delay: Option<u8>,
 }
 
 impl Timer {
     pub const fn new() -> Self {
         Self {
-            system_counter: (0xAB << 6) + 0x33,
+            divider: (0xAB << 6) + 0x33,
             counter: 0,
             modulo: 0,
             control: TimerControl::empty(),
-            interrupt_signal: false,
-            overflow_delay_counter: None,
+            tick_signal: false,
+            overflow_delay: None,
         }
     }
 
     pub const fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             #[allow(clippy::cast_possible_truncation)]
-            MEM_DIV => (self.system_counter >> 6) as u8,
+            MEM_DIV => (self.divider >> 6) as u8,
             MEM_TIMA => self.counter,
             MEM_TMA => self.modulo,
             MEM_TAC => self.control.bits(),
@@ -82,10 +82,10 @@ impl Timer {
 
     pub fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
-            MEM_DIV => self.system_counter = 0,
+            MEM_DIV => self.divider = 0,
             MEM_TIMA => {
                 self.counter = value;
-                self.overflow_delay_counter = None;
+                self.overflow_delay = None;
             }
             MEM_TMA => self.modulo = value,
             MEM_TAC => self.control = TimerControl::from_bits(value),
@@ -94,30 +94,30 @@ impl Timer {
     }
 
     pub fn tick(&mut self, interrupt_flags: &mut InterruptFlags) {
-        self.system_counter = self.system_counter.wrapping_add(1);
+        self.divider = self.divider.wrapping_add(1);
 
-        let new_signal = self.counter_bit() && self.control.is_enabled();
+        let new_tick_signal = self.frequency_bit() && self.control.is_enabled();
 
-        if self.interrupt_signal && !new_signal {
+        if self.tick_signal && !new_tick_signal {
             if self.counter == 255 {
                 self.counter = 0;
-                self.overflow_delay_counter = Some(2);
+                self.overflow_delay = Some(2);
             } else {
                 self.counter += 1;
             }
         }
-        self.interrupt_signal = new_signal;
+        self.tick_signal = new_tick_signal;
 
         // Checks for next cycle after overflow occurs
-        self.overflow_delay_counter = self.overflow_delay_counter.map(|n| n - 1);
-        if self.overflow_delay_counter.is_some_and(|n| n == 0) {
+        self.overflow_delay = self.overflow_delay.map(|n| n - 1);
+        if self.overflow_delay.is_some_and(|n| n == 0) {
             self.counter = self.modulo;
             interrupt_flags.set(Interrupt::Timer, true);
-            self.overflow_delay_counter = None;
+            self.overflow_delay = None;
         }
     }
 
-    fn counter_bit(&self) -> bool {
-        (self.system_counter & self.control.counter_mask()) != 0
+    const fn frequency_bit(&self) -> bool {
+        (self.divider & self.control.frequency_mask()) != 0
     }
 }
