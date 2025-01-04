@@ -6,107 +6,6 @@ use crate::hardware::AddressBus;
 use crate::interrupt::Interrupt;
 
 #[derive(Debug, Clone, Copy)]
-pub struct Registers {
-    /// Accumulator
-    a: u8,
-    b: u8,
-    c: u8,
-    d: u8,
-    e: u8,
-    /// Flags Register
-    f: FlagsRegister,
-    h: u8,
-    l: u8,
-    /// Stack Pointer
-    sp: u16,
-    /// Program Counter
-    pc: u16,
-}
-
-impl Registers {
-    const fn new() -> Self {
-        Self {
-            a: 0x01,
-            b: 0x00,
-            c: 0x13,
-            d: 0x00,
-            e: 0xD8,
-            f: FlagsRegister::new(),
-            h: 0x01,
-            l: 0x4D,
-            sp: 0xFFFE,
-            pc: 0x100,
-        }
-    }
-
-    const fn read_byte(&self, register: Register8) -> u8 {
-        match register {
-            Register8::A => self.a,
-            Register8::B => self.b,
-            Register8::C => self.c,
-            Register8::D => self.d,
-            Register8::E => self.e,
-            Register8::H => self.h,
-            Register8::L => self.l,
-        }
-    }
-
-    fn write_byte(&mut self, register: Register8, value: u8) {
-        match register {
-            Register8::A => self.a = value,
-            Register8::B => self.b = value,
-            Register8::C => self.c = value,
-            Register8::D => self.d = value,
-            Register8::E => self.e = value,
-            Register8::H => self.h = value,
-            Register8::L => self.l = value,
-        }
-    }
-
-    const fn read_word(&self, register: Register16) -> u16 {
-        match register {
-            Register16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
-            Register16::BC => u16::from_le_bytes([self.c, self.b]),
-            Register16::DE => u16::from_le_bytes([self.e, self.d]),
-            Register16::HL => u16::from_le_bytes([self.l, self.h]),
-            Register16::SP => self.sp,
-            Register16::PC => self.pc,
-        }
-    }
-
-    fn write_word(&mut self, register: Register16, value: u16) {
-        match register {
-            Register16::AF => {
-                let [low, high] = value.to_le_bytes();
-                self.a = high;
-                self.f = FlagsRegister::from_bits(low);
-            }
-            Register16::BC => {
-                let [low, high] = value.to_le_bytes();
-                self.b = high;
-                self.c = low;
-            }
-            Register16::DE => {
-                let [low, high] = value.to_le_bytes();
-                self.d = high;
-                self.e = low;
-            }
-            Register16::HL => {
-                let [low, high] = value.to_le_bytes();
-                self.h = high;
-                self.l = low;
-            }
-            Register16::SP => {
-                self.sp = value;
-            }
-            Register16::PC => {
-                self.pc = value;
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
 struct FlagsRegister(u8);
 
 impl FlagsRegister {
@@ -182,13 +81,29 @@ pub enum Register8 {
 
 impl AccessReadByte<Register8> for Cpu {
     fn read_byte(&mut self, _: &mut AddressBus, src: Register8) -> u8 {
-        self.registers.read_byte(src)
+        match src {
+            Register8::A => self.a,
+            Register8::B => self.b,
+            Register8::C => self.c,
+            Register8::D => self.d,
+            Register8::E => self.e,
+            Register8::H => self.h,
+            Register8::L => self.l,
+        }
     }
 }
 
 impl AccessWriteByte<Register8> for Cpu {
     fn write_byte(&mut self, _: &mut AddressBus, dest: Register8, value: u8) {
-        self.registers.write_byte(dest, value);
+        match dest {
+            Register8::A => self.a = value,
+            Register8::B => self.b = value,
+            Register8::C => self.c = value,
+            Register8::D => self.d = value,
+            Register8::E => self.e = value,
+            Register8::H => self.h = value,
+            Register8::L => self.l = value,
+        }
     }
 }
 
@@ -205,13 +120,47 @@ pub enum Register16 {
 
 impl AccessReadWord<Register16> for Cpu {
     fn read_word(&mut self, _: &mut AddressBus, src: Register16) -> u16 {
-        self.registers.read_word(src)
+        match src {
+            Register16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
+            Register16::BC => u16::from_le_bytes([self.c, self.b]),
+            Register16::DE => u16::from_le_bytes([self.e, self.d]),
+            Register16::HL => u16::from_le_bytes([self.l, self.h]),
+            Register16::SP => self.sp,
+            Register16::PC => self.pc,
+        }
     }
 }
 
 impl AccessWriteWord<Register16> for Cpu {
     fn write_word(&mut self, _: &mut AddressBus, dest: Register16, value: u16) {
-        self.registers.write_word(dest, value);
+        match dest {
+            Register16::AF => {
+                let [low, high] = value.to_le_bytes();
+                self.a = high;
+                self.f = FlagsRegister::from_bits(low);
+            }
+            Register16::BC => {
+                let [low, high] = value.to_le_bytes();
+                self.b = high;
+                self.c = low;
+            }
+            Register16::DE => {
+                let [low, high] = value.to_le_bytes();
+                self.d = high;
+                self.e = low;
+            }
+            Register16::HL => {
+                let [low, high] = value.to_le_bytes();
+                self.h = high;
+                self.l = low;
+            }
+            Register16::SP => {
+                self.sp = value;
+            }
+            Register16::PC => {
+                self.pc = value;
+            }
+        }
     }
 }
 
@@ -338,7 +287,20 @@ pub enum JumpCondition {
 
 #[derive(Debug, Clone)]
 pub struct Cpu {
-    registers: Registers,
+    /// Accumulator
+    a: u8,
+    b: u8,
+    c: u8,
+    d: u8,
+    e: u8,
+    /// Flags Register
+    f: FlagsRegister,
+    h: u8,
+    l: u8,
+    /// Stack Pointer
+    sp: u16,
+    /// Program Counter
+    pc: u16,
     halted: bool,
     // IME: Interrupt Master Enable
     interrupt_enabled: bool,
@@ -350,7 +312,16 @@ impl Cpu {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            registers: Registers::new(),
+            a: 0x01,
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
+            f: FlagsRegister::new(),
+            h: 0x01,
+            l: 0x4D,
+            sp: 0xFFFE,
+            pc: 0x100,
             halted: false,
             interrupt_enabled: false,
             interrupt_delay: None,
@@ -377,7 +348,7 @@ impl Cpu {
                     bus.interrupt_flags().set(*interrupt, false);
                     // Calls interrupt handler
                     self.push(bus, Register16::PC);
-                    self.registers.pc = interrupt.handler_addr();
+                    self.pc = interrupt.handler_addr();
                     bus.tick();
                     bus.tick();
                 }
@@ -395,8 +366,8 @@ impl Cpu {
     }
 
     fn read_next_byte(&mut self, bus: &mut AddressBus) -> u8 {
-        let byte = bus.read_byte(self.registers.pc);
-        self.registers.pc = self.registers.pc.wrapping_add(1);
+        let byte = bus.read_byte(self.pc);
+        self.pc = self.pc.wrapping_add(1);
         bus.tick();
         byte
     }

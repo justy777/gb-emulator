@@ -253,7 +253,7 @@ impl Cpu {
             0xF1 => self.pop(bus, AF),
             // ---- Jumps
             // JP
-            0xE9 => self.jump_hl(),
+            0xE9 => self.jump_hl(bus),
             0xC3 => self.jump(bus, JumpCondition::Always),
             0xC2 => self.jump(bus, JumpCondition::NotZero),
             0xCA => self.jump(bus, JumpCondition::Zero),
