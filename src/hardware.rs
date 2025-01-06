@@ -161,7 +161,7 @@ impl AddressBus<'_> {
     }
 
     pub(crate) fn tick(&mut self) {
-        self.timer.tick(self.interrupt_flags);
+        self.timer.increment_divider(self.interrupt_flags);
         self.sprite_dma_transfer();
         self.ppu.step(self.interrupt_flags);
         self.serial_port.step(self.interrupt_flags);

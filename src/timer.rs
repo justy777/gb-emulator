@@ -54,7 +54,8 @@ pub struct Timer {
     // Used to check for falling edge
     tick_signal: bool,
     // Used to delay overflow until the next cycle
-    overflow_delay: Option<u8>,
+    overflow: bool,
+    overflowed: bool,
 }
 
 impl Timer {
@@ -65,7 +66,8 @@ impl Timer {
             modulo: 0,
             control: TimerControl::empty(),
             tick_signal: false,
-            overflow_delay: None,
+            overflow: false,
+            overflowed: false,
         }
     }
 
@@ -82,39 +84,55 @@ impl Timer {
 
     pub fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
-            MEM_DIV => self.divider = 0,
+            MEM_DIV => {
+                self.divider = 0;
+                self.sync();
+            },
             MEM_TIMA => {
-                self.counter = value;
-                self.overflow_delay = None;
-            }
-            MEM_TMA => self.modulo = value,
-            MEM_TAC => self.control = TimerControl::from_bits(value),
+                if !self.overflowed {
+                    self.counter = value;
+                    self.overflow = false;
+                }
+            },
+            MEM_TMA => {
+                self.modulo = value;
+                if self.overflowed {
+                    self.counter = value;
+                }
+            },
+            MEM_TAC => {
+                self.control = TimerControl::from_bits(value);
+                self.sync();
+            },
             _ => unreachable!(),
         }
     }
 
-    pub fn tick(&mut self, interrupt_flags: &mut InterruptFlags) {
+    pub fn increment_divider(&mut self, interrupt_flags: &mut InterruptFlags) {
+        self.overflowed = false;
         self.divider = self.divider.wrapping_add(1);
 
+        // Checks for next cycle after overflow occurs
+        if self.overflow {
+            self.counter = self.modulo;
+            interrupt_flags.set(Interrupt::Timer, true);
+            self.overflow = false;
+            self.overflowed = true;
+        }
+
+        self.sync();
+    }
+
+    fn sync(&mut self) {
         let new_tick_signal = self.frequency_bit() && self.control.is_enabled();
 
         if self.tick_signal && !new_tick_signal {
-            if self.counter == 255 {
-                self.counter = 0;
-                self.overflow_delay = Some(2);
-            } else {
-                self.counter += 1;
-            }
+            let (counter, overflow) = self.counter.overflowing_add(1);
+            self.counter = counter;
+            self.overflow = overflow;
         }
-        self.tick_signal = new_tick_signal;
 
-        // Checks for next cycle after overflow occurs
-        self.overflow_delay = self.overflow_delay.map(|n| n - 1);
-        if self.overflow_delay.is_some_and(|n| n == 0) {
-            self.counter = self.modulo;
-            interrupt_flags.set(Interrupt::Timer, true);
-            self.overflow_delay = None;
-        }
+        self.tick_signal = new_tick_signal;
     }
 
     const fn frequency_bit(&self) -> bool {
