@@ -1,6 +1,6 @@
 use crate::cpu::{
-    AccessReadByte, AccessReadWord, AccessWriteByte, AccessWriteWord, Cpu, FlagsRegister,
-    Immediate, JumpCondition, Register16,
+    AccessReadByte, AccessReadWord, AccessWriteByte, AccessWriteWord, Cpu, Flag, Immediate,
+    JumpCondition, Register16,
 };
 use crate::hardware::AddressBus;
 
@@ -70,14 +70,14 @@ impl Cpu {
         let sp = self.sp;
         let offset = self.read_next_byte_signed(bus) as i16;
 
-        self.f.set(FlagsRegister::ZERO, false);
-        self.f.set(FlagsRegister::SUBTRACT, false);
+        self.f.set(Flag::Zero, false);
+        self.f.set(Flag::Subtract, false);
         // Half-carry from bit 3, carry from bit 7
         // Bits are labeled from 0-15 from least to most significant.
         let half_carry = (sp & 0xF).wrapping_add_signed(offset & 0xF) > 0xF;
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
+        self.f.set(Flag::HalfCarry, half_carry);
         let carry = (sp & 0xFF).wrapping_add_signed(offset & 0xFF) > 0xFF;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
 
         let new_value = sp.wrapping_add_signed(offset);
         self.write_word(bus, Register16::HL, new_value);
@@ -97,14 +97,14 @@ impl Cpu {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
         let (result, did_overflow) = lhs.overflowing_add(rhs);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
         // Half carry is set if adding the lower bits (0-3) of the value and register A
         // together result in overflowing to bit 4. If the result is larger than 0xF
         // than the addition caused a carry from bit 3 to bit 4.
         let half_carry = (lhs & 0xF) + (rhs & 0xF) > 0xF;
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
-        self.f.set(FlagsRegister::CARRY, did_overflow);
+        self.f.set(Flag::HalfCarry, half_carry);
+        self.f.set(Flag::Carry, did_overflow);
         self.write_byte(bus, dest, result);
     }
 
@@ -120,14 +120,14 @@ impl Cpu {
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
-        let cf = self.f.contains(FlagsRegister::CARRY) as u8;
+        let cf = self.f.contains(Flag::Carry) as u8;
         let result = lhs.wrapping_add(rhs).wrapping_add(cf);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
         let half_carry = (lhs & 0xF) + (rhs & 0xF) + cf > 0xF;
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
+        self.f.set(Flag::HalfCarry, half_carry);
         let carry = lhs as u16 + rhs as u16 + cf as u16 > 0xFF;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, dest, result);
     }
 
@@ -144,11 +144,11 @@ impl Cpu {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
         let (result, did_overflow) = lhs.overflowing_sub(rhs);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, true);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, true);
         let half_carry = (lhs & 0xF) < (rhs & 0xF);
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
-        self.f.set(FlagsRegister::CARRY, did_overflow);
+        self.f.set(Flag::HalfCarry, half_carry);
+        self.f.set(Flag::Carry, did_overflow);
         self.write_byte(bus, dest, result);
     }
 
@@ -164,14 +164,14 @@ impl Cpu {
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
-        let cf = self.f.contains(FlagsRegister::CARRY) as u8;
+        let cf = self.f.contains(Flag::Carry) as u8;
         let result = lhs.wrapping_sub(rhs).wrapping_sub(cf);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, true);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, true);
         let half_carry = (lhs & 0xF) < (rhs & 0xF) + cf;
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
+        self.f.set(Flag::HalfCarry, half_carry);
         let carry = (lhs as u16) < (rhs as u16) + (cf as u16);
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, dest, result);
     }
 
@@ -188,10 +188,10 @@ impl Cpu {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
         let result = lhs & rhs;
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, true);
-        self.f.set(FlagsRegister::CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, true);
+        self.f.set(Flag::Carry, false);
         self.write_byte(bus, dest, result);
     }
 
@@ -208,10 +208,10 @@ impl Cpu {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
         let result = lhs ^ rhs;
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
-        self.f.set(FlagsRegister::CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
+        self.f.set(Flag::Carry, false);
         self.write_byte(bus, dest, result);
     }
 
@@ -228,10 +228,10 @@ impl Cpu {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
         let result = lhs | rhs;
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
-        self.f.set(FlagsRegister::CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
+        self.f.set(Flag::Carry, false);
         self.write_byte(bus, dest, result);
     }
 
@@ -247,11 +247,11 @@ impl Cpu {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
         let (result, did_overflow) = lhs.overflowing_sub(rhs);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, true);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, true);
         let half_carry = (lhs & 0xF) < (rhs & 0xF);
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
-        self.f.set(FlagsRegister::CARRY, did_overflow);
+        self.f.set(Flag::HalfCarry, half_carry);
+        self.f.set(Flag::Carry, did_overflow);
     }
 
     /// INC r8
@@ -266,10 +266,10 @@ impl Cpu {
     {
         let value = self.read_byte(bus, src);
         let result = value.wrapping_add(1);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
         let half_carry = value & 0xF == 0xF;
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
+        self.f.set(Flag::HalfCarry, half_carry);
         // CARRY is left untouched
         self.write_byte(bus, src, result);
     }
@@ -286,10 +286,10 @@ impl Cpu {
     {
         let value = self.read_byte(bus, src);
         let result = value.wrapping_sub(1);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, true);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, true);
         let half_carry = value & 0xF == 0;
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
+        self.f.set(Flag::HalfCarry, half_carry);
         // CARRY is left untouched
         self.write_byte(bus, src, result);
     }
@@ -308,12 +308,12 @@ impl Cpu {
         let rhs = self.read_word(bus, src);
         let (result, did_overflow) = lhs.overflowing_add(rhs);
         // ZERO is left untouched
-        self.f.set(FlagsRegister::SUBTRACT, false);
+        self.f.set(Flag::Subtract, false);
         // Half-carry from bit 11, carry from bit 15
         // Bits are labeled from 0-15 from least to most significant.
         let half_carry = (lhs & 0xFFF) + (rhs & 0xFFF) > 0xFFF;
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
-        self.f.set(FlagsRegister::CARRY, did_overflow);
+        self.f.set(Flag::HalfCarry, half_carry);
+        self.f.set(Flag::Carry, did_overflow);
         self.write_word(bus, dest, result);
         bus.tick();
     }
@@ -327,14 +327,14 @@ impl Cpu {
         let sp = self.sp;
         let offset = self.read_next_byte_signed(bus) as i16;
 
-        self.f.set(FlagsRegister::ZERO, false);
-        self.f.set(FlagsRegister::SUBTRACT, false);
+        self.f.set(Flag::Zero, false);
+        self.f.set(Flag::Subtract, false);
         // Half-carry from bit 3, carry from bit 7
         // Bits are labeled from 0-15 from least to most significant.
         let half_carry = (sp & 0xF).wrapping_add_signed(offset & 0xF) > 0xF;
-        self.f.set(FlagsRegister::HALF_CARRY, half_carry);
+        self.f.set(Flag::HalfCarry, half_carry);
         let carry = (sp & 0xFF).wrapping_add_signed(offset & 0xFF) > 0xFF;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         let result = sp.wrapping_add_signed(offset);
         self.sp = result;
         bus.tick();
@@ -373,11 +373,11 @@ impl Cpu {
     pub(crate) fn rotate_left_circular_accumulator(&mut self) {
         let value = self.a;
         let result = value.rotate_left(1);
-        self.f.set(FlagsRegister::ZERO, false);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, false);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x80 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.a = result;
     }
 
@@ -388,13 +388,13 @@ impl Cpu {
     /// Rotate register A left, through the carry flag.
     pub(crate) fn rotate_left_accumulator(&mut self) {
         let value = self.a;
-        let cf = self.f.contains(FlagsRegister::CARRY) as u8;
+        let cf = self.f.contains(Flag::Carry) as u8;
         let result = (value << 1) | cf;
-        self.f.set(FlagsRegister::ZERO, false);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, false);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x80 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.a = result;
     }
 
@@ -406,11 +406,11 @@ impl Cpu {
     pub(crate) fn rotate_right_circular_accumulator(&mut self) {
         let value = self.a;
         let result = value.rotate_right(1);
-        self.f.set(FlagsRegister::ZERO, false);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, false);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.a = result;
     }
 
@@ -421,13 +421,13 @@ impl Cpu {
     /// Rotate register A right, through the carry flag.
     pub(crate) fn rotate_right_accumulator(&mut self) {
         let value = self.a;
-        let cf = self.f.contains(FlagsRegister::CARRY) as u8;
+        let cf = self.f.contains(Flag::Carry) as u8;
         let result = (value >> 1) | (cf << 7);
-        self.f.set(FlagsRegister::ZERO, false);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, false);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.a = result;
     }
 
@@ -438,9 +438,9 @@ impl Cpu {
     /// Set the carry flag.
     pub(crate) fn set_carry_flag(&mut self) {
         // ZERO left untouched
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
-        self.f.set(FlagsRegister::CARRY, true);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
+        self.f.set(Flag::Carry, true);
     }
 
     /// CPL
@@ -451,8 +451,8 @@ impl Cpu {
     pub(crate) fn complement_accumulator(&mut self) {
         let value = self.a;
         // ZERO left untouched
-        self.f.set(FlagsRegister::SUBTRACT, true);
-        self.f.set(FlagsRegister::HALF_CARRY, true);
+        self.f.set(Flag::Subtract, true);
+        self.f.set(Flag::HalfCarry, true);
         // CARRY left untouched
         self.a = !value;
     }
@@ -463,11 +463,11 @@ impl Cpu {
     ///
     /// Complement the carry flag.
     pub(crate) fn complement_carry_flag(&mut self) {
-        let cf = self.f.contains(FlagsRegister::CARRY);
+        let cf = self.f.contains(Flag::Carry);
         // ZERO left untouched
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
-        self.f.set(FlagsRegister::CARRY, !cf);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
+        self.f.set(Flag::Carry, !cf);
     }
 
     /// DAA
@@ -478,9 +478,9 @@ impl Cpu {
     pub(crate) fn decimal_adjust_accumulator(&mut self) {
         let mut value = self.a;
 
-        let nf = self.f.contains(FlagsRegister::SUBTRACT);
-        let hf = self.f.contains(FlagsRegister::HALF_CARRY);
-        let mut cf = self.f.contains(FlagsRegister::CARRY);
+        let nf = self.f.contains(Flag::Subtract);
+        let hf = self.f.contains(Flag::HalfCarry);
+        let mut cf = self.f.contains(Flag::Carry);
 
         if nf {
             // After a subtraction, only adjust if (half-)carry occurred
@@ -501,10 +501,10 @@ impl Cpu {
             }
         }
 
-        self.f.set(FlagsRegister::ZERO, value == 0);
+        self.f.set(Flag::Zero, value == 0);
         // SUBTRACT left untouched
-        self.f.set(FlagsRegister::HALF_CARRY, false);
-        self.f.set(FlagsRegister::CARRY, cf);
+        self.f.set(Flag::HalfCarry, false);
+        self.f.set(Flag::Carry, cf);
 
         self.a = value;
     }
@@ -521,11 +521,11 @@ impl Cpu {
     {
         let value = self.read_byte(bus, src);
         let result = value.rotate_left(1);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x80 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, src, result);
     }
 
@@ -541,11 +541,11 @@ impl Cpu {
     {
         let value = self.read_byte(bus, src);
         let result = value.rotate_right(1);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, src, result);
     }
 
@@ -560,13 +560,13 @@ impl Cpu {
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
         let value = self.read_byte(bus, src);
-        let cf = self.f.contains(FlagsRegister::CARRY) as u8;
+        let cf = self.f.contains(Flag::Carry) as u8;
         let result = (value << 1) | cf;
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x80 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, src, result);
     }
 
@@ -581,13 +581,13 @@ impl Cpu {
         Self: AccessReadByte<S> + AccessWriteByte<S>,
     {
         let value = self.read_byte(bus, src);
-        let cf = self.f.contains(FlagsRegister::CARRY) as u8;
+        let cf = self.f.contains(Flag::Carry) as u8;
         let result = (value >> 1) | (cf << 7);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, src, result);
     }
 
@@ -603,11 +603,11 @@ impl Cpu {
     {
         let value = self.read_byte(bus, src);
         let result = value << 1;
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x80 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, src, result);
     }
 
@@ -623,11 +623,11 @@ impl Cpu {
     {
         let value = self.read_byte(bus, src);
         let result = (value >> 1) | (value & 0x80);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, src, result);
     }
 
@@ -644,10 +644,10 @@ impl Cpu {
         let value = self.read_byte(bus, src);
         // Rotating by 4 swaps the upper bits with the lower bits
         let result = value.rotate_left(4);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
-        self.f.set(FlagsRegister::CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
+        self.f.set(Flag::Carry, false);
         self.write_byte(bus, src, result);
     }
 
@@ -663,11 +663,11 @@ impl Cpu {
     {
         let value = self.read_byte(bus, src);
         let result = value >> 1;
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, false);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
-        self.f.set(FlagsRegister::CARRY, carry);
+        self.f.set(Flag::Carry, carry);
         self.write_byte(bus, src, result);
     }
 
@@ -682,9 +682,9 @@ impl Cpu {
     {
         let value = self.read_byte(bus, src);
         let result = value & (1 << bit);
-        self.f.set(FlagsRegister::ZERO, result == 0);
-        self.f.set(FlagsRegister::SUBTRACT, false);
-        self.f.set(FlagsRegister::HALF_CARRY, true);
+        self.f.set(Flag::Zero, result == 0);
+        self.f.set(Flag::Subtract, false);
+        self.f.set(Flag::HalfCarry, true);
         // CARRY left untouched
     }
 

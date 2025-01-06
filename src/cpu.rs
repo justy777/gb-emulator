@@ -5,18 +5,21 @@ mod instruction;
 use crate::hardware::AddressBus;
 use crate::interrupt::Interrupt;
 
+enum Flag {
+    Zero = 0b1000_0000,
+    Subtract = 0b0100_0000,
+    HalfCarry = 0b0010_0000,
+    Carry = 0b0001_0000,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct FlagsRegister(u8);
 
 impl FlagsRegister {
-    const ZERO: u8 = 0b1000_0000;
-    const SUBTRACT: u8 = 0b0100_0000;
-    const HALF_CARRY: u8 = 0b0010_0000;
-    const CARRY: u8 = 0b0001_0000;
     const UNUSED: u8 = 0b0000_1111;
 
     const fn new() -> Self {
-        Self::from_bits(Self::ZERO | Self::HALF_CARRY | Self::CARRY)
+        Self::from_bits(Flag::Zero as u8 | Flag::HalfCarry as u8 | Flag::Carry as u8)
     }
 
     const fn from_bits(bits: u8) -> Self {
@@ -27,25 +30,26 @@ impl FlagsRegister {
         self.0
     }
 
-    fn set(&mut self, bits: u8, enable: bool) {
+    fn set(&mut self, flag: Flag, enable: bool) {
+        let bits = flag as u8;
         if enable {
             self.0 |= bits;
         } else {
             self.0 &= !bits;
         }
-        self.0 &= !Self::UNUSED;
     }
 
-    const fn contains(self, bits: u8) -> bool {
+    const fn contains(self, flag: Flag) -> bool {
+        let bits = flag as u8;
         (self.0 & bits) == bits
     }
 
     const fn test(self, condition: JumpCondition) -> bool {
         match condition {
-            JumpCondition::NotZero => !self.contains(Self::ZERO),
-            JumpCondition::Zero => self.contains(Self::ZERO),
-            JumpCondition::NotCarry => !self.contains(Self::CARRY),
-            JumpCondition::Carry => self.contains(Self::CARRY),
+            JumpCondition::NotZero => !self.contains(Flag::Zero),
+            JumpCondition::Zero => self.contains(Flag::Zero),
+            JumpCondition::NotCarry => !self.contains(Flag::Carry),
+            JumpCondition::Carry => self.contains(Flag::Carry),
             JumpCondition::Always => true,
         }
     }
