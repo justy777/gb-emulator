@@ -4,18 +4,18 @@ use crate::interrupt::{Interrupt, InterruptFlags};
 const VIDEO_RAM_SIZE: usize = 8 * 1024;
 const SPRITE_RAM_SIZE: usize = 0xFE9F - 0xFE00 + 1;
 
-const MEM_DISPLAY_CONTROL: u16 = 0xFF40;
-const MEM_DISPLAY_STATUS: u16 = 0xFF41;
-const MEM_SCROLL_Y: u16 = 0xFF42;
-const MEM_SCROLL_X: u16 = 0xFF43;
+const MEM_LCDC: u16 = 0xFF40;
+const MEM_STAT: u16 = 0xFF41;
+const MEM_SCY: u16 = 0xFF42;
+const MEM_SCX: u16 = 0xFF43;
 const MEM_LY: u16 = 0xFF44;
 const MEM_LYC: u16 = 0xFF45;
-const MEM_TRANSFER_AND_START_ADDRESS: u16 = 0xFF46;
-const MEM_BACKGROUND_PALETTE_DATA: u16 = 0xFF47;
-const MEM_OBJECT_PALETTE_0_DATA: u16 = 0xFF48;
-const MEM_OBJECT_PALETTE_1_DATA: u16 = 0xFF49;
-const MEM_WINDOW_Y: u16 = 0xFF4A;
-const MEM_WINDOW_X: u16 = 0xFF4B;
+const MEM_DMA: u16 = 0xFF46;
+const MEM_BGP: u16 = 0xFF47;
+const MEM_OBP0: u16 = 0xFF48;
+const MEM_OBP1: u16 = 0xFF49;
+const MEM_WY: u16 = 0xFF4A;
+const MEM_WX: u16 = 0xFF4B;
 
 const CYCLES_PER_LINE: usize = 456;
 const CYCLES_PER_FRAME: usize = 70224;
@@ -128,11 +128,11 @@ pub struct Ppu {
     // DMA
     sprite_transfer_addr: u16,
     // BGP
-    background_palette_data: u8,
+    background_palette: u8,
     // OBP0
-    object_palette_0_data: u8,
+    sprite_palette_0: u8,
     // OBP1
-    object_palette_1_data: u8,
+    sprite_palette_1: u8,
     // WY
     window_y: u8,
     // WX
@@ -152,9 +152,9 @@ impl Ppu {
             ly: 0,
             lyc: 0,
             sprite_transfer_addr: 0xFF,
-            background_palette_data: 0xFC,
-            object_palette_0_data: 0xFF,
-            object_palette_1_data: 0xFF,
+            background_palette: 0xFC,
+            sprite_palette_0: 0xFF,
+            sprite_palette_1: 0xFF,
             window_y: 0,
             window_x: 0,
             frame_cycles: 0,
@@ -195,36 +195,36 @@ impl Ppu {
 
     pub const fn read_display(&self, addr: u16) -> u8 {
         match addr {
-            MEM_DISPLAY_CONTROL => self.control.bits(),
-            MEM_DISPLAY_STATUS => self.status.bits(),
-            MEM_SCROLL_Y => self.scroll_y,
-            MEM_SCROLL_X => self.scroll_x,
+            MEM_LCDC => self.control.bits(),
+            MEM_STAT => self.status.bits(),
+            MEM_SCY => self.scroll_y,
+            MEM_SCX => self.scroll_x,
             MEM_LY => self.ly,
             MEM_LYC => self.lyc,
-            MEM_TRANSFER_AND_START_ADDRESS => (self.sprite_transfer_addr >> 8) as u8,
-            MEM_BACKGROUND_PALETTE_DATA => self.background_palette_data,
-            MEM_OBJECT_PALETTE_0_DATA => self.object_palette_0_data,
-            MEM_OBJECT_PALETTE_1_DATA => self.object_palette_1_data,
-            MEM_WINDOW_Y => self.window_y,
-            MEM_WINDOW_X => self.window_x,
+            MEM_DMA => (self.sprite_transfer_addr >> 8) as u8,
+            MEM_BGP => self.background_palette,
+            MEM_OBP0 => self.sprite_palette_0,
+            MEM_OBP1 => self.sprite_palette_1,
+            MEM_WY => self.window_y,
+            MEM_WX => self.window_x,
             _ => unreachable!(),
         }
     }
 
     pub fn write_display(&mut self, addr: u16, value: u8) {
         match addr {
-            MEM_DISPLAY_CONTROL => self.control = DisplayControl::from_bits(value),
-            MEM_DISPLAY_STATUS => self.status = DisplayStatus::from_bits(value),
-            MEM_SCROLL_Y => self.scroll_y = value,
-            MEM_SCROLL_X => self.scroll_x = value,
+            MEM_LCDC => self.control = DisplayControl::from_bits(value),
+            MEM_STAT => self.status = DisplayStatus::from_bits(value),
+            MEM_SCY => self.scroll_y = value,
+            MEM_SCX => self.scroll_x = value,
             MEM_LY => self.ly = value,
             MEM_LYC => self.lyc = value,
-            MEM_TRANSFER_AND_START_ADDRESS => self.sprite_transfer_addr = (value as u16) << 8,
-            MEM_BACKGROUND_PALETTE_DATA => self.background_palette_data = value,
-            MEM_OBJECT_PALETTE_0_DATA => self.object_palette_0_data = value,
-            MEM_OBJECT_PALETTE_1_DATA => self.object_palette_1_data = value,
-            MEM_WINDOW_Y => self.window_y = value,
-            MEM_WINDOW_X => self.window_x = value,
+            MEM_DMA => self.sprite_transfer_addr = (value as u16) << 8,
+            MEM_BGP => self.background_palette = value,
+            MEM_OBP0 => self.sprite_palette_0 = value,
+            MEM_OBP1 => self.sprite_palette_1 = value,
+            MEM_WY => self.window_y = value,
+            MEM_WX => self.window_x = value,
             _ => unreachable!(),
         }
     }

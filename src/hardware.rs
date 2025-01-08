@@ -11,7 +11,6 @@ const WORK_RAM_SIZE: usize = 8 * 1024;
 const WAVE_PATTERN_RAM_SIZE: usize = 0xFF3F - 0xFF30 + 1;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 
-#[allow(clippy::module_name_repetitions)]
 pub struct GameboyHardware {
     cpu: Cpu,
     // ROM and External RAM
