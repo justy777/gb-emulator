@@ -1,6 +1,5 @@
 use crate::cpu::{
-    AccessReadByte, AccessReadWord, AccessWriteByte, AccessWriteWord, Cpu, Flag, Immediate,
-    JumpCondition, Register16,
+    Cpu, Flag, Immediate, JumpCondition, ReadByte, ReadWord, Register16, WriteByte, WriteWord,
 };
 use crate::hardware::AddressBus;
 
@@ -42,7 +41,7 @@ impl Cpu {
     /// Load src (right) and copy into dest (left).
     pub(crate) fn load<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S> + AccessWriteByte<D>,
+        Self: ReadByte<S> + WriteByte<D>,
     {
         let value = self.read_byte(bus, src);
         self.write_byte(bus, dest, value);
@@ -55,7 +54,7 @@ impl Cpu {
     /// Load src (right) and copy into dest (left).
     pub(crate) fn load16<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadWord<S> + AccessWriteWord<D>,
+        Self: ReadWord<S> + WriteWord<D>,
     {
         let value = self.read_word(bus, src);
         self.write_word(bus, dest, value);
@@ -92,7 +91,7 @@ impl Cpu {
     pub(crate) fn add<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         D: Copy,
-        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
+        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
@@ -116,7 +115,7 @@ impl Cpu {
     pub(crate) fn add_with_carry<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         D: Copy,
-        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
+        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
@@ -139,7 +138,7 @@ impl Cpu {
     pub(crate) fn subtract<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         D: Copy,
-        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
+        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
@@ -160,7 +159,7 @@ impl Cpu {
     pub(crate) fn subtract_with_carry<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         D: Copy,
-        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
+        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
@@ -183,7 +182,7 @@ impl Cpu {
     pub(crate) fn and<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         D: Copy,
-        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
+        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
@@ -203,7 +202,7 @@ impl Cpu {
     pub(crate) fn xor<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         D: Copy,
-        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
+        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
@@ -223,7 +222,7 @@ impl Cpu {
     pub(crate) fn or<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         D: Copy,
-        Self: AccessReadByte<S> + AccessReadByte<D> + AccessWriteByte<D>,
+        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
@@ -242,7 +241,7 @@ impl Cpu {
     /// Subtract the value in r8 from register A and set flags accordingly, but don't store the result.
     pub(crate) fn compare<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
-        Self: AccessReadByte<S> + AccessReadByte<D>,
+        Self: ReadByte<S> + ReadByte<D>,
     {
         let lhs = self.read_byte(bus, dest);
         let rhs = self.read_byte(bus, src);
@@ -259,19 +258,19 @@ impl Cpu {
     /// Z 0 H -
     ///
     /// Increment value in register r8 by 1.
-    pub(crate) fn increment<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn increment<T>(&mut self, bus: &mut AddressBus, target: T)
     where
-        S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_byte(bus, target);
         let result = value.wrapping_add(1);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         let half_carry = value & 0xF == 0xF;
         self.f.set(Flag::HalfCarry, half_carry);
         // CARRY is left untouched
-        self.write_byte(bus, src, result);
+        self.write_byte(bus, target, result);
     }
 
     /// DEC r8
@@ -279,19 +278,19 @@ impl Cpu {
     /// Z 1 H -
     ///
     /// Decrement value in register r8 by 1.
-    pub(crate) fn decrement<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn decrement<T>(&mut self, bus: &mut AddressBus, target: T)
     where
-        S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        T: Copy,
+        Self: ReadByte<T> + WriteByte<T>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_byte(bus, target);
         let result = value.wrapping_sub(1);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, true);
         let half_carry = value & 0xF == 0;
         self.f.set(Flag::HalfCarry, half_carry);
         // CARRY is left untouched
-        self.write_byte(bus, src, result);
+        self.write_byte(bus, target, result);
     }
 
     /// ADD HL, r16
@@ -302,7 +301,7 @@ impl Cpu {
     pub(crate) fn add16<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
     where
         D: Copy,
-        Self: AccessReadWord<S> + AccessReadWord<D> + AccessWriteWord<D>,
+        Self: ReadWord<S> + ReadWord<D> + WriteWord<D>,
     {
         let lhs = self.read_word(bus, dest);
         let rhs = self.read_word(bus, src);
@@ -346,10 +345,14 @@ impl Cpu {
     /// - - - -
     ///
     /// Increment value in register r16 by 1.
-    pub(crate) fn increment16(&mut self, bus: &mut AddressBus, src: Register16) {
-        let value = self.read_word(bus, src);
+    pub(crate) fn increment16<T>(&mut self, bus: &mut AddressBus, target: T)
+    where
+        T: Copy,
+        Self: ReadWord<T> + WriteWord<T>,
+    {
+        let value = self.read_word(bus, target);
         let result = value.wrapping_add(1);
-        self.write_word(bus, src, result);
+        self.write_word(bus, target, result);
         bus.tick();
     }
 
@@ -358,10 +361,14 @@ impl Cpu {
     /// - - - -
     ///
     /// Decrement value in register r16 by 1.
-    pub(crate) fn decrement16(&mut self, bus: &mut AddressBus, src: Register16) {
-        let value = self.read_word(bus, src);
+    pub(crate) fn decrement16<T>(&mut self, bus: &mut AddressBus, target: T)
+    where
+        T: Copy,
+        Self: ReadWord<T> + WriteWord<T>,
+    {
+        let value = self.read_word(bus, target);
         let result = value.wrapping_sub(1);
-        self.write_word(bus, src, result);
+        self.write_word(bus, target, result);
         bus.tick();
     }
 
@@ -517,7 +524,7 @@ impl Cpu {
     pub(crate) fn rotate_left_circular<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let result = value.rotate_left(1);
@@ -537,7 +544,7 @@ impl Cpu {
     pub(crate) fn rotate_right_circular<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let result = value.rotate_right(1);
@@ -557,7 +564,7 @@ impl Cpu {
     pub(crate) fn rotate_left<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let cf = self.f.contains(Flag::Carry) as u8;
@@ -578,7 +585,7 @@ impl Cpu {
     pub(crate) fn rotate_right<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let cf = self.f.contains(Flag::Carry) as u8;
@@ -599,7 +606,7 @@ impl Cpu {
     pub(crate) fn shift_left_arithmetic<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let result = value << 1;
@@ -619,7 +626,7 @@ impl Cpu {
     pub(crate) fn shift_right_arithmetic<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let result = (value >> 1) | (value & 0x80);
@@ -639,7 +646,7 @@ impl Cpu {
     pub(crate) fn swap<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         // Rotating by 4 swaps the upper bits with the lower bits
@@ -659,7 +666,7 @@ impl Cpu {
     pub(crate) fn shift_right_logical<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let result = value >> 1;
@@ -678,7 +685,7 @@ impl Cpu {
     /// Test bit u3 in register r8, set the zero flag if bit not set.
     pub(crate) fn bit_test<S>(&mut self, bus: &mut AddressBus, bit: u8, src: S)
     where
-        Self: AccessReadByte<S>,
+        Self: ReadByte<S>,
     {
         let value = self.read_byte(bus, src);
         let result = value & (1 << bit);
@@ -696,7 +703,7 @@ impl Cpu {
     pub(crate) fn bit_reset<S>(&mut self, bus: &mut AddressBus, bit: u8, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let result = value & !(1 << bit);
@@ -712,7 +719,7 @@ impl Cpu {
     pub(crate) fn bit_set<S>(&mut self, bus: &mut AddressBus, bit: u8, src: S)
     where
         S: Copy,
-        Self: AccessReadByte<S> + AccessWriteByte<S>,
+        Self: ReadByte<S> + WriteByte<S>,
     {
         let value = self.read_byte(bus, src);
         let result = value | (1 << bit);
@@ -762,9 +769,12 @@ impl Cpu {
     /// - - - -
     ///
     /// Push register r16 into the stack.
-    pub(crate) fn push(&mut self, bus: &mut AddressBus, register: Register16) {
+    pub(crate) fn push<T>(&mut self, bus: &mut AddressBus, target: T)
+    where
+        Self: ReadWord<T>,
+    {
         bus.tick();
-        let value = self.read_word(bus, register);
+        let value = self.read_word(bus, target);
         let [low, high] = value.to_le_bytes();
         self.sp = self.sp.wrapping_sub(1);
         bus.write_byte(self.sp, high);
@@ -782,7 +792,10 @@ impl Cpu {
     /// Pop register r16 from the stack.
     ///
     /// NOTE: POP AF affects all flags.
-    pub(crate) fn pop(&mut self, bus: &mut AddressBus, register: Register16) {
+    pub(crate) fn pop<T>(&mut self, bus: &mut AddressBus, target: T)
+    where
+        Self: WriteWord<T>,
+    {
         let low = bus.read_byte(self.sp);
         self.sp = self.sp.wrapping_add(1);
         bus.tick();
@@ -792,7 +805,7 @@ impl Cpu {
         bus.tick();
 
         let value = u16::from_le_bytes([low, high]);
-        self.write_word(bus, register, value);
+        self.write_word(bus, target, value);
     }
 
     /// CALL cc, n16

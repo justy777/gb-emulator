@@ -13,6 +13,15 @@ enum Flag {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum JumpCondition {
+    NotZero,
+    Zero,
+    NotCarry,
+    Carry,
+    Always,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct FlagsRegister(u8);
 
 impl FlagsRegister {
@@ -55,19 +64,19 @@ impl FlagsRegister {
     }
 }
 
-pub trait AccessReadByte<S> {
+pub trait ReadByte<S> {
     fn read_byte(&mut self, bus: &mut AddressBus, src: S) -> u8;
 }
 
-pub trait AccessWriteByte<D> {
+pub trait WriteByte<D> {
     fn write_byte(&mut self, bus: &mut AddressBus, dest: D, value: u8);
 }
 
-pub trait AccessReadWord<S> {
+pub trait ReadWord<S> {
     fn read_word(&mut self, bus: &mut AddressBus, src: S) -> u16;
 }
 
-pub trait AccessWriteWord<D> {
+pub trait WriteWord<D> {
     fn write_word(&mut self, bus: &mut AddressBus, dest: D, value: u16);
 }
 
@@ -83,7 +92,7 @@ pub enum Register8 {
     L,
 }
 
-impl AccessReadByte<Register8> for Cpu {
+impl ReadByte<Register8> for Cpu {
     fn read_byte(&mut self, _: &mut AddressBus, src: Register8) -> u8 {
         match src {
             Register8::A => self.a,
@@ -97,7 +106,7 @@ impl AccessReadByte<Register8> for Cpu {
     }
 }
 
-impl AccessWriteByte<Register8> for Cpu {
+impl WriteByte<Register8> for Cpu {
     fn write_byte(&mut self, _: &mut AddressBus, dest: Register8, value: u8) {
         match dest {
             Register8::A => self.a = value,
@@ -122,7 +131,7 @@ pub enum Register16 {
     PC,
 }
 
-impl AccessReadWord<Register16> for Cpu {
+impl ReadWord<Register16> for Cpu {
     fn read_word(&mut self, _: &mut AddressBus, src: Register16) -> u16 {
         match src {
             Register16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
@@ -135,7 +144,7 @@ impl AccessReadWord<Register16> for Cpu {
     }
 }
 
-impl AccessWriteWord<Register16> for Cpu {
+impl WriteWord<Register16> for Cpu {
     fn write_word(&mut self, _: &mut AddressBus, dest: Register16, value: u16) {
         match dest {
             Register16::AF => {
@@ -173,13 +182,13 @@ impl AccessWriteWord<Register16> for Cpu {
 #[derive(Debug, Clone, Copy)]
 pub struct Immediate;
 
-impl AccessReadByte<Immediate> for Cpu {
+impl ReadByte<Immediate> for Cpu {
     fn read_byte(&mut self, bus: &mut AddressBus, _: Immediate) -> u8 {
         self.read_next_byte(bus)
     }
 }
 
-impl AccessReadWord<Immediate> for Cpu {
+impl ReadWord<Immediate> for Cpu {
     fn read_word(&mut self, bus: &mut AddressBus, _: Immediate) -> u16 {
         let low = self.read_next_byte(bus);
         let high = self.read_next_byte(bus);
@@ -192,9 +201,9 @@ impl AccessReadWord<Immediate> for Cpu {
 #[derive(Debug, Clone, Copy)]
 pub struct Direct<T>(T);
 
-impl<T> AccessReadByte<Direct<T>> for Cpu
+impl<T> ReadByte<Direct<T>> for Cpu
 where
-    Self: AccessReadWord<T>,
+    Self: ReadWord<T>,
 {
     fn read_byte(&mut self, bus: &mut AddressBus, src: Direct<T>) -> u8 {
         let addr = self.read_word(bus, src.0);
@@ -204,9 +213,9 @@ where
     }
 }
 
-impl<T> AccessWriteByte<Direct<T>> for Cpu
+impl<T> WriteByte<Direct<T>> for Cpu
 where
-    Self: AccessReadWord<T>,
+    Self: ReadWord<T>,
 {
     fn write_byte(&mut self, bus: &mut AddressBus, dest: Direct<T>, value: u8) {
         let addr = self.read_word(bus, dest.0);
@@ -215,9 +224,9 @@ where
     }
 }
 
-impl<T> AccessWriteWord<Direct<T>> for Cpu
+impl<T> WriteWord<Direct<T>> for Cpu
 where
-    Self: AccessReadWord<T>,
+    Self: ReadWord<T>,
 {
     fn write_word(&mut self, bus: &mut AddressBus, dest: Direct<T>, value: u16) {
         let addr = self.read_word(bus, dest.0);
@@ -234,9 +243,9 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct Increment<T>(T);
 
-impl<T> AccessReadWord<Increment<T>> for Cpu
+impl<T> ReadWord<Increment<T>> for Cpu
 where
-    Self: AccessReadWord<T> + AccessWriteWord<T>,
+    Self: ReadWord<T> + WriteWord<T>,
     T: Copy,
 {
     fn read_word(&mut self, bus: &mut AddressBus, src: Increment<T>) -> u16 {
@@ -252,9 +261,9 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct Decrement<T>(T);
 
-impl<T> AccessReadWord<Decrement<T>> for Cpu
+impl<T> ReadWord<Decrement<T>> for Cpu
 where
-    Self: AccessReadWord<T> + AccessWriteWord<T>,
+    Self: ReadWord<T> + WriteWord<T>,
     T: Copy,
 {
     fn read_word(&mut self, bus: &mut AddressBus, src: Decrement<T>) -> u16 {
@@ -270,23 +279,14 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct HighIndexed<T>(T);
 
-impl<T> AccessReadWord<HighIndexed<T>> for Cpu
+impl<T> ReadWord<HighIndexed<T>> for Cpu
 where
-    Self: AccessReadByte<T>,
+    Self: ReadByte<T>,
 {
     fn read_word(&mut self, bus: &mut AddressBus, src: HighIndexed<T>) -> u16 {
         let byte = self.read_byte(bus, src.0) as u16;
         0xFF00 | byte
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum JumpCondition {
-    NotZero,
-    Zero,
-    NotCarry,
-    Carry,
-    Always,
 }
 
 #[derive(Debug, Clone)]

@@ -87,23 +87,23 @@ impl Timer {
             MEM_DIV => {
                 self.divider = 0;
                 self.sync();
-            },
+            }
             MEM_TIMA => {
                 if !self.overflowed {
                     self.counter = value;
                     self.overflow = false;
                 }
-            },
+            }
             MEM_TMA => {
                 self.modulo = value;
                 if self.overflowed {
                     self.counter = value;
                 }
-            },
+            }
             MEM_TAC => {
                 self.control = TimerControl::from_bits(value);
                 self.sync();
-            },
+            }
             _ => unreachable!(),
         }
     }
