@@ -9,19 +9,19 @@ fn main() -> io::Result<()> {
     let cartridge = Cartridge::new(rom);
     let metadata = cartridge.metadata();
 
-    println!("Title: {}", metadata.get_title());
-    println!("CGB Flag: {:#04X}", metadata.get_cgb_flag());
-    println!("Cartridge Type: {:#04X}", metadata.get_cartridge_type());
+    println!("Title: {}", metadata.title());
+    println!("CGB Flag: {:#04X}", metadata.cgb_flag());
+    println!("Cartridge Type: {:#04X}", metadata.cartridge_type());
     println!("Has RAM: {}", metadata.has_ram());
     println!("Has battery: {}", metadata.has_battery());
     println!("Supports RTC: {}", metadata.supports_rtc());
     println!("Supports rumble: {}", metadata.supports_rumble());
-    println!("ROM banks: {}", metadata.get_rom_banks());
-    println!("ROM size: {}", Data::from_bytes(metadata.get_rom_size()));
-    println!("RAM banks: {}", metadata.get_ram_banks());
-    println!("RAM size: {}", Data::from_bytes(metadata.get_ram_size()));
-    println!("Destination code: {:#04X}", metadata.get_destination_code());
-    println!("Version number: {}", metadata.get_version_number());
+    println!("ROM banks: {}", metadata.rom_banks());
+    println!("ROM size: {}", Data::from_bytes(metadata.rom_size()));
+    println!("RAM banks: {}", metadata.ram_banks());
+    println!("RAM size: {}", Data::from_bytes(metadata.ram_size()));
+    println!("Destination code: {:#04X}", metadata.destination_code());
+    println!("Version number: {}", metadata.version_number());
 
     metadata
         .verify_header_checksum()

@@ -22,23 +22,14 @@ impl Cartridge {
 
         let mbc: Box<dyn MemoryBankController> = match metadata.mbc_number {
             0 => Box::new(NoMBC::new()),
-            1 => Box::new(MBC1::new(
-                metadata.get_rom_banks(),
-                metadata.get_ram_banks(),
-            )),
-            3 => Box::new(MBC3::new(
-                metadata.get_rom_banks(),
-                metadata.get_ram_banks(),
-            )),
-            5 => Box::new(MBC5::new(
-                metadata.get_rom_banks(),
-                metadata.get_ram_banks(),
-            )),
+            1 => Box::new(MBC1::new(metadata.rom_banks(), metadata.ram_banks())),
+            3 => Box::new(MBC3::new(metadata.rom_banks(), metadata.ram_banks())),
+            5 => Box::new(MBC5::new(metadata.rom_banks(), metadata.ram_banks())),
             _ => unreachable!(),
         };
 
-        let ram = if metadata.has_ram() && metadata.get_ram_banks() > 0 {
-            let capacity = RAM_BANK_SIZE * metadata.get_ram_banks();
+        let ram = if metadata.has_ram() && metadata.ram_size() > 0 {
+            let capacity = metadata.ram_size();
             let vec = vec![0; capacity];
             Some(vec)
         } else {
@@ -54,12 +45,12 @@ impl Cartridge {
     }
 
     pub(crate) fn read_rom_bank0(&self, addr: u16) -> u8 {
-        let index = (ROM_BANK_SIZE * self.mbc.get_rom_bank0()) + (addr as usize);
+        let index = (ROM_BANK_SIZE * self.mbc.rom_bank0()) + (addr as usize);
         self.rom[index]
     }
 
     pub(crate) fn read_rom_bank1(&self, addr: u16) -> u8 {
-        let index = (ROM_BANK_SIZE * self.mbc.get_rom_bank1()) + (addr as usize);
+        let index = (ROM_BANK_SIZE * self.mbc.rom_bank1()) + (addr as usize);
         self.rom[index]
     }
 
@@ -73,7 +64,7 @@ impl Cartridge {
         }
 
         if let Some(ram) = &self.ram {
-            let index = (RAM_BANK_SIZE * self.mbc.get_ram_bank()) + (addr as usize);
+            let index = (RAM_BANK_SIZE * self.mbc.ram_bank()) + (addr as usize);
             ram[index]
         } else {
             panic!("Unable to read from cartridge RAM. No RAM included in cartridge.");
@@ -86,7 +77,7 @@ impl Cartridge {
         }
 
         if let Some(ram) = &mut self.ram {
-            let index = (RAM_BANK_SIZE * self.mbc.get_ram_bank()) + (addr as usize);
+            let index = (RAM_BANK_SIZE * self.mbc.ram_bank()) + (addr as usize);
             ram[index] = value;
         } else {
             panic!("Unable to write to cartridge RAM. No RAM included in cartridge.")

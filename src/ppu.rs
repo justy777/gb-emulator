@@ -185,7 +185,7 @@ impl Ppu {
         self.sprite_ram[addr as usize] = data;
     }
 
-    pub(crate) const fn get_sprite_transfer_addr(&self) -> u16 {
+    pub(crate) const fn sprite_transfer_addr(&self) -> u16 {
         self.sprite_transfer_addr
     }
 

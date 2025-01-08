@@ -349,7 +349,7 @@ impl Cpu {
                 self.halted = false;
                 if self.interrupt_enabled {
                     self.interrupt_enabled = false;
-                    bus.interrupt_flags().set(*interrupt, false);
+                    bus.interrupt_flags_mut().set(*interrupt, false);
                     // Calls interrupt handler
                     self.push(bus, Register16::PC);
                     self.pc = interrupt.handler_addr();

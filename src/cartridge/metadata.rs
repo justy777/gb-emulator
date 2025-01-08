@@ -125,15 +125,15 @@ impl Metadata {
         }
     }
 
-    pub fn get_title(&self) -> &str {
+    pub fn title(&self) -> &str {
         &self.title
     }
 
-    pub const fn get_cgb_flag(&self) -> u8 {
+    pub const fn cgb_flag(&self) -> u8 {
         self.cgb_flag
     }
 
-    pub const fn get_cartridge_type(&self) -> u8 {
+    pub const fn cartridge_type(&self) -> u8 {
         self.cartridge_type
     }
 
@@ -153,27 +153,27 @@ impl Metadata {
         CARTRIDGE_TYPE_SUPPORTS_RUMBLE.contains(&self.cartridge_type)
     }
 
-    pub const fn get_rom_banks(&self) -> usize {
+    pub const fn rom_banks(&self) -> usize {
         self.rom_banks
     }
 
-    pub const fn get_ram_banks(&self) -> usize {
+    pub const fn ram_banks(&self) -> usize {
         self.ram_banks
     }
 
-    pub const fn get_rom_size(&self) -> usize {
+    pub const fn rom_size(&self) -> usize {
         self.rom_banks * ROM_BANK_SIZE
     }
 
-    pub const fn get_ram_size(&self) -> usize {
+    pub const fn ram_size(&self) -> usize {
         self.ram_banks * RAM_BANK_SIZE
     }
 
-    pub const fn get_destination_code(&self) -> u8 {
+    pub const fn destination_code(&self) -> u8 {
         self.destination_code
     }
 
-    pub const fn get_version_number(&self) -> u8 {
+    pub const fn version_number(&self) -> u8 {
         self.version_number
     }
 }

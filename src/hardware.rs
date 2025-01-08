@@ -167,7 +167,7 @@ impl AddressBus<'_> {
     }
 
     fn sprite_dma_transfer(&mut self) {
-        let src_addr = self.ppu.get_sprite_transfer_addr();
+        let src_addr = self.ppu.sprite_transfer_addr();
         if (src_addr & 0xFF00) <= 0xDF00 && (src_addr & 0xFF) <= 0x9F {
             let value = self.read_byte(src_addr);
             let dest_addr = 0xFE00 | (src_addr & 0xFF);
@@ -176,7 +176,7 @@ impl AddressBus<'_> {
         }
     }
 
-    pub(crate) const fn interrupt_flags(&mut self) -> &mut InterruptFlags {
+    pub(crate) const fn interrupt_flags_mut(&mut self) -> &mut InterruptFlags {
         self.interrupt_flags
     }
 

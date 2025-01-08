@@ -1,7 +1,7 @@
 pub trait MemoryBankController {
-    fn get_rom_bank0(&self) -> usize;
-    fn get_rom_bank1(&self) -> usize;
-    fn get_ram_bank(&self) -> usize;
+    fn rom_bank0(&self) -> usize;
+    fn rom_bank1(&self) -> usize;
+    fn ram_bank(&self) -> usize;
     fn is_ram_enabled(&self) -> bool;
     fn write_register(&mut self, addr: u16, value: u8);
 }
@@ -15,15 +15,15 @@ impl NoMBC {
 }
 
 impl MemoryBankController for NoMBC {
-    fn get_rom_bank0(&self) -> usize {
+    fn rom_bank0(&self) -> usize {
         0
     }
 
-    fn get_rom_bank1(&self) -> usize {
+    fn rom_bank1(&self) -> usize {
         1
     }
 
-    fn get_ram_bank(&self) -> usize {
+    fn ram_bank(&self) -> usize {
         0
     }
 
@@ -61,7 +61,7 @@ impl MBC1 {
 }
 
 impl MemoryBankController for MBC1 {
-    fn get_rom_bank0(&self) -> usize {
+    fn rom_bank0(&self) -> usize {
         let bank = if self.banking_mode {
             self.ram_bank_number << 5
         } else {
@@ -70,7 +70,7 @@ impl MemoryBankController for MBC1 {
         truncate_bank(bank as usize, self.rom_banks)
     }
 
-    fn get_rom_bank1(&self) -> usize {
+    fn rom_bank1(&self) -> usize {
         let mut bank = self.ram_bank_number << 5 | self.rom_bank_number;
 
         if self.rom_bank_number == 0 {
@@ -80,7 +80,7 @@ impl MemoryBankController for MBC1 {
         truncate_bank(bank as usize, self.rom_banks)
     }
 
-    fn get_ram_bank(&self) -> usize {
+    fn ram_bank(&self) -> usize {
         let bank = if self.banking_mode {
             self.ram_bank_number
         } else {
@@ -128,11 +128,11 @@ impl MBC3 {
 }
 
 impl MemoryBankController for MBC3 {
-    fn get_rom_bank0(&self) -> usize {
+    fn rom_bank0(&self) -> usize {
         0
     }
 
-    fn get_rom_bank1(&self) -> usize {
+    fn rom_bank1(&self) -> usize {
         let bank = if self.rom_bank_number == 0 {
             1
         } else {
@@ -141,7 +141,7 @@ impl MemoryBankController for MBC3 {
         truncate_bank(bank as usize, self.rom_banks)
     }
 
-    fn get_ram_bank(&self) -> usize {
+    fn ram_bank(&self) -> usize {
         let bank = self.ram_bank_number;
         truncate_bank(bank as usize, self.ram_banks)
     }
@@ -187,16 +187,16 @@ impl MBC5 {
 }
 
 impl MemoryBankController for MBC5 {
-    fn get_rom_bank0(&self) -> usize {
+    fn rom_bank0(&self) -> usize {
         0
     }
 
-    fn get_rom_bank1(&self) -> usize {
+    fn rom_bank1(&self) -> usize {
         let bank = ((self.rom_bank_number2 as u16) << 8) | (self.rom_bank_number as u16);
         truncate_bank(bank as usize, self.rom_banks)
     }
 
-    fn get_ram_bank(&self) -> usize {
+    fn ram_bank(&self) -> usize {
         let bank = self.ram_bank_number;
         truncate_bank(bank as usize, self.ram_banks)
     }
