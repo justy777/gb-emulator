@@ -2,10 +2,35 @@ mod mbc;
 mod metadata;
 
 use crate::cartridge::mbc::{MemoryBankController, NoMBC, MBC1, MBC3, MBC5};
-use crate::cartridge::metadata::Metadata;
+use crate::cartridge::metadata::{Metadata, MetadataError};
 
 const ROM_BANK_SIZE: usize = 16 * 1024;
 const RAM_BANK_SIZE: usize = 8 * 1024;
+
+#[derive(Debug)]
+pub enum CartridgeError {
+    NotDivisibleIntoBanks,
+    Metadata(MetadataError),
+}
+
+impl From<MetadataError> for CartridgeError {
+    fn from(err: MetadataError) -> Self {
+        Self::Metadata(err)
+    }
+}
+
+impl std::fmt::Display for CartridgeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotDivisibleIntoBanks => {
+                write!(f, "Cartridge is not divisible into 16 KiB banks")
+            }
+            Self::Metadata(err) => write!(f, "Bad cartridge header: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for CartridgeError {}
 
 // TODO: add support for save files
 pub struct Cartridge {
@@ -16,9 +41,12 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    #[must_use]
-    pub fn new(rom: Vec<u8>) -> Self {
-        let metadata = Metadata::new(&rom);
+    pub fn new(rom: Vec<u8>) -> Result<Self, CartridgeError> {
+        if rom.is_empty() || rom.len() % ROM_BANK_SIZE != 0 {
+            return Err(CartridgeError::NotDivisibleIntoBanks);
+        }
+
+        let metadata = Metadata::new(&rom)?;
 
         let mbc: Box<dyn MemoryBankController> = match metadata.mbc_number {
             0 => Box::new(NoMBC::new()),
@@ -36,12 +64,12 @@ impl Cartridge {
             None
         };
 
-        Self {
+        Ok(Self {
             rom,
             ram,
             mbc,
             metadata,
-        }
+        })
     }
 
     pub(crate) fn read_rom_bank0(&self, addr: u16) -> u8 {

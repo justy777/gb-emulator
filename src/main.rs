@@ -1,12 +1,12 @@
 use gb_emulator::cartridge::Cartridge;
 use gb_emulator::hardware::GameboyHardware;
 use gb_emulator::util::Data;
-use std::{env, fs, io};
+use std::{env, fs};
 
-fn main() -> io::Result<()> {
+fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
     let rom = fs::read(&args[1])?;
-    let cartridge = Cartridge::new(rom);
+    let cartridge = Cartridge::new(rom)?;
     let metadata = cartridge.metadata();
 
     println!("Title: {}", metadata.title());

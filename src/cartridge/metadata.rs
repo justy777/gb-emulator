@@ -23,6 +23,63 @@ const ROM_BANK_SIZE: usize = 16 * 1024;
 const RAM_BANK_SIZE: usize = 8 * 1024;
 
 #[derive(Debug)]
+pub enum MetadataError {
+    UnsupportedCartridgeType(u8),
+    InvalidRomSize(u8),
+    InvalidRamSize(u8),
+}
+
+impl std::fmt::Display for MetadataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedCartridgeType(val) => {
+                write!(f, r#"Cartridge type "{val:#04X}" is not supported"#)
+            }
+            Self::InvalidRomSize(val) => write!(f, r#"Invalid value for ROM size: "{val:#04X}""#),
+            Self::InvalidRamSize(val) => write!(f, r#"Invalid value for RAM size: "{val:#04X}""#),
+        }
+    }
+}
+
+impl std::error::Error for MetadataError {}
+
+#[derive(Debug)]
+pub struct HeaderChecksumError {
+    pub expected: u8,
+    pub actual: u8,
+}
+
+impl std::fmt::Display for HeaderChecksumError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let Self { expected, actual } = self;
+        write!(
+            f,
+            "Header verification failed (expected {expected:#04X}, found {actual:#04X})"
+        )
+    }
+}
+
+impl std::error::Error for HeaderChecksumError {}
+
+#[derive(Debug)]
+pub struct GlobalChecksumError {
+    pub expected: u16,
+    pub actual: u16,
+}
+
+impl std::fmt::Display for GlobalChecksumError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let Self { expected, actual } = self;
+        write!(
+            f,
+            "Global verification failed (expected {expected:#06X}, found {actual:#06X})"
+        )
+    }
+}
+
+impl std::error::Error for GlobalChecksumError {}
+
+#[derive(Debug)]
 pub struct Metadata {
     title: String,
     cgb_flag: u8,
@@ -39,7 +96,7 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub fn new(rom: &[u8]) -> Self {
+    pub fn new(rom: &[u8]) -> Result<Self, MetadataError> {
         let title = rom[CART_TITLE_START..=CART_TITLE_END]
             .iter()
             .map(|byte| char::from(*byte))
@@ -55,12 +112,12 @@ impl Metadata {
             0x01..=0x03 => 1,
             0x0F..=0x13 => 3,
             0x19..=0x1E => 5,
-            val => panic!("Memory bank controller for {val:#X} not implemented"),
+            val => return Err(MetadataError::UnsupportedCartridgeType(val)),
         };
 
         let rom_banks = match rom[CART_ROM_SIZE] {
             n @ 0x00..=0x08 => 1 << (n + 1),
-            val => panic!("Invalid value {val:#X} for ROM size in cartridge header."),
+            val => return Err(MetadataError::InvalidRomSize(val)),
         };
 
         let ram_banks = match rom[CART_RAM_SIZE] {
@@ -69,7 +126,7 @@ impl Metadata {
             0x03 => 4,
             0x04 => 16,
             0x05 => 8,
-            val => panic!("Invalid value {val:#02X} for RAM size in cartridge header."),
+            val => return Err(MetadataError::InvalidRamSize(val)),
         };
 
         let destination_code = rom[CART_DESTINATION_CODE];
@@ -85,7 +142,7 @@ impl Metadata {
 
         let actual_global_checksum = calculate_global_checksum(rom);
 
-        Self {
+        Ok(Self {
             title,
             cgb_flag,
             cartridge_type,
@@ -98,30 +155,26 @@ impl Metadata {
             actual_header_checksum,
             expected_global_checksum,
             actual_global_checksum,
-        }
+        })
     }
 
-    pub fn verify_header_checksum(&self) -> Result<(), String> {
+    pub const fn verify_header_checksum(&self) -> Result<(), HeaderChecksumError> {
         let expected = self.expected_header_checksum;
         let actual = self.actual_header_checksum;
         if actual == expected {
             Ok(())
         } else {
-            Err(format!(
-                "Header verification failed (expected {expected:#04X}, found {actual:#04X})"
-            ))
+            Err(HeaderChecksumError { expected, actual })
         }
     }
 
-    pub fn verify_global_checksum(&self) -> Result<(), String> {
+    pub const fn verify_global_checksum(&self) -> Result<(), GlobalChecksumError> {
         let expected = self.expected_global_checksum;
         let actual = self.actual_global_checksum;
         if actual == expected {
             Ok(())
         } else {
-            Err(format!(
-                "Global verification failed (expected {expected:#04X}, found {actual:#04X})"
-            ))
+            Err(GlobalChecksumError { expected, actual })
         }
     }
 
