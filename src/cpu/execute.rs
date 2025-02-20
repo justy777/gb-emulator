@@ -1,7 +1,7 @@
 use crate::cpu::{
     Cpu, Decrement, Direct, HighIndexed, Immediate, Increment, JumpCondition,
-    Register16::{AF, BC, DE, HL, SP},
     Register8::{A, B, C, D, E, H, L},
+    Register16::{AF, BC, DE, HL, SP},
 };
 use crate::hardware::AddressBus;
 

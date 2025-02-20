@@ -1,7 +1,7 @@
 mod mbc;
 mod metadata;
 
-use crate::cartridge::mbc::{MemoryBankController, NoMBC, MBC1, MBC3, MBC5};
+use crate::cartridge::mbc::{MBC1, MBC3, MBC5, MemoryBankController, NoMBC};
 use crate::cartridge::metadata::{Metadata, MetadataError};
 
 const ROM_BANK_SIZE: usize = 16 * 1024;

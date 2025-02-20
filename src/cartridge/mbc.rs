@@ -71,7 +71,7 @@ impl MemoryBankController for MBC1 {
     }
 
     fn rom_bank1(&self) -> usize {
-        let mut bank = self.ram_bank_number << 5 | self.rom_bank_number;
+        let mut bank = (self.ram_bank_number << 5) | self.rom_bank_number;
 
         if self.rom_bank_number == 0 {
             bank += 1;
