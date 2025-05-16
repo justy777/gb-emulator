@@ -159,7 +159,7 @@ impl Ppu {
         self.video_ram[addr as usize]
     }
 
-    pub fn write_vram(&mut self, addr: u16, data: u8) {
+    pub const fn write_vram(&mut self, addr: u16, data: u8) {
         self.video_ram[addr as usize] = data;
     }
 
@@ -167,7 +167,7 @@ impl Ppu {
         self.sprite_ram[addr as usize]
     }
 
-    pub fn write_sprite(&mut self, addr: u16, data: u8) {
+    pub const fn write_sprite(&mut self, addr: u16, data: u8) {
         self.sprite_ram[addr as usize] = data;
     }
 

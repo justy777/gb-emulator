@@ -51,7 +51,7 @@ impl Registers {
         }
     }
 
-    fn write_byte(&mut self, register: Register8, value: u8) {
+    const fn write_byte(&mut self, register: Register8, value: u8) {
         match register {
             Register8::A => self.a = value,
             Register8::B => self.b = value,
@@ -74,7 +74,7 @@ impl Registers {
         }
     }
 
-    fn write_word(&mut self, register: Register16, value: u16) {
+    const fn write_word(&mut self, register: Register16, value: u16) {
         match register {
             Register16::AF => {
                 let [low, high] = value.to_le_bytes();
@@ -128,7 +128,7 @@ impl FlagsRegister {
         self.0
     }
 
-    fn set(&mut self, bits: u8, enable: bool) {
+    const fn set(&mut self, bits: u8, enable: bool) {
         if enable {
             self.0 |= bits;
         } else {

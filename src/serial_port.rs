@@ -22,7 +22,7 @@ impl SerialTransferControl {
         self.0
     }
 
-    fn set_transfer_enable(&mut self, enable: bool) {
+    const fn set_transfer_enable(&mut self, enable: bool) {
         if enable {
             self.0 |= Self::TRANSFER_ENABLE;
         } else {

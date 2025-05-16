@@ -40,7 +40,7 @@ impl InterruptFlags {
         self.0
     }
 
-    pub fn set(&mut self, bits: u8, enable: bool) {
+    pub const fn set(&mut self, bits: u8, enable: bool) {
         if enable {
             self.0 |= bits;
         } else {

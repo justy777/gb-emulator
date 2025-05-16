@@ -1,5 +1,6 @@
 use crate::cpu::{
-    Cpu, FlagsRegister, JumpCondition, AccessReadByte, AccessReadWord, Register16, AccessWriteByte, AccessWriteWord,
+    AccessReadByte, AccessReadWord, AccessWriteByte, AccessWriteWord, Cpu, FlagsRegister,
+    JumpCondition, Register16,
 };
 use crate::hardware::AddressBus;
 
@@ -33,7 +34,7 @@ impl Cpu {
     /// - - - -
     ///
     /// Halt CPU until an interrupt occurs.
-    pub(crate) fn halt(&mut self) {
+    pub(crate) const fn halt(&mut self) {
         self.halted = true;
         // TODO: Look into halt bug
     }
@@ -302,7 +303,7 @@ impl Cpu {
     /// - 0 H C
     ///
     /// Add the value in r16 to register HL.
-    pub(crate) fn add16_hl(&mut self, src: Register16) {
+    pub(crate) const fn add16_hl(&mut self, src: Register16) {
         let value = self.registers.read_word(src);
         let hl = self.registers.read_word(Register16::HL);
         let (new_value, did_overflow) = hl.overflowing_add(value);
@@ -341,7 +342,7 @@ impl Cpu {
     /// - - - -
     ///
     /// Increment value in register r16 by 1.
-    pub(crate) fn increment16(&mut self, src: Register16) {
+    pub(crate) const fn increment16(&mut self, src: Register16) {
         let value = self.registers.read_word(src);
         let new_value = value.wrapping_add(1);
         self.registers.write_word(src, new_value);
@@ -352,7 +353,7 @@ impl Cpu {
     /// - - - -
     ///
     /// Decrement value in register r16 by 1.
-    pub(crate) fn decrement16(&mut self, src: Register16) {
+    pub(crate) const fn decrement16(&mut self, src: Register16) {
         let value = self.registers.read_word(src);
         let new_value = value.wrapping_sub(1);
         self.registers.write_word(src, new_value);
@@ -363,7 +364,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A left.
-    pub(crate) fn rotate_left_circular_accumulator(&mut self) {
+    pub(crate) const fn rotate_left_circular_accumulator(&mut self) {
         let value = self.registers.a;
         let new_value = self.registers.a.rotate_left(1);
         self.registers.f.set(FlagsRegister::ZERO, false);
@@ -379,7 +380,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A left, through the carry flag.
-    pub(crate) fn rotate_left_accumulator(&mut self) {
+    pub(crate) const fn rotate_left_accumulator(&mut self) {
         let value = self.registers.a;
         let cf = self.registers.f.contains(FlagsRegister::CARRY) as u8;
         let new_value = (value << 1) | cf;
@@ -396,7 +397,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A right.
-    pub(crate) fn rotate_right_circular_accumulator(&mut self) {
+    pub(crate) const fn rotate_right_circular_accumulator(&mut self) {
         let value = self.registers.a;
         let new_value = self.registers.a.rotate_right(1);
         self.registers.f.set(FlagsRegister::ZERO, false);
@@ -412,7 +413,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A right, through the carry flag.
-    pub(crate) fn rotate_right_accumulator(&mut self) {
+    pub(crate) const fn rotate_right_accumulator(&mut self) {
         let value = self.registers.a;
         let cf = self.registers.f.contains(FlagsRegister::CARRY) as u8;
         let new_value = (value >> 1) | (cf << 7);
@@ -429,7 +430,7 @@ impl Cpu {
     /// - 0 0 1
     ///
     /// Set the carry flag.
-    pub(crate) fn set_carry_flag(&mut self) {
+    pub(crate) const fn set_carry_flag(&mut self) {
         // ZERO left untouched
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
         self.registers.f.set(FlagsRegister::HALF_CARRY, false);
@@ -441,7 +442,7 @@ impl Cpu {
     /// - 1 1 -
     ///
     /// Flip the bits in register A.
-    pub(crate) fn complement_accumulator(&mut self) {
+    pub(crate) const fn complement_accumulator(&mut self) {
         let value = self.registers.a;
         // ZERO left untouched
         self.registers.f.set(FlagsRegister::SUBTRACT, true);
@@ -455,7 +456,7 @@ impl Cpu {
     /// - 0 0 C
     ///
     /// Complement the carry flag.
-    pub(crate) fn complement_carry_flag(&mut self) {
+    pub(crate) const fn complement_carry_flag(&mut self) {
         let cf = self.registers.f.contains(FlagsRegister::CARRY);
         // ZERO left untouched
         self.registers.f.set(FlagsRegister::SUBTRACT, false);
@@ -468,7 +469,7 @@ impl Cpu {
     /// Z - 0 C
     ///
     /// Decimal Adjust register A to get a correct BCD representation after an arithmetic instruction.
-    pub(crate) fn decimal_adjust_accumulator(&mut self) {
+    pub(crate) const fn decimal_adjust_accumulator(&mut self) {
         let mut value = self.registers.a;
 
         let nf = self.registers.f.contains(FlagsRegister::SUBTRACT);
@@ -718,7 +719,7 @@ impl Cpu {
     /// - - - -
     ///
     /// Jump to address in HL; effectively, load PC with value in register HL.
-    pub(crate) fn jump_to_hl(&mut self) {
+    pub(crate) const fn jump_to_hl(&mut self) {
         self.registers.pc = self.registers.read_word(Register16::HL);
     }
 
@@ -841,7 +842,7 @@ impl Cpu {
     /// - - - -
     ///
     /// Disable Interrupts by clearing the IME flag.
-    pub(crate) fn disable_interrupt(&mut self) {
+    pub(crate) const fn disable_interrupt(&mut self) {
         self.ime_delay_counter = None;
         self.ime = false;
     }
@@ -852,7 +853,7 @@ impl Cpu {
     ///
     /// Enable Interrupts by setting the IME flag.
     /// The flag is only set after the instruction following EI.
-    pub(crate) fn enable_interrupt(&mut self) {
+    pub(crate) const fn enable_interrupt(&mut self) {
         self.ime_delay_counter = Some(2);
     }
 }
