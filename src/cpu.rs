@@ -146,24 +146,21 @@ impl ReadWord<Register16> for Cpu {
 
 impl WriteWord<Register16> for Cpu {
     fn write_word(&mut self, _: &mut AddressBus, dest: Register16, value: u16) {
+        let [low, high] = value.to_le_bytes();
         match dest {
             Register16::AF => {
-                let [low, high] = value.to_le_bytes();
                 self.a = high;
                 self.f = FlagsRegister::from_bits(low);
             }
             Register16::BC => {
-                let [low, high] = value.to_le_bytes();
                 self.b = high;
                 self.c = low;
             }
             Register16::DE => {
-                let [low, high] = value.to_le_bytes();
                 self.d = high;
                 self.e = low;
             }
             Register16::HL => {
-                let [low, high] = value.to_le_bytes();
                 self.h = high;
                 self.l = low;
             }
@@ -325,7 +322,7 @@ impl Cpu {
             h: 0x01,
             l: 0x4D,
             sp: 0xFFFE,
-            pc: 0x100,
+            pc: 0x0100,
             halted: false,
             interrupt_enabled: false,
             interrupt_delay: None,

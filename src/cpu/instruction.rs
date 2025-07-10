@@ -19,7 +19,7 @@ impl Cpu {
     pub(crate) fn stop() {
         // No licensed Game Boy games use this instruction
         // It's only used for speed switching Game Boy Color games
-        panic!("STOP instruction not implemented");
+        unimplemented!("STOP instruction");
     }
 
     /// HALT
@@ -98,8 +98,8 @@ impl Cpu {
         let (result, did_overflow) = lhs.overflowing_add(rhs);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
-        // Half carry is set if adding the lower bits (0-3) of the value and register A
-        // together result in overflowing to bit 4. If the result is larger than 0xF
+        // Half-carry is set if adding the lower bits (0-3) of the value and register A
+        // together results in overflowing to bit 4. If the result is larger than 0xF
         // than the addition caused a carry from bit 3 to bit 4.
         let half_carry = (lhs & 0xF) + (rhs & 0xF) > 0xF;
         self.f.set(Flag::HalfCarry, half_carry);
@@ -602,8 +602,8 @@ impl Cpu {
     /// 2 8
     /// Z 0 0 C
     ///
-    /// Shift Left Arithmetically register r8.
-    pub(crate) fn shift_left_arithmetic<S>(&mut self, bus: &mut AddressBus, src: S)
+    /// Shift register r8 left.
+    pub(crate) fn shift_left<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
         Self: ReadByte<S> + WriteByte<S>,
@@ -622,7 +622,7 @@ impl Cpu {
     /// 2 8
     /// Z 0 0 C
     ///
-    /// Shift Right Arithmetically register r8 (bit 7 of r8 is unchanged).
+    /// Shift register r8 right (bit 7 of r8 is unchanged).
     pub(crate) fn shift_right_arithmetic<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
@@ -662,7 +662,7 @@ impl Cpu {
     /// 2 8
     /// Z 0 0 C
     ///
-    /// Shift Right Logically register r8.
+    /// Shift register r8 right.
     pub(crate) fn shift_right_logical<S>(&mut self, bus: &mut AddressBus, src: S)
     where
         S: Copy,
