@@ -1,7 +1,9 @@
-use gb_emulator::cartridge::Cartridge;
-use gb_emulator::hardware::GameboyHardware;
-use gb_emulator::util::Data;
+use gb_core::cartridge::Cartridge;
+use gb_core::hardware::GameboyHardware;
+use crate::util::Data;
 use std::{env, fs};
+
+mod util;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();

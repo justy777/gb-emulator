@@ -15,4 +15,3 @@ mod joypad;
 mod ppu;
 mod serial;
 mod timer;
-pub mod util;

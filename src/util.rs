@@ -20,17 +20,17 @@ impl Data {
     }
 
     #[must_use]
-    pub const fn to_bytes(&self) -> usize {
+    pub const fn to_bytes(self) -> usize {
         self.0
     }
 
     #[must_use]
-    pub const fn to_kilobytes(&self) -> usize {
+    pub const fn to_kilobytes(self) -> usize {
         self.0 / 1024
     }
 
     #[must_use]
-    pub const fn to_megabytes(&self) -> usize {
+    pub const fn to_megabytes(self) -> usize {
         self.0 / 1024 / 1024
     }
 }

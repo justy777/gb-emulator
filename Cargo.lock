@@ -13,4 +13,9 @@ name = "gb-emulator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "gb_core",
 ]
+
+[[package]]
+name = "gb_core"
+version = "0.1.0"
