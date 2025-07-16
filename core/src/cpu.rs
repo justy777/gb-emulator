@@ -82,8 +82,9 @@ pub trait WriteWord<D> {
 
 /// 8-bit registers (r8)
 #[derive(Debug, Clone, Copy)]
-pub enum Register8 {
+pub enum RegisterU8 {
     A,
+    F,
     B,
     C,
     D,
@@ -92,37 +93,21 @@ pub enum Register8 {
     L,
 }
 
-impl ReadByte<Register8> for Cpu {
-    fn read_byte(&mut self, _: &mut AddressBus, src: Register8) -> u8 {
-        match src {
-            Register8::A => self.a,
-            Register8::B => self.b,
-            Register8::C => self.c,
-            Register8::D => self.d,
-            Register8::E => self.e,
-            Register8::H => self.h,
-            Register8::L => self.l,
-        }
+impl ReadByte<RegisterU8> for Cpu {
+    fn read_byte(&mut self, _: &mut AddressBus, src: RegisterU8) -> u8 {
+        self.register_u8(src)
     }
 }
 
-impl WriteByte<Register8> for Cpu {
-    fn write_byte(&mut self, _: &mut AddressBus, dest: Register8, value: u8) {
-        match dest {
-            Register8::A => self.a = value,
-            Register8::B => self.b = value,
-            Register8::C => self.c = value,
-            Register8::D => self.d = value,
-            Register8::E => self.e = value,
-            Register8::H => self.h = value,
-            Register8::L => self.l = value,
-        }
+impl WriteByte<RegisterU8> for Cpu {
+    fn write_byte(&mut self, _: &mut AddressBus, dest: RegisterU8, value: u8) {
+        self.set_register_u8(dest, value);
     }
 }
 
 /// 16-bit registers (r16)
 #[derive(Debug, Clone, Copy)]
-pub enum Register16 {
+pub enum RegisterU16 {
     AF,
     BC,
     DE,
@@ -131,46 +116,15 @@ pub enum Register16 {
     PC,
 }
 
-impl ReadWord<Register16> for Cpu {
-    fn read_word(&mut self, _: &mut AddressBus, src: Register16) -> u16 {
-        match src {
-            Register16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
-            Register16::BC => u16::from_le_bytes([self.c, self.b]),
-            Register16::DE => u16::from_le_bytes([self.e, self.d]),
-            Register16::HL => u16::from_le_bytes([self.l, self.h]),
-            Register16::SP => self.sp,
-            Register16::PC => self.pc,
-        }
+impl ReadWord<RegisterU16> for Cpu {
+    fn read_word(&mut self, _: &mut AddressBus, src: RegisterU16) -> u16 {
+        self.register_u16(src)
     }
 }
 
-impl WriteWord<Register16> for Cpu {
-    fn write_word(&mut self, _: &mut AddressBus, dest: Register16, value: u16) {
-        let [low, high] = value.to_le_bytes();
-        match dest {
-            Register16::AF => {
-                self.a = high;
-                self.f = FlagsRegister::from_bits(low);
-            }
-            Register16::BC => {
-                self.b = high;
-                self.c = low;
-            }
-            Register16::DE => {
-                self.d = high;
-                self.e = low;
-            }
-            Register16::HL => {
-                self.h = high;
-                self.l = low;
-            }
-            Register16::SP => {
-                self.sp = value;
-            }
-            Register16::PC => {
-                self.pc = value;
-            }
-        }
+impl WriteWord<RegisterU16> for Cpu {
+    fn write_word(&mut self, _: &mut AddressBus, dest: RegisterU16, value: u16) {
+        self.set_register_u16(dest, value);
     }
 }
 
@@ -348,7 +302,7 @@ impl Cpu {
                     self.interrupt_enabled = false;
                     bus.interrupt_flags_mut().set(*interrupt, false);
                     // Calls interrupt handler
-                    self.push(bus, Register16::PC);
+                    self.push(bus, RegisterU16::PC);
                     self.pc = interrupt.handler_addr();
                     bus.tick();
                     bus.tick();
@@ -376,6 +330,71 @@ impl Cpu {
     #[allow(clippy::cast_possible_wrap)]
     fn read_next_byte_signed(&mut self, bus: &mut AddressBus) -> i8 {
         self.read_next_byte(bus) as i8
+    }
+
+    const fn register_u8(&self, reg: RegisterU8) -> u8 {
+        match reg {
+            RegisterU8::A => self.a,
+            RegisterU8::F => self.f.bits(),
+            RegisterU8::B => self.b,
+            RegisterU8::C => self.c,
+            RegisterU8::D => self.d,
+            RegisterU8::E => self.e,
+            RegisterU8::H => self.h,
+            RegisterU8::L => self.l,
+        }
+    }
+
+    const fn set_register_u8(&mut self, reg: RegisterU8, value: u8) {
+        match reg {
+            RegisterU8::A => self.a = value,
+            RegisterU8::F => self.f = FlagsRegister::from_bits(value),
+            RegisterU8::B => self.b = value,
+            RegisterU8::C => self.c = value,
+            RegisterU8::D => self.d = value,
+            RegisterU8::E => self.e = value,
+            RegisterU8::H => self.h = value,
+            RegisterU8::L => self.l = value,
+        }
+    }
+
+    const fn register_u16(&self, reg: RegisterU16) -> u16 {
+        match reg {
+            RegisterU16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
+            RegisterU16::BC => u16::from_le_bytes([self.c, self.b]),
+            RegisterU16::DE => u16::from_le_bytes([self.e, self.d]),
+            RegisterU16::HL => u16::from_le_bytes([self.l, self.h]),
+            RegisterU16::SP => self.sp,
+            RegisterU16::PC => self.pc,
+        }
+    }
+
+    const fn set_register_u16(&mut self, reg: RegisterU16, value: u16) {
+        let [low, high] = value.to_le_bytes();
+        match reg {
+            RegisterU16::AF => {
+                self.a = high;
+                self.f = FlagsRegister::from_bits(low);
+            }
+            RegisterU16::BC => {
+                self.b = high;
+                self.c = low;
+            }
+            RegisterU16::DE => {
+                self.d = high;
+                self.e = low;
+            }
+            RegisterU16::HL => {
+                self.h = high;
+                self.l = low;
+            }
+            RegisterU16::SP => {
+                self.sp = value;
+            }
+            RegisterU16::PC => {
+                self.pc = value;
+            }
+        }
     }
 }
 

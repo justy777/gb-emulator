@@ -1,5 +1,5 @@
 use crate::cpu::{
-    Cpu, Flag, Immediate, JumpCondition, ReadByte, ReadWord, Register16, WriteByte, WriteWord,
+    Cpu, Flag, Immediate, JumpCondition, ReadByte, ReadWord, RegisterU16, WriteByte, WriteWord,
 };
 use crate::hardware::AddressBus;
 
@@ -79,7 +79,7 @@ impl Cpu {
         self.f.set(Flag::Carry, carry);
 
         let new_value = sp.wrapping_add_signed(offset);
-        self.write_word(bus, Register16::HL, new_value);
+        self.write_word(bus, RegisterU16::HL, new_value);
         bus.tick();
     }
 
@@ -733,7 +733,7 @@ impl Cpu {
     ///
     /// Jump to address in HL; effectively, load PC with value in register HL.
     pub(crate) fn jump_hl(&mut self, bus: &mut AddressBus) {
-        self.pc = self.read_word(bus, Register16::HL);
+        self.pc = self.read_word(bus, RegisterU16::HL);
     }
 
     /// JP cc, n16
@@ -819,7 +819,7 @@ impl Cpu {
         if should_jump {
             bus.tick();
 
-            let value = self.read_word(bus, Register16::PC);
+            let value = self.read_word(bus, RegisterU16::PC);
             let [low, high] = value.to_le_bytes();
 
             self.sp = self.sp.wrapping_sub(1);
@@ -849,7 +849,7 @@ impl Cpu {
         bus.tick();
 
         let value = u16::from_le_bytes([low, high]);
-        self.write_word(bus, Register16::PC, value);
+        self.write_word(bus, RegisterU16::PC, value);
         bus.tick();
     }
 
@@ -871,7 +871,7 @@ impl Cpu {
             bus.tick();
 
             let value = u16::from_le_bytes([low, high]);
-            self.write_word(bus, Register16::PC, value);
+            self.write_word(bus, RegisterU16::PC, value);
             bus.tick();
         }
     }
@@ -894,7 +894,7 @@ impl Cpu {
     /// Push current address onto stack, and jump to address u8.
     pub(crate) fn restart(&mut self, bus: &mut AddressBus, addr: u16) {
         bus.tick();
-        let value = self.read_word(bus, Register16::PC);
+        let value = self.read_word(bus, RegisterU16::PC);
         let [low, high] = value.to_le_bytes();
         self.sp = self.sp.wrapping_sub(1);
         bus.write_byte(self.sp, high);
