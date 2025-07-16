@@ -27,7 +27,7 @@ impl Cpu {
     /// - - - -
     ///
     /// Halt CPU until an interrupt occurs.
-    pub(crate) fn halt(&mut self) {
+    pub(crate) const fn halt(&mut self) {
         self.halted = true;
         // TODO: Look into halt bug
     }
@@ -377,7 +377,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A left.
-    pub(crate) fn rotate_left_circular_accumulator(&mut self) {
+    pub(crate) const fn rotate_left_circular_accumulator(&mut self) {
         let value = self.a;
         let result = value.rotate_left(1);
         self.f.set(Flag::Zero, false);
@@ -393,7 +393,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A left, through the carry flag.
-    pub(crate) fn rotate_left_accumulator(&mut self) {
+    pub(crate) const fn rotate_left_accumulator(&mut self) {
         let value = self.a;
         let cf = self.f.contains(Flag::Carry) as u8;
         let result = (value << 1) | cf;
@@ -410,7 +410,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A right.
-    pub(crate) fn rotate_right_circular_accumulator(&mut self) {
+    pub(crate) const fn rotate_right_circular_accumulator(&mut self) {
         let value = self.a;
         let result = value.rotate_right(1);
         self.f.set(Flag::Zero, false);
@@ -426,7 +426,7 @@ impl Cpu {
     /// 0 0 0 C
     ///
     /// Rotate register A right, through the carry flag.
-    pub(crate) fn rotate_right_accumulator(&mut self) {
+    pub(crate) const fn rotate_right_accumulator(&mut self) {
         let value = self.a;
         let cf = self.f.contains(Flag::Carry) as u8;
         let result = (value >> 1) | (cf << 7);
@@ -443,7 +443,7 @@ impl Cpu {
     /// - 0 0 1
     ///
     /// Set the carry flag.
-    pub(crate) fn set_carry_flag(&mut self) {
+    pub(crate) const fn set_carry_flag(&mut self) {
         // ZERO left untouched
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
@@ -455,7 +455,7 @@ impl Cpu {
     /// - 1 1 -
     ///
     /// Flip the bits in register A.
-    pub(crate) fn complement_accumulator(&mut self) {
+    pub(crate) const fn complement_accumulator(&mut self) {
         let value = self.a;
         // ZERO left untouched
         self.f.set(Flag::Subtract, true);
@@ -469,7 +469,7 @@ impl Cpu {
     /// - 0 0 C
     ///
     /// Complement the carry flag.
-    pub(crate) fn complement_carry_flag(&mut self) {
+    pub(crate) const fn complement_carry_flag(&mut self) {
         let cf = self.f.contains(Flag::Carry);
         // ZERO left untouched
         self.f.set(Flag::Subtract, false);
@@ -482,7 +482,7 @@ impl Cpu {
     /// Z - 0 C
     ///
     /// Decimal Adjust register A to get a correct BCD representation after an arithmetic instruction.
-    pub(crate) fn decimal_adjust_accumulator(&mut self) {
+    pub(crate) const fn decimal_adjust_accumulator(&mut self) {
         let mut value = self.a;
 
         let nf = self.f.contains(Flag::Subtract);
@@ -911,7 +911,7 @@ impl Cpu {
     /// - - - -
     ///
     /// Disable Interrupts by clearing the IME flag.
-    pub(crate) fn disable_interrupt(&mut self) {
+    pub(crate) const fn disable_interrupt(&mut self) {
         self.interrupt_enabled = false;
         self.interrupt_delay = None;
     }
@@ -922,7 +922,7 @@ impl Cpu {
     ///
     /// Enable Interrupts by setting the IME flag.
     /// The flag is only set after the instruction following EI.
-    pub(crate) fn enable_interrupt(&mut self) {
+    pub(crate) const fn enable_interrupt(&mut self) {
         if self.interrupt_delay.is_none() {
             self.interrupt_delay = Some(1);
         }

@@ -1,6 +1,6 @@
+use crate::util::Data;
 use gb_core::cartridge::Cartridge;
 use gb_core::hardware::GameboyHardware;
-use crate::util::Data;
 use std::{env, fs};
 
 mod util;

@@ -57,7 +57,7 @@ impl InterruptFlags {
         self.0
     }
 
-    pub fn set(&mut self, interrupt: Interrupt, enable: bool) {
+    pub const fn set(&mut self, interrupt: Interrupt, enable: bool) {
         let bits = interrupt as u8;
         if enable {
             self.0 |= bits;

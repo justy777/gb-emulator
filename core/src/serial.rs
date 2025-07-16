@@ -23,7 +23,7 @@ impl SerialTransferControl {
         self.0
     }
 
-    fn set_transfer_enable(&mut self, enable: bool) {
+    const fn set_transfer_enable(&mut self, enable: bool) {
         if enable {
             self.0 |= Self::TRANSFER_ENABLE;
         } else {
@@ -86,7 +86,7 @@ impl SerialPort {
         }
     }
 
-    pub fn write_byte(&mut self, addr: u16, value: u8) {
+    pub const fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
             MEM_SB => self.data = value,
             MEM_SC => {

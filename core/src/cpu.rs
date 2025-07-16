@@ -39,7 +39,7 @@ impl FlagsRegister {
         self.0
     }
 
-    fn set(&mut self, flag: Flag, enable: bool) {
+    const fn set(&mut self, flag: Flag, enable: bool) {
         let bits = flag as u8;
         if enable {
             self.0 |= bits;

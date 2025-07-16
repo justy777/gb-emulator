@@ -161,7 +161,7 @@ impl Ppu {
         }
     }
 
-    pub fn step(&mut self, interrupt_flags: &mut InterruptFlags) {
+    pub const fn step(&mut self, interrupt_flags: &mut InterruptFlags) {
         self.frame_cycles = (self.frame_cycles + 4) % CYCLES_PER_FRAME;
         self.ly = (self.frame_cycles / CYCLES_PER_LINE) as u8;
         if self.frame_cycles == (144 * CYCLES_PER_LINE) {
@@ -173,7 +173,7 @@ impl Ppu {
         self.video_ram[addr as usize]
     }
 
-    pub fn write_vram(&mut self, addr: u16, data: u8) {
+    pub const fn write_vram(&mut self, addr: u16, data: u8) {
         self.video_ram[addr as usize] = data;
     }
 
@@ -181,7 +181,7 @@ impl Ppu {
         self.sprite_ram[addr as usize]
     }
 
-    pub fn write_sprite(&mut self, addr: u16, data: u8) {
+    pub const fn write_sprite(&mut self, addr: u16, data: u8) {
         self.sprite_ram[addr as usize] = data;
     }
 
@@ -189,7 +189,7 @@ impl Ppu {
         self.sprite_transfer_addr
     }
 
-    pub(crate) fn set_sprite_transfer_addr(&mut self, addr: u16) {
+    pub(crate) const fn set_sprite_transfer_addr(&mut self, addr: u16) {
         self.sprite_transfer_addr = addr;
     }
 
@@ -211,7 +211,7 @@ impl Ppu {
         }
     }
 
-    pub fn write_display(&mut self, addr: u16, value: u8) {
+    pub const fn write_display(&mut self, addr: u16, value: u8) {
         match addr {
             MEM_LCDC => self.control = DisplayControl::from_bits(value),
             MEM_STAT => self.status = DisplayStatus::from_bits(value),

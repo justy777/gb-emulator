@@ -82,7 +82,7 @@ impl Timer {
         }
     }
 
-    pub fn write_byte(&mut self, addr: u16, value: u8) {
+    pub const fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
             MEM_DIV => {
                 self.divider = 0;
@@ -108,7 +108,7 @@ impl Timer {
         }
     }
 
-    pub fn increment_divider(&mut self, interrupt_flags: &mut InterruptFlags) {
+    pub const fn increment_divider(&mut self, interrupt_flags: &mut InterruptFlags) {
         self.overflowed = false;
         self.divider = self.divider.wrapping_add(1);
 
@@ -123,7 +123,7 @@ impl Timer {
         self.sync();
     }
 
-    fn sync(&mut self) {
+    const fn sync(&mut self) {
         let new_tick_signal = self.frequency_bit() && self.control.is_enabled();
 
         if self.tick_signal && !new_tick_signal {
