@@ -1,6 +1,6 @@
 use crate::apu::Apu;
 use crate::cartridge::Cartridge;
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, RegisterU8, RegisterU16};
 use crate::interrupt::{Interrupt, InterruptEnable, InterruptFlags};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
@@ -70,6 +70,34 @@ impl GameboyHardware {
         };
 
         self.cpu.step(&mut bus);
+    }
+
+    #[must_use]
+    pub const fn register_u8(&self, reg: RegisterU8) -> u8 {
+        self.cpu.register_u8(reg)
+    }
+
+    #[must_use]
+    pub const fn register_u16(&self, reg: RegisterU16) -> u16 {
+        self.cpu.register_u16(reg)
+    }
+
+    pub fn memory(&mut self, addr: u16) -> u8 {
+        let bus = AddressBus {
+            cartridge: &mut self.cartridge,
+            ppu: &mut self.ppu,
+            work_ram: &mut self.work_ram,
+            joypad: &mut self.joypad,
+            serial_port: &mut self.serial_port,
+            timer: &mut self.timer,
+            interrupt_flags: &mut self.interrupt_flags,
+            apu: &mut self.apu,
+            wave_pattern_ram: &mut self.wave_pattern_ram,
+            high_ram: &mut self.high_ram,
+            interrupt_enable: &mut self.interrupt_enable,
+        };
+
+        bus.read_byte(addr)
     }
 }
 

@@ -5,13 +5,16 @@
     clippy::verbose_bit_mask
 )]
 
-mod apu;
 pub mod cartridge;
+pub mod hardware;
+
+mod apu;
 mod cpu;
 mod error;
-pub mod hardware;
 mod interrupt;
 mod joypad;
 mod ppu;
 mod serial;
 mod timer;
+
+pub use cpu::{RegisterU8, RegisterU16};

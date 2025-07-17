@@ -332,7 +332,7 @@ impl Cpu {
         self.read_next_byte(bus) as i8
     }
 
-    const fn register_u8(&self, reg: RegisterU8) -> u8 {
+    pub(crate) const fn register_u8(&self, reg: RegisterU8) -> u8 {
         match reg {
             RegisterU8::A => self.a,
             RegisterU8::F => self.f.bits(),
@@ -358,7 +358,7 @@ impl Cpu {
         }
     }
 
-    const fn register_u16(&self, reg: RegisterU16) -> u16 {
+    pub(crate) const fn register_u16(&self, reg: RegisterU16) -> u16 {
         match reg {
             RegisterU16::AF => u16::from_le_bytes([self.f.bits(), self.a]),
             RegisterU16::BC => u16::from_le_bytes([self.c, self.b]),

@@ -1,8 +1,11 @@
+use crate::debug::Debugger;
 use crate::util::Data;
+use gb_core::RegisterU16;
 use gb_core::cartridge::Cartridge;
 use gb_core::hardware::GameboyHardware;
 use std::{env, fs};
 
+mod debug;
 mod util;
 
 fn main() -> anyhow::Result<()> {
@@ -33,8 +36,23 @@ fn main() -> anyhow::Result<()> {
         .verify_global_checksum()
         .unwrap_or_else(|err| eprintln!("Warning: {err}"));
 
+    let mut debugger = Debugger::new();
     let mut gameboy = GameboyHardware::new(cartridge);
+
+    let exit = debugger.debug(&mut gameboy)?;
+    if exit {
+        return Ok(());
+    }
+
     loop {
+        let pc = gameboy.register_u16(RegisterU16::PC);
+        if debugger.is_breakpoint(pc) {
+            let exit = debugger.debug(&mut gameboy)?;
+            if exit {
+                return Ok(());
+            }
+        }
+
         gameboy.step();
     }
 }
