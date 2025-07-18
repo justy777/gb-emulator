@@ -414,23 +414,18 @@ impl Apu {
         }
     }
 
-    pub fn read_audio(&self, addr: u16) -> u8 {
+    pub const fn read_audio(&self, addr: u16) -> u8 {
         match addr {
             MEM_NR10 => self.channel_1.sweep.bits(),
             MEM_NR11 => self.channel_1.length_timer_and_duty_cycle.bits(),
             MEM_NR12 => self.channel_1.volume_and_envelope.bits(),
-            MEM_NR13 => self.channel_1.period_low,
             MEM_NR14 => self.channel_1.period_high_and_control.bits(),
             MEM_NR21 => self.channel_2.length_timer_and_duty_cycle.bits(),
             MEM_NR22 => self.channel_2.volume_and_envelope.bits(),
-            MEM_NR23 => self.channel_2.period_low,
             MEM_NR24 => self.channel_2.period_high_and_control.bits(),
             MEM_NR30 => self.channel_3.dac_enable.bits(),
-            MEM_NR31 => self.channel_3.length_timer,
             MEM_NR32 => self.channel_3.output_level.bits(),
-            MEM_NR33 => self.channel_3.period_low,
             MEM_NR34 => self.channel_3.period_high_and_control.bits(),
-            MEM_NR41 => self.channel_4.length_timer.bits(),
             MEM_NR42 => self.channel_4.volume_and_envelope.bits(),
             MEM_NR43 => self.channel_4.frequency_and_randomness.bits(),
             MEM_NR44 => self.channel_4.control.bits(),
@@ -439,13 +434,13 @@ impl Apu {
             MEM_NR52 => self.audio_master_control.bits(),
             WAVE_RAM_START..=WAVE_RAM_END => self.wave_ram[(addr - WAVE_RAM_START) as usize],
             _ => {
-                println!("Warning: Address {addr:#X} is not mapped to an I/O register.");
+                // NR13, NR23, NR31, NR33, NR41 are write-only
                 0xFF
             }
         }
     }
 
-    pub fn write_audio(&mut self, addr: u16, value: u8) {
+    pub const fn write_audio(&mut self, addr: u16, value: u8) {
         match addr {
             MEM_NR10 => self.channel_1.sweep = ChannelSweep::from_bits(value),
             MEM_NR11 => {
@@ -485,7 +480,7 @@ impl Apu {
             WAVE_RAM_START..=WAVE_RAM_END => {
                 self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
             }
-            _ => println!("Warning: Address {addr:#X} is not mapped to an I/O register."),
+            _ => {}
         }
     }
 }
