@@ -19,6 +19,10 @@ const MEM_NR44: u16 = 0xFF23;
 const MEM_NR50: u16 = 0xFF24;
 const MEM_NR51: u16 = 0xFF25;
 const MEM_NR52: u16 = 0xFF26;
+const WAVE_RAM_START: u16 = 0xFF30;
+const WAVE_RAM_END: u16 = 0xFF3F;
+
+const WAVE_RAM_SIZE: usize = (WAVE_RAM_END as usize) - (WAVE_RAM_START as usize) + 1;
 
 #[derive(Debug, Copy, Clone)]
 struct ChannelSweep(u8);
@@ -393,6 +397,7 @@ pub struct Apu {
     sound_panning: SoundPanning,
     // NR52
     audio_master_control: AudioMasterControl,
+    wave_ram: [u8; WAVE_RAM_SIZE],
 }
 
 impl Apu {
@@ -405,6 +410,7 @@ impl Apu {
             master_volume: MasterVolume::new(),
             sound_panning: SoundPanning::new(),
             audio_master_control: AudioMasterControl::new(),
+            wave_ram: [0xFF; WAVE_RAM_SIZE],
         }
     }
 
@@ -431,6 +437,7 @@ impl Apu {
             MEM_NR50 => self.master_volume.bits(),
             MEM_NR51 => self.sound_panning.bits(),
             MEM_NR52 => self.audio_master_control.bits(),
+            WAVE_RAM_START..=WAVE_RAM_END => self.wave_ram[(addr - WAVE_RAM_START) as usize],
             _ => {
                 println!("Warning: Address {addr:#X} is not mapped to an I/O register.");
                 0xFF
@@ -475,6 +482,9 @@ impl Apu {
             MEM_NR50 => self.master_volume = MasterVolume::from_bits(value),
             MEM_NR51 => self.sound_panning = SoundPanning::from_bits(value),
             MEM_NR52 => self.audio_master_control = AudioMasterControl::from_bits(value),
+            WAVE_RAM_START..=WAVE_RAM_END => {
+                self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
+            }
             _ => println!("Warning: Address {addr:#X} is not mapped to an I/O register."),
         }
     }

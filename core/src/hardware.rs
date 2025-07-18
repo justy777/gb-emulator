@@ -8,7 +8,6 @@ use crate::serial::SerialPort;
 use crate::timer::Timer;
 
 const WORK_RAM_SIZE: usize = 8 * 1024;
-const WAVE_PATTERN_RAM_SIZE: usize = 0xFF3F - 0xFF30 + 1;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 
 pub struct GameboyHardware {
@@ -28,7 +27,6 @@ pub struct GameboyHardware {
     interrupt_flags: InterruptFlags,
     // Audio Processing Unit
     apu: Apu,
-    wave_pattern_ram: [u8; WAVE_PATTERN_RAM_SIZE],
     // HRAM
     high_ram: [u8; HIGH_RAM_SIZE],
     // IE
@@ -48,7 +46,6 @@ impl GameboyHardware {
             timer: Timer::new(),
             interrupt_flags: InterruptFlags::from_interrupt(Interrupt::VBlank),
             apu: Apu::new(),
-            wave_pattern_ram: [0xFF; WAVE_PATTERN_RAM_SIZE],
             high_ram: [0; HIGH_RAM_SIZE],
             interrupt_enable: InterruptEnable::empty(),
         }
@@ -64,7 +61,6 @@ impl GameboyHardware {
             timer: &mut self.timer,
             interrupt_flags: &mut self.interrupt_flags,
             apu: &mut self.apu,
-            wave_pattern_ram: &mut self.wave_pattern_ram,
             high_ram: &mut self.high_ram,
             interrupt_enable: &mut self.interrupt_enable,
         };
@@ -92,7 +88,6 @@ impl GameboyHardware {
             timer: &mut self.timer,
             interrupt_flags: &mut self.interrupt_flags,
             apu: &mut self.apu,
-            wave_pattern_ram: &mut self.wave_pattern_ram,
             high_ram: &mut self.high_ram,
             interrupt_enable: &mut self.interrupt_enable,
         };
@@ -117,7 +112,6 @@ pub(crate) struct AddressBus<'a> {
     interrupt_flags: &'a mut InterruptFlags,
     // Audio Processing Unit
     apu: &'a mut Apu,
-    wave_pattern_ram: &'a mut [u8],
     // HRAM
     high_ram: &'a mut [u8],
     // IE
@@ -148,8 +142,7 @@ impl AddressBus<'_> {
             0xFF01..=0xFF02 => self.serial_port.read_byte(addr),
             0xFF04..=0xFF07 => self.timer.read_byte(addr),
             0xFF0F => self.interrupt_flags.bits(),
-            0xFF10..=0xFF26 => self.apu.read_audio(addr),
-            0xFF30..=0xFF3F => self.wave_pattern_ram[(addr - 0xFF30) as usize],
+            0xFF10..=0xFF3F => self.apu.read_audio(addr),
             0xFF40..=0xFF4B => self.ppu.read_display(addr),
             _ => {
                 println!("Warning: Address {addr:#X} is not mapped to an I/O register.");
@@ -180,8 +173,7 @@ impl AddressBus<'_> {
             0xFF01..=0xFF02 => self.serial_port.write_byte(addr, value),
             0xFF04..=0xFF07 => self.timer.write_byte(addr, value),
             0xFF0F => *self.interrupt_flags = InterruptFlags::from_bits(value),
-            0xFF10..=0xFF26 => self.apu.write_audio(addr, value),
-            0xFF30..=0xFF3F => self.wave_pattern_ram[(addr - 0xFF30) as usize] = value,
+            0xFF10..=0xFF3F => self.apu.write_audio(addr, value),
             0xFF40..=0xFF4B => self.ppu.write_display(addr, value),
             _ => println!("Warning: Address {addr:#X} is not mapped to an I/O register."),
         }
