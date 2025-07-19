@@ -99,7 +99,7 @@ impl Metadata {
     pub fn new(rom: &[u8]) -> Result<Self, MetadataError> {
         let title = rom[CART_TITLE_START..=CART_TITLE_END]
             .iter()
-            .map(|byte| char::from(*byte))
+            .map(|&byte| char::from(byte))
             .filter(char::is_ascii)
             .collect();
 
@@ -233,17 +233,17 @@ impl Metadata {
 
 fn calculate_header_checksum(rom: &[u8]) -> u8 {
     let mut checksum: u8 = 0;
-    for byte in &rom[CART_TITLE_START..=CART_VERSION_NUMBER] {
-        checksum = checksum.wrapping_sub(*byte).wrapping_sub(1);
+    for &byte in &rom[CART_TITLE_START..=CART_VERSION_NUMBER] {
+        checksum = checksum.wrapping_sub(byte).wrapping_sub(1);
     }
     checksum
 }
 
 fn calculate_global_checksum(rom: &[u8]) -> u16 {
     let mut checksum: u16 = 0;
-    for (addr, byte) in rom.iter().enumerate() {
+    for (addr, &byte) in rom.iter().enumerate() {
         if addr != CART_GLOBAL_CHECKSUM1 && addr != CART_GLOBAL_CHECKSUM2 {
-            checksum = checksum.wrapping_add(*byte as u16);
+            checksum = checksum.wrapping_add(byte as u16);
         }
     }
     checksum

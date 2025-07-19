@@ -163,6 +163,10 @@ impl AddressBus<'_> {
             self.ppu.set_sprite_transfer_addr(src_addr + 1);
         }
     }
+
+    const fn is_interrupt_serviceable(&self, interrupt: Interrupt) -> bool {
+        self.interrupt_enable.contains(interrupt) && self.interrupt_flags.contains(interrupt)
+    }
 }
 
 impl BusInterface for AddressBus<'_> {
@@ -207,14 +211,9 @@ impl BusInterface for AddressBus<'_> {
     }
 
     fn highest_priority_interrupt(&self) -> Option<Interrupt> {
-        for interrupt in Interrupt::iter() {
-            if self.interrupt_enable.contains(*interrupt)
-                && self.interrupt_flags.contains(*interrupt)
-            {
-                return Some(*interrupt);
-            }
-        }
-        None
+        Interrupt::iter()
+            .find(|&&interrupt| self.is_interrupt_serviceable(interrupt))
+            .copied()
     }
 
     fn acknowledge_interrupt(&mut self, interrupt: Interrupt) {
