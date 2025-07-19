@@ -92,8 +92,16 @@ impl GameboyHardware {
             interrupt_enable: &mut self.interrupt_enable,
         };
 
-        bus.read_byte(addr)
+        bus.read(addr)
     }
+}
+
+pub trait BusInterface {
+    fn read(&self, addr: u16) -> u8;
+    fn write(&mut self, addr: u16, value: u8);
+    fn tick(&mut self);
+    fn highest_priority_interrupt(&self) -> Option<Interrupt>;
+    fn acknowledge_interrupt(&mut self, interrupt: Interrupt);
 }
 
 pub(crate) struct AddressBus<'a> {
@@ -119,23 +127,6 @@ pub(crate) struct AddressBus<'a> {
 }
 
 impl AddressBus<'_> {
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
-        match addr {
-            0x0000..=0x3FFF => self.cartridge.read_rom_bank0(addr),
-            0x4000..=0x7FFF => self.cartridge.read_rom_bank1(addr - 0x4000),
-            0x8000..=0x9FFF => self.ppu.read_vram(addr - 0x8000),
-            0xA000..=0xBFFF => self.cartridge.read_ram_bank(addr - 0xA000),
-            0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize],
-            0xFE00..=0xFE9F => self.ppu.read_sprite(addr - 0xFE00),
-            0xFF00..=0xFF7F => self.read_io(addr),
-            0xFF80..=0xFFFE => self.high_ram[(addr - 0xFF80) as usize],
-            0xFFFF => self.interrupt_enable.bits(),
-            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
-                panic!("Use of this area is prohibited {addr:#X}")
-            }
-        }
-    }
-
     fn read_io(&self, addr: u16) -> u8 {
         match addr {
             0xFF00 => self.joypad.bits(),
@@ -147,22 +138,6 @@ impl AddressBus<'_> {
             _ => {
                 println!("Warning: Address {addr:#X} is not mapped to an I/O register.");
                 0xFF
-            }
-        }
-    }
-
-    pub(crate) fn write_byte(&mut self, addr: u16, value: u8) {
-        match addr {
-            0x0000..=0x7FFF => self.cartridge.write_mbc_register(addr, value),
-            0x8000..=0x9FFF => self.ppu.write_vram(addr - 0x8000, value),
-            0xA000..=0xBFFF => self.cartridge.write_ram_bank(addr - 0xA000, value),
-            0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize] = value,
-            0xFE00..=0xFE9F => self.ppu.write_sprite(addr - 0xFE00, value),
-            0xFF00..=0xFF7F => self.write_io(addr, value),
-            0xFF80..=0xFFFE => self.high_ram[(addr - 0xFF80) as usize] = value,
-            0xFFFF => *self.interrupt_enable = InterruptEnable::from_bits(value),
-            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
-                panic!("Use of this area is prohibited {addr:#X}")
             }
         }
     }
@@ -179,28 +154,70 @@ impl AddressBus<'_> {
         }
     }
 
-    pub(crate) fn tick(&mut self) {
+    fn sprite_dma_transfer(&mut self) {
+        let src_addr = self.ppu.sprite_transfer_addr();
+        if (src_addr & 0xFF00) <= 0xDF00 && (src_addr & 0xFF) <= 0x9F {
+            let value = self.read(src_addr);
+            let dest_addr = 0xFE00 | (src_addr & 0xFF);
+            self.write(dest_addr, value);
+            self.ppu.set_sprite_transfer_addr(src_addr + 1);
+        }
+    }
+}
+
+impl BusInterface for AddressBus<'_> {
+    fn read(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x3FFF => self.cartridge.read_rom_bank0(addr),
+            0x4000..=0x7FFF => self.cartridge.read_rom_bank1(addr - 0x4000),
+            0x8000..=0x9FFF => self.ppu.read_vram(addr - 0x8000),
+            0xA000..=0xBFFF => self.cartridge.read_ram_bank(addr - 0xA000),
+            0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize],
+            0xFE00..=0xFE9F => self.ppu.read_sprite(addr - 0xFE00),
+            0xFF00..=0xFF7F => self.read_io(addr),
+            0xFF80..=0xFFFE => self.high_ram[(addr - 0xFF80) as usize],
+            0xFFFF => self.interrupt_enable.bits(),
+            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
+                panic!("Use of this area is prohibited {addr:#X}")
+            }
+        }
+    }
+
+    fn write(&mut self, addr: u16, value: u8) {
+        match addr {
+            0x0000..=0x7FFF => self.cartridge.write_mbc_register(addr, value),
+            0x8000..=0x9FFF => self.ppu.write_vram(addr - 0x8000, value),
+            0xA000..=0xBFFF => self.cartridge.write_ram_bank(addr - 0xA000, value),
+            0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize] = value,
+            0xFE00..=0xFE9F => self.ppu.write_sprite(addr - 0xFE00, value),
+            0xFF00..=0xFF7F => self.write_io(addr, value),
+            0xFF80..=0xFFFE => self.high_ram[(addr - 0xFF80) as usize] = value,
+            0xFFFF => *self.interrupt_enable = InterruptEnable::from_bits(value),
+            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
+                panic!("Use of this area is prohibited {addr:#X}")
+            }
+        }
+    }
+
+    fn tick(&mut self) {
         self.timer.increment_divider(self.interrupt_flags);
         self.sprite_dma_transfer();
         self.ppu.step(self.interrupt_flags);
         self.serial_port.step(self.interrupt_flags);
     }
 
-    fn sprite_dma_transfer(&mut self) {
-        let src_addr = self.ppu.sprite_transfer_addr();
-        if (src_addr & 0xFF00) <= 0xDF00 && (src_addr & 0xFF) <= 0x9F {
-            let value = self.read_byte(src_addr);
-            let dest_addr = 0xFE00 | (src_addr & 0xFF);
-            self.write_byte(dest_addr, value);
-            self.ppu.set_sprite_transfer_addr(src_addr + 1);
+    fn highest_priority_interrupt(&self) -> Option<Interrupt> {
+        for interrupt in Interrupt::iter() {
+            if self.interrupt_enable.contains(*interrupt)
+                && self.interrupt_flags.contains(*interrupt)
+            {
+                return Some(*interrupt);
+            }
         }
+        None
     }
 
-    pub(crate) const fn interrupt_flags_mut(&mut self) -> &mut InterruptFlags {
-        self.interrupt_flags
-    }
-
-    pub(crate) const fn is_interrupt_pending(&self, interrupt: Interrupt) -> bool {
-        self.interrupt_enable.contains(interrupt) && self.interrupt_flags.contains(interrupt)
+    fn acknowledge_interrupt(&mut self, interrupt: Interrupt) {
+        self.interrupt_flags.set(interrupt, false);
     }
 }

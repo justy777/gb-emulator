@@ -2,8 +2,7 @@
 mod execute;
 mod instruction;
 
-use crate::hardware::AddressBus;
-use crate::interrupt::Interrupt;
+use crate::hardware::BusInterface;
 
 enum Flag {
     Zero = 0b1000_0000,
@@ -64,20 +63,20 @@ impl FlagsRegister {
     }
 }
 
-pub trait ReadByte<S> {
-    fn read_byte(&mut self, bus: &mut AddressBus, src: S) -> u8;
+pub trait ReadU8<B: BusInterface, S> {
+    fn read_u8(&mut self, bus: &mut B, src: S) -> u8;
 }
 
-pub trait WriteByte<D> {
-    fn write_byte(&mut self, bus: &mut AddressBus, dest: D, value: u8);
+pub trait WriteU8<B: BusInterface, D> {
+    fn write_u8(&mut self, bus: &mut B, dest: D, value: u8);
 }
 
-pub trait ReadWord<S> {
-    fn read_word(&mut self, bus: &mut AddressBus, src: S) -> u16;
+pub trait ReadU16<B: BusInterface, S> {
+    fn read_u16(&mut self, bus: &mut B, src: S) -> u16;
 }
 
-pub trait WriteWord<D> {
-    fn write_word(&mut self, bus: &mut AddressBus, dest: D, value: u16);
+pub trait WriteU16<B: BusInterface, D> {
+    fn write_u16(&mut self, bus: &mut B, dest: D, value: u16);
 }
 
 /// 8-bit registers (r8)
@@ -93,14 +92,14 @@ pub enum RegisterU8 {
     L,
 }
 
-impl ReadByte<RegisterU8> for Cpu {
-    fn read_byte(&mut self, _: &mut AddressBus, src: RegisterU8) -> u8 {
+impl<B: BusInterface> ReadU8<B, RegisterU8> for Cpu {
+    fn read_u8(&mut self, _: &mut B, src: RegisterU8) -> u8 {
         self.register_u8(src)
     }
 }
 
-impl WriteByte<RegisterU8> for Cpu {
-    fn write_byte(&mut self, _: &mut AddressBus, dest: RegisterU8, value: u8) {
+impl<B: BusInterface> WriteU8<B, RegisterU8> for Cpu {
+    fn write_u8(&mut self, _: &mut B, dest: RegisterU8, value: u8) {
         self.set_register_u8(dest, value);
     }
 }
@@ -116,14 +115,14 @@ pub enum RegisterU16 {
     PC,
 }
 
-impl ReadWord<RegisterU16> for Cpu {
-    fn read_word(&mut self, _: &mut AddressBus, src: RegisterU16) -> u16 {
+impl<B: BusInterface> ReadU16<B, RegisterU16> for Cpu {
+    fn read_u16(&mut self, _: &mut B, src: RegisterU16) -> u16 {
         self.register_u16(src)
     }
 }
 
-impl WriteWord<RegisterU16> for Cpu {
-    fn write_word(&mut self, _: &mut AddressBus, dest: RegisterU16, value: u16) {
+impl<B: BusInterface> WriteU16<B, RegisterU16> for Cpu {
+    fn write_u16(&mut self, _: &mut B, dest: RegisterU16, value: u16) {
         self.set_register_u16(dest, value);
     }
 }
@@ -133,16 +132,16 @@ impl WriteWord<RegisterU16> for Cpu {
 #[derive(Debug, Clone, Copy)]
 pub struct Immediate;
 
-impl ReadByte<Immediate> for Cpu {
-    fn read_byte(&mut self, bus: &mut AddressBus, _: Immediate) -> u8 {
-        self.read_next_byte(bus)
+impl<B: BusInterface> ReadU8<B, Immediate> for Cpu {
+    fn read_u8(&mut self, bus: &mut B, _: Immediate) -> u8 {
+        self.next(bus)
     }
 }
 
-impl ReadWord<Immediate> for Cpu {
-    fn read_word(&mut self, bus: &mut AddressBus, _: Immediate) -> u16 {
-        let low = self.read_next_byte(bus);
-        let high = self.read_next_byte(bus);
+impl<B: BusInterface> ReadU16<B, Immediate> for Cpu {
+    fn read_u16(&mut self, bus: &mut B, _: Immediate) -> u16 {
+        let low = self.next(bus);
+        let high = self.next(bus);
         u16::from_le_bytes([low, high])
     }
 }
@@ -152,39 +151,42 @@ impl ReadWord<Immediate> for Cpu {
 #[derive(Debug, Clone, Copy)]
 pub struct Direct<T>(T);
 
-impl<T> ReadByte<Direct<T>> for Cpu
+impl<B, T> ReadU8<B, Direct<T>> for Cpu
 where
-    Self: ReadWord<T>,
+    B: BusInterface,
+    Self: ReadU16<B, T>,
 {
-    fn read_byte(&mut self, bus: &mut AddressBus, src: Direct<T>) -> u8 {
-        let addr = self.read_word(bus, src.0);
-        let byte = bus.read_byte(addr);
+    fn read_u8(&mut self, bus: &mut B, src: Direct<T>) -> u8 {
+        let addr = self.read_u16(bus, src.0);
+        let byte = bus.read(addr);
         bus.tick();
         byte
     }
 }
 
-impl<T> WriteByte<Direct<T>> for Cpu
+impl<B, T> WriteU8<B, Direct<T>> for Cpu
 where
-    Self: ReadWord<T>,
+    B: BusInterface,
+    Self: ReadU16<B, T>,
 {
-    fn write_byte(&mut self, bus: &mut AddressBus, dest: Direct<T>, value: u8) {
-        let addr = self.read_word(bus, dest.0);
-        bus.write_byte(addr, value);
+    fn write_u8(&mut self, bus: &mut B, dest: Direct<T>, value: u8) {
+        let addr = self.read_u16(bus, dest.0);
+        bus.write(addr, value);
         bus.tick();
     }
 }
 
-impl<T> WriteWord<Direct<T>> for Cpu
+impl<B, T> WriteU16<B, Direct<T>> for Cpu
 where
-    Self: ReadWord<T>,
+    B: BusInterface,
+    Self: ReadU16<B, T>,
 {
-    fn write_word(&mut self, bus: &mut AddressBus, dest: Direct<T>, value: u16) {
-        let addr = self.read_word(bus, dest.0);
+    fn write_u16(&mut self, bus: &mut B, dest: Direct<T>, value: u16) {
+        let addr = self.read_u16(bus, dest.0);
         let [low, high] = value.to_le_bytes();
-        bus.write_byte(addr, low);
+        bus.write(addr, low);
         bus.tick();
-        bus.write_byte(addr.wrapping_add(1), high);
+        bus.write(addr.wrapping_add(1), high);
         bus.tick();
     }
 }
@@ -194,15 +196,16 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct Increment<T>(T);
 
-impl<T> ReadWord<Increment<T>> for Cpu
+impl<B, T> ReadU16<B, Increment<T>> for Cpu
 where
-    Self: ReadWord<T> + WriteWord<T>,
+    B: BusInterface,
+    Self: ReadU16<B, T> + WriteU16<B, T>,
     T: Copy,
 {
-    fn read_word(&mut self, bus: &mut AddressBus, src: Increment<T>) -> u16 {
-        let word = self.read_word(bus, src.0);
+    fn read_u16(&mut self, bus: &mut B, src: Increment<T>) -> u16 {
+        let word = self.read_u16(bus, src.0);
         let new_word = word.wrapping_add(1);
-        self.write_word(bus, src.0, new_word);
+        self.write_u16(bus, src.0, new_word);
         word
     }
 }
@@ -212,15 +215,16 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct Decrement<T>(T);
 
-impl<T> ReadWord<Decrement<T>> for Cpu
+impl<B, T> ReadU16<B, Decrement<T>> for Cpu
 where
-    Self: ReadWord<T> + WriteWord<T>,
+    B: BusInterface,
+    Self: ReadU16<B, T> + WriteU16<B, T>,
     T: Copy,
 {
-    fn read_word(&mut self, bus: &mut AddressBus, src: Decrement<T>) -> u16 {
-        let word = self.read_word(bus, src.0);
+    fn read_u16(&mut self, bus: &mut B, src: Decrement<T>) -> u16 {
+        let word = self.read_u16(bus, src.0);
         let new_word = word.wrapping_sub(1);
-        self.write_word(bus, src.0, new_word);
+        self.write_u16(bus, src.0, new_word);
         word
     }
 }
@@ -230,12 +234,13 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct HighIndexed<T>(T);
 
-impl<T> ReadWord<HighIndexed<T>> for Cpu
+impl<B, T> ReadU16<B, HighIndexed<T>> for Cpu
 where
-    Self: ReadByte<T>,
+    B: BusInterface,
+    Self: ReadU8<B, T>,
 {
-    fn read_word(&mut self, bus: &mut AddressBus, src: HighIndexed<T>) -> u16 {
-        let byte = self.read_byte(bus, src.0) as u16;
+    fn read_u16(&mut self, bus: &mut B, src: HighIndexed<T>) -> u16 {
+        let byte = self.read_u8(bus, src.0) as u16;
         0xFF00 | byte
     }
 }
@@ -283,7 +288,7 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, bus: &mut AddressBus) {
+    pub fn step<B: BusInterface>(&mut self, bus: &mut B) {
         // Checks for next instruction after EI is called
         self.interrupt_delay = match self.interrupt_delay {
             Some(0) => {
@@ -294,20 +299,17 @@ impl Cpu {
             None => None,
         };
 
-        for interrupt in Interrupt::iter() {
-            if bus.is_interrupt_pending(*interrupt) {
-                // Disables HALT when interrupt is pending
-                self.halted = false;
-                if self.interrupt_enabled {
-                    self.interrupt_enabled = false;
-                    bus.interrupt_flags_mut().set(*interrupt, false);
-                    // Calls interrupt handler
-                    self.push(bus, RegisterU16::PC);
-                    self.pc = interrupt.handler_addr();
-                    bus.tick();
-                    bus.tick();
-                }
-                break;
+        if let Some(interrupt) = bus.highest_priority_interrupt() {
+            // Disables HALT when interrupt is pending
+            self.halted = false;
+            if self.interrupt_enabled {
+                self.interrupt_enabled = false;
+                bus.acknowledge_interrupt(interrupt);
+                // Calls interrupt handler
+                self.push(bus, RegisterU16::PC);
+                self.pc = interrupt.handler_addr();
+                bus.tick();
+                bus.tick();
             }
         }
 
@@ -316,20 +318,20 @@ impl Cpu {
             return;
         }
 
-        let opcode = self.read_next_byte(bus);
+        let opcode = self.next(bus);
         self.execute(bus, opcode);
     }
 
-    fn read_next_byte(&mut self, bus: &mut AddressBus) -> u8 {
-        let byte = bus.read_byte(self.pc);
+    fn next<B: BusInterface>(&mut self, bus: &mut B) -> u8 {
+        let byte = bus.read(self.pc);
         self.pc = self.pc.wrapping_add(1);
         bus.tick();
         byte
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn read_next_byte_signed(&mut self, bus: &mut AddressBus) -> i8 {
-        self.read_next_byte(bus) as i8
+    fn next_signed<B: BusInterface>(&mut self, bus: &mut B) -> i8 {
+        self.next(bus) as i8
     }
 
     pub(crate) const fn register_u8(&self, reg: RegisterU8) -> u8 {

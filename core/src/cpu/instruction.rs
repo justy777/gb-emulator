@@ -1,7 +1,7 @@
 use crate::cpu::{
-    Cpu, Flag, Immediate, JumpCondition, ReadByte, ReadWord, RegisterU16, WriteByte, WriteWord,
+    Cpu, Flag, Immediate, JumpCondition, ReadU8, ReadU16, RegisterU16, WriteU8, WriteU16,
 };
-use crate::hardware::AddressBus;
+use crate::hardware::BusInterface;
 
 impl Cpu {
     /// NOP
@@ -39,12 +39,13 @@ impl Cpu {
     /// LD
     ///
     /// Load src (right) and copy into dest (left).
-    pub(crate) fn load<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn load<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
-        Self: ReadByte<S> + WriteByte<D>,
+        B: BusInterface,
+        Self: ReadU8<B, S> + WriteU8<B, D>,
     {
-        let value = self.read_byte(bus, src);
-        self.write_byte(bus, dest, value);
+        let value = self.read_u8(bus, src);
+        self.write_u8(bus, dest, value);
     }
 
     /// LD r16, n16
@@ -52,12 +53,13 @@ impl Cpu {
     /// - - - -
     ///
     /// Load src (right) and copy into dest (left).
-    pub(crate) fn load16<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn load16<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
-        Self: ReadWord<S> + WriteWord<D>,
+        B: BusInterface,
+        Self: ReadU16<B, S> + WriteU16<B, D>,
     {
-        let value = self.read_word(bus, src);
-        self.write_word(bus, dest, value);
+        let value = self.read_u16(bus, src);
+        self.write_u16(bus, dest, value);
     }
 
     /// LD HL, SP + e8
@@ -65,9 +67,9 @@ impl Cpu {
     /// 0 0 H C
     ///
     /// Add the signed value e8 to SP and store the result in HL.
-    pub(crate) fn load16_hl_sp_e(&mut self, bus: &mut AddressBus) {
+    pub(crate) fn load16_hl_sp_e<B: BusInterface>(&mut self, bus: &mut B) {
         let sp = self.sp;
-        let offset = self.read_next_byte_signed(bus) as i16;
+        let offset = self.next_signed(bus) as i16;
 
         self.f.set(Flag::Zero, false);
         self.f.set(Flag::Subtract, false);
@@ -79,7 +81,7 @@ impl Cpu {
         self.f.set(Flag::Carry, carry);
 
         let new_value = sp.wrapping_add_signed(offset);
-        self.write_word(bus, RegisterU16::HL, new_value);
+        self.write_u16(bus, RegisterU16::HL, new_value);
         bus.tick();
     }
 
@@ -88,13 +90,14 @@ impl Cpu {
     /// Z 0 H C
     ///
     /// Add the value in r8 to register A.
-    pub(crate) fn add<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn add<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
+        B: BusInterface,
         D: Copy,
-        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
+        Self: ReadU8<B, S> + ReadU8<B, D> + WriteU8<B, D>,
     {
-        let lhs = self.read_byte(bus, dest);
-        let rhs = self.read_byte(bus, src);
+        let lhs = self.read_u8(bus, dest);
+        let rhs = self.read_u8(bus, src);
         let (result, did_overflow) = lhs.overflowing_add(rhs);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
@@ -104,7 +107,7 @@ impl Cpu {
         let half_carry = (lhs & 0xF) + (rhs & 0xF) > 0xF;
         self.f.set(Flag::HalfCarry, half_carry);
         self.f.set(Flag::Carry, did_overflow);
-        self.write_byte(bus, dest, result);
+        self.write_u8(bus, dest, result);
     }
 
     /// ADC A, r8
@@ -112,13 +115,14 @@ impl Cpu {
     /// Z 0 H C
     ///
     /// Add the value in r8 plus the carry flag to register A.
-    pub(crate) fn add_with_carry<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn add_with_carry<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
+        B: BusInterface,
         D: Copy,
-        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
+        Self: ReadU8<B, S> + ReadU8<B, D> + WriteU8<B, D>,
     {
-        let lhs = self.read_byte(bus, dest);
-        let rhs = self.read_byte(bus, src);
+        let lhs = self.read_u8(bus, dest);
+        let rhs = self.read_u8(bus, src);
         let cf = self.f.contains(Flag::Carry) as u8;
         let result = lhs.wrapping_add(rhs).wrapping_add(cf);
         self.f.set(Flag::Zero, result == 0);
@@ -127,7 +131,7 @@ impl Cpu {
         self.f.set(Flag::HalfCarry, half_carry);
         let carry = lhs as u16 + rhs as u16 + cf as u16 > 0xFF;
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, dest, result);
+        self.write_u8(bus, dest, result);
     }
 
     /// SUB A, r8
@@ -135,20 +139,21 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 from register A.
-    pub(crate) fn subtract<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn subtract<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
+        B: BusInterface,
         D: Copy,
-        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
+        Self: ReadU8<B, S> + ReadU8<B, D> + WriteU8<B, D>,
     {
-        let lhs = self.read_byte(bus, dest);
-        let rhs = self.read_byte(bus, src);
+        let lhs = self.read_u8(bus, dest);
+        let rhs = self.read_u8(bus, src);
         let (result, did_overflow) = lhs.overflowing_sub(rhs);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, true);
         let half_carry = (lhs & 0xF) < (rhs & 0xF);
         self.f.set(Flag::HalfCarry, half_carry);
         self.f.set(Flag::Carry, did_overflow);
-        self.write_byte(bus, dest, result);
+        self.write_u8(bus, dest, result);
     }
 
     /// SBC A, r8
@@ -156,13 +161,14 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 and the carry flag from register A.
-    pub(crate) fn subtract_with_carry<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn subtract_with_carry<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
+        B: BusInterface,
         D: Copy,
-        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
+        Self: ReadU8<B, S> + ReadU8<B, D> + WriteU8<B, D>,
     {
-        let lhs = self.read_byte(bus, dest);
-        let rhs = self.read_byte(bus, src);
+        let lhs = self.read_u8(bus, dest);
+        let rhs = self.read_u8(bus, src);
         let cf = self.f.contains(Flag::Carry) as u8;
         let result = lhs.wrapping_sub(rhs).wrapping_sub(cf);
         self.f.set(Flag::Zero, result == 0);
@@ -171,7 +177,7 @@ impl Cpu {
         self.f.set(Flag::HalfCarry, half_carry);
         let carry = (lhs as u16) < (rhs as u16) + (cf as u16);
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, dest, result);
+        self.write_u8(bus, dest, result);
     }
 
     /// AND A, r8
@@ -179,19 +185,20 @@ impl Cpu {
     /// Z 0 1 0
     ///
     /// Bitwise AND between the value in r8 and register A.
-    pub(crate) fn and<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn and<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
+        B: BusInterface,
         D: Copy,
-        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
+        Self: ReadU8<B, S> + ReadU8<B, D> + WriteU8<B, D>,
     {
-        let lhs = self.read_byte(bus, dest);
-        let rhs = self.read_byte(bus, src);
+        let lhs = self.read_u8(bus, dest);
+        let rhs = self.read_u8(bus, src);
         let result = lhs & rhs;
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, true);
         self.f.set(Flag::Carry, false);
-        self.write_byte(bus, dest, result);
+        self.write_u8(bus, dest, result);
     }
 
     /// XOR A, r8
@@ -199,19 +206,20 @@ impl Cpu {
     /// Z 0 0 0
     ///
     /// Bitwise XOR between the value in r8 and register A.
-    pub(crate) fn xor<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn xor<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
+        B: BusInterface,
         D: Copy,
-        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
+        Self: ReadU8<B, S> + ReadU8<B, D> + WriteU8<B, D>,
     {
-        let lhs = self.read_byte(bus, dest);
-        let rhs = self.read_byte(bus, src);
+        let lhs = self.read_u8(bus, dest);
+        let rhs = self.read_u8(bus, src);
         let result = lhs ^ rhs;
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
         self.f.set(Flag::Carry, false);
-        self.write_byte(bus, dest, result);
+        self.write_u8(bus, dest, result);
     }
 
     /// OR A, r8
@@ -219,19 +227,20 @@ impl Cpu {
     /// Z 0 0 0
     ///
     /// Bitwise OR between the value in r8 and register A.
-    pub(crate) fn or<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn or<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
+        B: BusInterface,
         D: Copy,
-        Self: ReadByte<S> + ReadByte<D> + WriteByte<D>,
+        Self: ReadU8<B, S> + ReadU8<B, D> + WriteU8<B, D>,
     {
-        let lhs = self.read_byte(bus, dest);
-        let rhs = self.read_byte(bus, src);
+        let lhs = self.read_u8(bus, dest);
+        let rhs = self.read_u8(bus, src);
         let result = lhs | rhs;
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
         self.f.set(Flag::Carry, false);
-        self.write_byte(bus, dest, result);
+        self.write_u8(bus, dest, result);
     }
 
     /// CP A, r8
@@ -239,12 +248,13 @@ impl Cpu {
     /// Z 1 H C
     ///
     /// Subtract the value in r8 from register A and set flags accordingly, but don't store the result.
-    pub(crate) fn compare<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn compare<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
-        Self: ReadByte<S> + ReadByte<D>,
+        B: BusInterface,
+        Self: ReadU8<B, S> + ReadU8<B, D>,
     {
-        let lhs = self.read_byte(bus, dest);
-        let rhs = self.read_byte(bus, src);
+        let lhs = self.read_u8(bus, dest);
+        let rhs = self.read_u8(bus, src);
         let (result, did_overflow) = lhs.overflowing_sub(rhs);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, true);
@@ -258,19 +268,20 @@ impl Cpu {
     /// Z 0 H -
     ///
     /// Increment value in register r8 by 1.
-    pub(crate) fn increment<T>(&mut self, bus: &mut AddressBus, target: T)
+    pub(crate) fn increment<B, T>(&mut self, bus: &mut B, target: T)
     where
+        B: BusInterface,
         T: Copy,
-        Self: ReadByte<T> + WriteByte<T>,
+        Self: ReadU8<B, T> + WriteU8<B, T>,
     {
-        let value = self.read_byte(bus, target);
+        let value = self.read_u8(bus, target);
         let result = value.wrapping_add(1);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         let half_carry = value & 0xF == 0xF;
         self.f.set(Flag::HalfCarry, half_carry);
         // CARRY is left untouched
-        self.write_byte(bus, target, result);
+        self.write_u8(bus, target, result);
     }
 
     /// DEC r8
@@ -278,19 +289,20 @@ impl Cpu {
     /// Z 1 H -
     ///
     /// Decrement value in register r8 by 1.
-    pub(crate) fn decrement<T>(&mut self, bus: &mut AddressBus, target: T)
+    pub(crate) fn decrement<B, T>(&mut self, bus: &mut B, target: T)
     where
+        B: BusInterface,
         T: Copy,
-        Self: ReadByte<T> + WriteByte<T>,
+        Self: ReadU8<B, T> + WriteU8<B, T>,
     {
-        let value = self.read_byte(bus, target);
+        let value = self.read_u8(bus, target);
         let result = value.wrapping_sub(1);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, true);
         let half_carry = value & 0xF == 0;
         self.f.set(Flag::HalfCarry, half_carry);
         // CARRY is left untouched
-        self.write_byte(bus, target, result);
+        self.write_u8(bus, target, result);
     }
 
     /// ADD HL, r16
@@ -298,13 +310,14 @@ impl Cpu {
     /// - 0 H C
     ///
     /// Add the value in r16 to register HL.
-    pub(crate) fn add16<D, S>(&mut self, bus: &mut AddressBus, dest: D, src: S)
+    pub(crate) fn add16<B, D, S>(&mut self, bus: &mut B, dest: D, src: S)
     where
+        B: BusInterface,
         D: Copy,
-        Self: ReadWord<S> + ReadWord<D> + WriteWord<D>,
+        Self: ReadU16<B, S> + ReadU16<B, D> + WriteU16<B, D>,
     {
-        let lhs = self.read_word(bus, dest);
-        let rhs = self.read_word(bus, src);
+        let lhs = self.read_u16(bus, dest);
+        let rhs = self.read_u16(bus, src);
         let (result, did_overflow) = lhs.overflowing_add(rhs);
         // ZERO is left untouched
         self.f.set(Flag::Subtract, false);
@@ -313,7 +326,7 @@ impl Cpu {
         let half_carry = (lhs & 0xFFF) + (rhs & 0xFFF) > 0xFFF;
         self.f.set(Flag::HalfCarry, half_carry);
         self.f.set(Flag::Carry, did_overflow);
-        self.write_word(bus, dest, result);
+        self.write_u16(bus, dest, result);
         bus.tick();
     }
 
@@ -322,9 +335,9 @@ impl Cpu {
     /// 0 0 H C
     ///
     /// Add the signed value e8 to SP.
-    pub(crate) fn add16_sp_e(&mut self, bus: &mut AddressBus) {
+    pub(crate) fn add16_sp_e<B: BusInterface>(&mut self, bus: &mut B) {
         let sp = self.sp;
-        let offset = self.read_next_byte_signed(bus) as i16;
+        let offset = self.next_signed(bus) as i16;
 
         self.f.set(Flag::Zero, false);
         self.f.set(Flag::Subtract, false);
@@ -345,14 +358,15 @@ impl Cpu {
     /// - - - -
     ///
     /// Increment value in register r16 by 1.
-    pub(crate) fn increment16<T>(&mut self, bus: &mut AddressBus, target: T)
+    pub(crate) fn increment16<B, T>(&mut self, bus: &mut B, target: T)
     where
+        B: BusInterface,
         T: Copy,
-        Self: ReadWord<T> + WriteWord<T>,
+        Self: ReadU16<B, T> + WriteU16<B, T>,
     {
-        let value = self.read_word(bus, target);
+        let value = self.read_u16(bus, target);
         let result = value.wrapping_add(1);
-        self.write_word(bus, target, result);
+        self.write_u16(bus, target, result);
         bus.tick();
     }
 
@@ -361,14 +375,15 @@ impl Cpu {
     /// - - - -
     ///
     /// Decrement value in register r16 by 1.
-    pub(crate) fn decrement16<T>(&mut self, bus: &mut AddressBus, target: T)
+    pub(crate) fn decrement16<B, T>(&mut self, bus: &mut B, target: T)
     where
+        B: BusInterface,
         T: Copy,
-        Self: ReadWord<T> + WriteWord<T>,
+        Self: ReadU16<B, T> + WriteU16<B, T>,
     {
-        let value = self.read_word(bus, target);
+        let value = self.read_u16(bus, target);
         let result = value.wrapping_sub(1);
-        self.write_word(bus, target, result);
+        self.write_u16(bus, target, result);
         bus.tick();
     }
 
@@ -521,19 +536,20 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Rotate register r8 left.
-    pub(crate) fn rotate_left_circular<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn rotate_left_circular<B, S>(&mut self, bus: &mut B, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let result = value.rotate_left(1);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x80 != 0;
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// RRC r8
@@ -541,19 +557,20 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Rotate register r8 right.
-    pub(crate) fn rotate_right_circular<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn rotate_right_circular<B, S>(&mut self, bus: &mut B, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let result = value.rotate_right(1);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// RL r8
@@ -561,12 +578,13 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Rotate bits in register r8 left, through the carry flag.
-    pub(crate) fn rotate_left<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn rotate_left<B, S>(&mut self, bus: &mut B, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let cf = self.f.contains(Flag::Carry) as u8;
         let result = (value << 1) | cf;
         self.f.set(Flag::Zero, result == 0);
@@ -574,7 +592,7 @@ impl Cpu {
         self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x80 != 0;
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// RR r8
@@ -582,12 +600,13 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Rotate register r8 right, through the carry flag.
-    pub(crate) fn rotate_right<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn rotate_right<B, S>(&mut self, bus: &mut B, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let cf = self.f.contains(Flag::Carry) as u8;
         let result = (value >> 1) | (cf << 7);
         self.f.set(Flag::Zero, result == 0);
@@ -595,7 +614,7 @@ impl Cpu {
         self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// SLA r8
@@ -603,19 +622,20 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Shift register r8 left.
-    pub(crate) fn shift_left<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn shift_left<B, S>(&mut self, bus: &mut B, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let result = value << 1;
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x80 != 0;
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// SRA r8
@@ -623,19 +643,20 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Shift register r8 right (bit 7 of r8 is unchanged).
-    pub(crate) fn shift_right_arithmetic<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn shift_right_arithmetic<B, S>(&mut self, bus: &mut B, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let result = (value >> 1) | (value & 0x80);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// SWAP r8
@@ -643,19 +664,20 @@ impl Cpu {
     /// Z 0 0 0
     ///
     /// Swap the upper 4 bits in register r8 and the lower 4 ones.
-    pub(crate) fn swap<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn swap<B, S>(&mut self, bus: &mut B, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         // Rotating by 4 swaps the upper bits with the lower bits
         let result = value.rotate_left(4);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
         self.f.set(Flag::Carry, false);
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// SRL r8
@@ -663,19 +685,20 @@ impl Cpu {
     /// Z 0 0 C
     ///
     /// Shift register r8 right.
-    pub(crate) fn shift_right_logical<S>(&mut self, bus: &mut AddressBus, src: S)
+    pub(crate) fn shift_right_logical<B, S>(&mut self, bus: &mut B, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let result = value >> 1;
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
         self.f.set(Flag::HalfCarry, false);
         let carry = value & 0x01 != 0;
         self.f.set(Flag::Carry, carry);
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// BIT u3, r8
@@ -683,11 +706,12 @@ impl Cpu {
     /// Z 0 1 -
     ///
     /// Test bit u3 in register r8, set the zero flag if bit not set.
-    pub(crate) fn bit_test<S>(&mut self, bus: &mut AddressBus, bit: u8, src: S)
+    pub(crate) fn bit_test<B, S>(&mut self, bus: &mut B, bit: u8, src: S)
     where
-        Self: ReadByte<S>,
+        B: BusInterface,
+        Self: ReadU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let result = value & (1 << bit);
         self.f.set(Flag::Zero, result == 0);
         self.f.set(Flag::Subtract, false);
@@ -700,15 +724,16 @@ impl Cpu {
     /// - - - -
     ///
     /// Set bit u3 in register r8 to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
-    pub(crate) fn bit_reset<S>(&mut self, bus: &mut AddressBus, bit: u8, src: S)
+    pub(crate) fn bit_reset<B, S>(&mut self, bus: &mut B, bit: u8, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let result = value & !(1 << bit);
         // Flags left untouched
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// SET u3, r8
@@ -716,15 +741,16 @@ impl Cpu {
     /// - - - -
     ///
     /// Set bit u3 in register r8 to 1. Bit 0 is the rightmost one, bit 7 the leftmost one.
-    pub(crate) fn bit_set<S>(&mut self, bus: &mut AddressBus, bit: u8, src: S)
+    pub(crate) fn bit_set<B, S>(&mut self, bus: &mut B, bit: u8, src: S)
     where
+        B: BusInterface,
         S: Copy,
-        Self: ReadByte<S> + WriteByte<S>,
+        Self: ReadU8<B, S> + WriteU8<B, S>,
     {
-        let value = self.read_byte(bus, src);
+        let value = self.read_u8(bus, src);
         let result = value | (1 << bit);
         // Flags left untouched
-        self.write_byte(bus, src, result);
+        self.write_u8(bus, src, result);
     }
 
     /// JP HL
@@ -732,8 +758,8 @@ impl Cpu {
     /// - - - -
     ///
     /// Jump to address in HL; effectively, load PC with value in register HL.
-    pub(crate) fn jump_hl(&mut self, bus: &mut AddressBus) {
-        self.pc = self.read_word(bus, RegisterU16::HL);
+    pub(crate) fn jump_hl<B: BusInterface>(&mut self, bus: &mut B) {
+        self.pc = self.read_u16(bus, RegisterU16::HL);
     }
 
     /// JP cc, n16
@@ -741,9 +767,9 @@ impl Cpu {
     /// - - - -
     ///
     /// Jump to address n16 if condition cc is met.
-    pub(crate) fn jump(&mut self, bus: &mut AddressBus, condition: JumpCondition) {
+    pub(crate) fn jump<B: BusInterface>(&mut self, bus: &mut B, condition: JumpCondition) {
         let should_jump = self.f.test(condition);
-        let addr = self.read_word(bus, Immediate);
+        let addr = self.read_u16(bus, Immediate);
         if should_jump {
             self.pc = addr;
             bus.tick();
@@ -755,9 +781,9 @@ impl Cpu {
     /// - - - -
     ///
     /// Relative Jump to current address plus e8 offset if condition cc is met.
-    pub(crate) fn jump_relative(&mut self, bus: &mut AddressBus, condition: JumpCondition) {
+    pub(crate) fn jump_relative<B: BusInterface>(&mut self, bus: &mut B, condition: JumpCondition) {
         let should_jump = self.f.test(condition);
-        let offset = self.read_next_byte_signed(bus) as i16;
+        let offset = self.next_signed(bus) as i16;
         if should_jump {
             self.pc = self.pc.wrapping_add_signed(offset);
             bus.tick();
@@ -769,19 +795,20 @@ impl Cpu {
     /// - - - -
     ///
     /// Push register r16 into the stack.
-    pub(crate) fn push<T>(&mut self, bus: &mut AddressBus, target: T)
+    pub(crate) fn push<B, T>(&mut self, bus: &mut B, target: T)
     where
-        Self: ReadWord<T>,
+        B: BusInterface,
+        Self: ReadU16<B, T>,
     {
         bus.tick();
-        let value = self.read_word(bus, target);
+        let value = self.read_u16(bus, target);
         let [low, high] = value.to_le_bytes();
         self.sp = self.sp.wrapping_sub(1);
-        bus.write_byte(self.sp, high);
+        bus.write(self.sp, high);
         bus.tick();
 
         self.sp = self.sp.wrapping_sub(1);
-        bus.write_byte(self.sp, low);
+        bus.write(self.sp, low);
         bus.tick();
     }
 
@@ -792,20 +819,21 @@ impl Cpu {
     /// Pop register r16 from the stack.
     ///
     /// NOTE: POP AF affects all flags.
-    pub(crate) fn pop<T>(&mut self, bus: &mut AddressBus, target: T)
+    pub(crate) fn pop<B, T>(&mut self, bus: &mut B, target: T)
     where
-        Self: WriteWord<T>,
+        B: BusInterface,
+        Self: WriteU16<B, T>,
     {
-        let low = bus.read_byte(self.sp);
+        let low = bus.read(self.sp);
         self.sp = self.sp.wrapping_add(1);
         bus.tick();
 
-        let high = bus.read_byte(self.sp);
+        let high = bus.read(self.sp);
         self.sp = self.sp.wrapping_add(1);
         bus.tick();
 
         let value = u16::from_le_bytes([low, high]);
-        self.write_word(bus, target, value);
+        self.write_u16(bus, target, value);
     }
 
     /// CALL cc, n16
@@ -813,21 +841,21 @@ impl Cpu {
     /// - - - -
     ///
     /// Call address n16 if condition cc is met.
-    pub(crate) fn call(&mut self, bus: &mut AddressBus, condition: JumpCondition) {
+    pub(crate) fn call<B: BusInterface>(&mut self, bus: &mut B, condition: JumpCondition) {
         let should_jump = self.f.test(condition);
-        let addr = self.read_word(bus, Immediate);
+        let addr = self.read_u16(bus, Immediate);
         if should_jump {
             bus.tick();
 
-            let value = self.read_word(bus, RegisterU16::PC);
+            let value = self.read_u16(bus, RegisterU16::PC);
             let [low, high] = value.to_le_bytes();
 
             self.sp = self.sp.wrapping_sub(1);
-            bus.write_byte(self.sp, high);
+            bus.write(self.sp, high);
             bus.tick();
 
             self.sp = self.sp.wrapping_sub(1);
-            bus.write_byte(self.sp, low);
+            bus.write(self.sp, low);
             bus.tick();
 
             self.pc = addr;
@@ -839,17 +867,17 @@ impl Cpu {
     /// - - - -
     ///
     /// Return from subroutine.
-    pub(crate) fn return_(&mut self, bus: &mut AddressBus) {
-        let low = bus.read_byte(self.sp);
+    pub(crate) fn return_<B: BusInterface>(&mut self, bus: &mut B) {
+        let low = bus.read(self.sp);
         self.sp = self.sp.wrapping_add(1);
         bus.tick();
 
-        let high = bus.read_byte(self.sp);
+        let high = bus.read(self.sp);
         self.sp = self.sp.wrapping_add(1);
         bus.tick();
 
         let value = u16::from_le_bytes([low, high]);
-        self.write_word(bus, RegisterU16::PC, value);
+        self.write_u16(bus, RegisterU16::PC, value);
         bus.tick();
     }
 
@@ -858,20 +886,20 @@ impl Cpu {
     /// - - - -
     ///
     /// Return from subroutine if condition cc is met.
-    pub(crate) fn return_if(&mut self, bus: &mut AddressBus, condition: JumpCondition) {
+    pub(crate) fn return_if<B: BusInterface>(&mut self, bus: &mut B, condition: JumpCondition) {
         let should_jump = self.f.test(condition);
         bus.tick();
         if should_jump {
-            let low = bus.read_byte(self.sp);
+            let low = bus.read(self.sp);
             self.sp = self.sp.wrapping_add(1);
             bus.tick();
 
-            let high = bus.read_byte(self.sp);
+            let high = bus.read(self.sp);
             self.sp = self.sp.wrapping_add(1);
             bus.tick();
 
             let value = u16::from_le_bytes([low, high]);
-            self.write_word(bus, RegisterU16::PC, value);
+            self.write_u16(bus, RegisterU16::PC, value);
             bus.tick();
         }
     }
@@ -882,7 +910,7 @@ impl Cpu {
     ///
     /// Return from subroutine and enable interrupts.
     /// This is basically equivalent to executing EI then RET, meaning that IME is set right after this instruction.
-    pub(crate) fn return_from_interrupt_handler(&mut self, bus: &mut AddressBus) {
+    pub(crate) fn return_from_interrupt_handler<B: BusInterface>(&mut self, bus: &mut B) {
         self.return_(bus);
         self.interrupt_enabled = true;
     }
@@ -892,16 +920,16 @@ impl Cpu {
     /// - - - -
     ///
     /// Push current address onto stack, and jump to address u8.
-    pub(crate) fn restart(&mut self, bus: &mut AddressBus, addr: u16) {
+    pub(crate) fn restart<B: BusInterface>(&mut self, bus: &mut B, addr: u16) {
         bus.tick();
-        let value = self.read_word(bus, RegisterU16::PC);
+        let value = self.read_u16(bus, RegisterU16::PC);
         let [low, high] = value.to_le_bytes();
         self.sp = self.sp.wrapping_sub(1);
-        bus.write_byte(self.sp, high);
+        bus.write(self.sp, high);
         bus.tick();
 
         self.sp = self.sp.wrapping_sub(1);
-        bus.write_byte(self.sp, low);
+        bus.write(self.sp, low);
         self.pc = addr;
         bus.tick();
     }

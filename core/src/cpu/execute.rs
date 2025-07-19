@@ -3,10 +3,10 @@ use crate::cpu::{
     RegisterU8::{A, B, C, D, E, H, L},
     RegisterU16::{AF, BC, DE, HL, SP},
 };
-use crate::hardware::AddressBus;
+use crate::hardware::BusInterface;
 
 impl Cpu {
-    pub(crate) fn execute(&mut self, bus: &mut AddressBus, opcode: u8) {
+    pub(crate) fn execute<B: BusInterface>(&mut self, bus: &mut B, opcode: u8) {
         match opcode {
             // ---- 8-bit Arithmetic
             // ADD
@@ -297,7 +297,7 @@ impl Cpu {
             0x76 => self.halt(),
             // PREFIX
             0xCB => {
-                let next_opcode = self.read_next_byte(bus);
+                let next_opcode = self.next(bus);
                 self.execute_prefixed(bus, next_opcode);
             }
             // DI
@@ -311,7 +311,7 @@ impl Cpu {
         }
     }
 
-    fn execute_prefixed(&mut self, bus: &mut AddressBus, opcode: u8) {
+    fn execute_prefixed<B: BusInterface>(&mut self, bus: &mut B, opcode: u8) {
         match opcode {
             // ---- Bit Shift
             // RLC
