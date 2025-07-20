@@ -9,7 +9,7 @@ const RAM_BANK_SIZE: usize = 8 * 1024;
 
 #[derive(Debug)]
 pub enum CartridgeError {
-    NotDivisibleIntoBanks,
+    TooSmall,
     Metadata(MetadataError),
 }
 
@@ -22,8 +22,8 @@ impl From<MetadataError> for CartridgeError {
 impl std::fmt::Display for CartridgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotDivisibleIntoBanks => {
-                write!(f, "Cartridge is not divisible into 16 KiB banks")
+            Self::TooSmall => {
+                write!(f, "Cartridge is too small; should be at least 32 KiB")
             }
             Self::Metadata(err) => write!(f, "Bad cartridge header: {err}"),
         }
@@ -39,9 +39,15 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn new(rom: Vec<u8>) -> Result<Self, CartridgeError> {
-        if rom.is_empty() || rom.len() % ROM_BANK_SIZE != 0 {
-            return Err(CartridgeError::NotDivisibleIntoBanks);
+    pub fn new(mut rom: Vec<u8>) -> Result<Self, CartridgeError> {
+        if rom.len() < (2 * ROM_BANK_SIZE) {
+            return Err(CartridgeError::TooSmall);
+        }
+
+        if !(rom.len() / ROM_BANK_SIZE).is_power_of_two() {
+            // Resize rom to proper size
+            let len = (rom.len() / ROM_BANK_SIZE).next_power_of_two() * ROM_BANK_SIZE;
+            rom.resize(len, 0xFF);
         }
 
         let metadata = Metadata::new(&rom)?;
