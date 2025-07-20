@@ -110,6 +110,7 @@ impl Metadata {
         let mbc_number = match cartridge_type {
             0x00 | 0x08 | 0x09 => 0,
             0x01..=0x03 => 1,
+            0x05 | 0x06 => 2,
             0x0F..=0x13 => 3,
             0x19..=0x1E => 5,
             val => return Err(MetadataError::UnsupportedCartridgeType(val)),

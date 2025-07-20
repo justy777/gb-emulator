@@ -1,7 +1,7 @@
 mod mbc;
 mod metadata;
 
-use crate::cartridge::mbc::{MBC1, MBC3, MBC5, MemoryBankController, NoMBC};
+use crate::cartridge::mbc::{MBC1, MBC2, MBC3, MBC5, MemoryBankController, NoMBC};
 use crate::cartridge::metadata::{Metadata, MetadataError};
 
 const ROM_BANK_SIZE: usize = 16 * 1024;
@@ -34,8 +34,6 @@ impl std::error::Error for CartridgeError {}
 
 // TODO: add support for save files
 pub struct Cartridge {
-    rom: Vec<u8>,
-    ram: Option<Vec<u8>>,
     mbc: Box<dyn MemoryBankController>,
     metadata: Metadata,
 }
@@ -48,14 +46,6 @@ impl Cartridge {
 
         let metadata = Metadata::new(&rom)?;
 
-        let mbc: Box<dyn MemoryBankController> = match metadata.mbc_number {
-            0 => Box::new(NoMBC::new()),
-            1 => Box::new(MBC1::new(metadata.rom_banks(), metadata.ram_banks())),
-            3 => Box::new(MBC3::new(metadata.rom_banks(), metadata.ram_banks())),
-            5 => Box::new(MBC5::new(metadata.rom_banks(), metadata.ram_banks())),
-            _ => unreachable!(),
-        };
-
         let ram = if metadata.has_ram() && metadata.ram_size() > 0 {
             let capacity = metadata.ram_size();
             let vec = vec![0; capacity];
@@ -64,22 +54,39 @@ impl Cartridge {
             None
         };
 
-        Ok(Self {
-            rom,
-            ram,
-            mbc,
-            metadata,
-        })
+        let mbc: Box<dyn MemoryBankController> = match metadata.mbc_number {
+            0 => Box::new(NoMBC::new(rom, ram)),
+            1 => Box::new(MBC1::new(
+                rom,
+                ram,
+                metadata.rom_banks(),
+                metadata.ram_banks(),
+            )),
+            2 => Box::new(MBC2::new(rom, metadata.rom_banks())),
+            3 => Box::new(MBC3::new(
+                rom,
+                ram,
+                metadata.rom_banks(),
+                metadata.ram_banks(),
+            )),
+            5 => Box::new(MBC5::new(
+                rom,
+                ram,
+                metadata.rom_banks(),
+                metadata.ram_banks(),
+            )),
+            _ => unreachable!(),
+        };
+
+        Ok(Self { mbc, metadata })
     }
 
     pub(crate) fn read_rom_bank0(&self, addr: u16) -> u8 {
-        let index = (ROM_BANK_SIZE * self.mbc.rom_bank0()) + (addr as usize);
-        self.rom[index]
+        self.mbc.read_rom_bank0(addr)
     }
 
     pub(crate) fn read_rom_bank1(&self, addr: u16) -> u8 {
-        let index = (ROM_BANK_SIZE * self.mbc.rom_bank1()) + (addr as usize);
-        self.rom[index]
+        self.mbc.read_rom_bank1(addr)
     }
 
     pub(crate) fn write_mbc_register(&mut self, addr: u16, value: u8) {
@@ -87,29 +94,11 @@ impl Cartridge {
     }
 
     pub(crate) fn read_ram_bank(&self, addr: u16) -> u8 {
-        if !self.mbc.is_ram_enabled() {
-            return 0xFF;
-        }
-
-        if let Some(ram) = &self.ram {
-            let index = (RAM_BANK_SIZE * self.mbc.ram_bank()) + (addr as usize);
-            ram[index]
-        } else {
-            panic!("Unable to read from cartridge RAM. No RAM included in cartridge.");
-        }
+        self.mbc.read_ram_bank(addr)
     }
 
     pub(crate) fn write_ram_bank(&mut self, addr: u16, value: u8) {
-        if !self.mbc.is_ram_enabled() {
-            return;
-        }
-
-        if let Some(ram) = &mut self.ram {
-            let index = (RAM_BANK_SIZE * self.mbc.ram_bank()) + (addr as usize);
-            ram[index] = value;
-        } else {
-            panic!("Unable to write to cartridge RAM. No RAM included in cartridge.")
-        }
+        self.mbc.write_ram_bank(addr, value);
     }
 
     #[must_use]
