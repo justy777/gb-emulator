@@ -1,22 +1,12 @@
 use std::fmt::Display;
 
 #[derive(Debug, Copy, Clone)]
-pub struct Data(usize);
+pub struct DataUnit(usize);
 
-impl Data {
+impl DataUnit {
     #[must_use]
     pub const fn from_bytes(bytes: usize) -> Self {
         Self(bytes)
-    }
-
-    #[must_use]
-    pub const fn from_kilobytes(kilobytes: usize) -> Self {
-        Self(kilobytes * 1024)
-    }
-
-    #[must_use]
-    pub const fn from_megabytes(megabytes: usize) -> Self {
-        Self(megabytes * 1024 * 1024)
     }
 
     #[must_use]
@@ -35,7 +25,7 @@ impl Data {
     }
 }
 
-impl Display for Data {
+impl Display for DataUnit {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if self.to_megabytes() > 0 {
             write!(f, "{} MiB", self.to_megabytes())

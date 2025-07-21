@@ -1,3 +1,5 @@
+//! Emulated Game Boy hardware.
+
 use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, RegisterU8, RegisterU16};
@@ -10,6 +12,7 @@ use crate::timer::Timer;
 const WORK_RAM_SIZE: usize = 8 * 1024;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 
+/// Emulated Game Boy hardware.
 pub struct GameboyHardware {
     cpu: Cpu,
     // ROM and External RAM
@@ -34,6 +37,7 @@ pub struct GameboyHardware {
 }
 
 impl GameboyHardware {
+    /// Creates new Game Boy hardware.
     #[must_use]
     pub const fn new(cartridge: Cartridge) -> Self {
         Self {
@@ -51,6 +55,7 @@ impl GameboyHardware {
         }
     }
 
+    /// Runs for a few cycles.
     pub fn step(&mut self) {
         let mut bus = AddressBus {
             cartridge: &mut self.cartridge,
@@ -68,16 +73,19 @@ impl GameboyHardware {
         self.cpu.step(&mut bus);
     }
 
+    /// Returns the value contained in the provided register.
     #[must_use]
     pub const fn register_u8(&self, reg: RegisterU8) -> u8 {
         self.cpu.register_u8(reg)
     }
 
+    /// Returns the value contained in the provided register.
     #[must_use]
     pub const fn register_u16(&self, reg: RegisterU16) -> u16 {
         self.cpu.register_u16(reg)
     }
 
+    /// Returns the value store at the provided address in memory.
     pub fn memory(&mut self, addr: u16) -> u8 {
         let bus = AddressBus {
             cartridge: &mut self.cartridge,
@@ -96,7 +104,7 @@ impl GameboyHardware {
     }
 }
 
-pub trait BusInterface {
+pub(crate) trait BusInterface {
     fn read(&self, addr: u16) -> u8;
     fn write(&mut self, addr: u16, value: u8);
     fn tick(&mut self);

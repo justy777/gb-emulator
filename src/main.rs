@@ -1,5 +1,7 @@
+//! gb-emulator is an original Game Boy (DMG) emulator written in Rust.
+
 use crate::debug::Debugger;
-use crate::util::Data;
+use crate::util::DataUnit;
 use gb_core::RegisterU16;
 use gb_core::cartridge::Cartridge;
 use gb_core::hardware::GameboyHardware;
@@ -22,9 +24,9 @@ fn main() -> anyhow::Result<()> {
     println!("Supports RTC: {}", metadata.supports_rtc());
     println!("Supports rumble: {}", metadata.supports_rumble());
     println!("ROM banks: {}", metadata.rom_banks());
-    println!("ROM size: {}", Data::from_bytes(metadata.rom_size()));
+    println!("ROM size: {}", DataUnit::from_bytes(metadata.rom_size()));
     println!("RAM banks: {}", metadata.ram_banks());
-    println!("RAM size: {}", Data::from_bytes(metadata.ram_size()));
+    println!("RAM size: {}", DataUnit::from_bytes(metadata.ram_size()));
     println!("Destination code: {:#04X}", metadata.destination_code());
     println!("Version number: {}", metadata.version_number());
 

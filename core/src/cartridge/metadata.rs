@@ -1,3 +1,16 @@
+//! Metadata parsed from a rom header.
+//!
+//! # Examples
+//!
+//! You can parse a rom's header:
+//! ```
+//! use std::fs;
+//! use gb_core::cartridge::metadata::Metadata;
+//!
+//! let rom = fs::read("example_rom.gb")?;
+//! let metadata = Metadata::new(&rom)?;
+//! ```
+
 const CART_TITLE_START: usize = 0x134;
 const CART_TITLE_END: usize = 0x143;
 const CART_CGB_FLAG: usize = 0x143;
@@ -22,10 +35,14 @@ const CARTRIDGE_TYPE_SUPPORTS_RUMBLE: &[u8] = &[0x1C, 0x1D, 0x1E, 0x22];
 const ROM_BANK_SIZE: usize = 16 * 1024;
 const RAM_BANK_SIZE: usize = 8 * 1024;
 
+/// The error which is returned from parsing a rom header.
 #[derive(Debug)]
 pub enum MetadataError {
+    /// Cartridge type is unsupported.
     UnsupportedCartridgeType(u8),
+    /// The value for ROM size is invalid.
     InvalidRomSize(u8),
+    /// The value for RAM size is invalid.
     InvalidRamSize(u8),
 }
 
@@ -43,9 +60,12 @@ impl std::fmt::Display for MetadataError {
 
 impl std::error::Error for MetadataError {}
 
+/// The error type which is returned from calling [`Metadata::verify_header_checksum`].
 #[derive(Debug)]
 pub struct HeaderChecksumError {
+    /// The expected checksum
     pub expected: u8,
+    /// The actual checksum
     pub actual: u8,
 }
 
@@ -61,9 +81,12 @@ impl std::fmt::Display for HeaderChecksumError {
 
 impl std::error::Error for HeaderChecksumError {}
 
+/// The error type which is returned from calling [`Metadata::verify_global_checksum`].
 #[derive(Debug)]
 pub struct GlobalChecksumError {
+    /// The expected checksum
     pub expected: u16,
+    /// The actual checksum
     pub actual: u16,
 }
 
@@ -79,12 +102,13 @@ impl std::fmt::Display for GlobalChecksumError {
 
 impl std::error::Error for GlobalChecksumError {}
 
+/// Metadata parsed from a rom header.
 #[derive(Debug)]
 pub struct Metadata {
     title: String,
     cgb_flag: u8,
     cartridge_type: u8,
-    pub mbc_number: u8,
+    pub(crate) mbc_number: u8,
     rom_banks: usize,
     ram_banks: usize,
     destination_code: u8,
@@ -96,6 +120,12 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    /// Creates a new `Metadata` by parsing the header of `rom`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if parsing the header of `rom` or if the
+    /// header contains invalid values.
     pub fn new(rom: &[u8]) -> Result<Self, MetadataError> {
         let title = rom[CART_TITLE_START..=CART_TITLE_END]
             .iter()
@@ -159,6 +189,11 @@ impl Metadata {
         })
     }
 
+    /// Verifies the header checksum of the rom.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the header checksum does not match.
     pub const fn verify_header_checksum(&self) -> Result<(), HeaderChecksumError> {
         let expected = self.expected_header_checksum;
         let actual = self.actual_header_checksum;
@@ -169,6 +204,11 @@ impl Metadata {
         }
     }
 
+    /// Verifies the global checksum of the rom.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if global checksum does not match.
     pub const fn verify_global_checksum(&self) -> Result<(), GlobalChecksumError> {
         let expected = self.expected_global_checksum;
         let actual = self.actual_global_checksum;
@@ -179,54 +219,80 @@ impl Metadata {
         }
     }
 
+    /// Returns the title.
+    #[must_use]
     pub fn title(&self) -> &str {
         &self.title
     }
 
+    /// Returns the CGB flag.
+    #[must_use]
     pub const fn cgb_flag(&self) -> u8 {
         self.cgb_flag
     }
 
+    /// Returns the cartridge type.
+    #[must_use]
     pub const fn cartridge_type(&self) -> u8 {
         self.cartridge_type
     }
 
+    /// Returns `true` if the associated rom has RAM banks.
+    #[must_use]
     pub fn has_ram(&self) -> bool {
         CARTRIDGE_TYPE_HAS_RAM.contains(&self.cartridge_type)
     }
 
+    /// Returns `true` if the associated rom has battery saves.
+    #[must_use]
     pub fn has_battery(&self) -> bool {
         CARTRIDGE_TYPE_HAS_BATTERY.contains(&self.cartridge_type)
     }
 
+    /// Returns `true` if the associated rom supports real-time clock (RTC) feature.
+    #[must_use]
     pub fn supports_rtc(&self) -> bool {
         CARTRIDGE_TYPE_SUPPORTS_RTC.contains(&self.cartridge_type)
     }
 
+    /// Returns `true` if associated rom supports rumble feature.
+    #[must_use]
     pub fn supports_rumble(&self) -> bool {
         CARTRIDGE_TYPE_SUPPORTS_RUMBLE.contains(&self.cartridge_type)
     }
 
+    /// Returns the number of ROM banks.
+    #[must_use]
     pub const fn rom_banks(&self) -> usize {
         self.rom_banks
     }
 
+    /// Returns the number of RAM banks.
+    #[must_use]
     pub const fn ram_banks(&self) -> usize {
         self.ram_banks
     }
 
+    /// Returns the ROM size in bytes.
+    #[must_use]
     pub const fn rom_size(&self) -> usize {
         self.rom_banks * ROM_BANK_SIZE
     }
 
+    /// Returns the RAM size in bytes.
+    #[must_use]
     pub const fn ram_size(&self) -> usize {
         self.ram_banks * RAM_BANK_SIZE
     }
 
+    /// Returns the destination code.
+    #[must_use]
     pub const fn destination_code(&self) -> u8 {
         self.destination_code
     }
 
+    /// Returns the version number.
+    #[must_use]
     pub const fn version_number(&self) -> u8 {
         self.version_number
     }

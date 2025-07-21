@@ -79,16 +79,24 @@ pub trait WriteU16<B: BusInterface, D> {
     fn write_u16(&mut self, bus: &mut B, dest: D, value: u16);
 }
 
-/// 8-bit registers (r8)
+/// A list of all 8-bit registers (r8)
 #[derive(Debug, Clone, Copy)]
 pub enum RegisterU8 {
+    /// Accumulator
     A,
+    /// Flag
     F,
+    /// Register B
     B,
+    /// Register C
     C,
+    /// Register D
     D,
+    /// Register E
     E,
+    /// Register H
     H,
+    /// Register L
     L,
 }
 
@@ -104,14 +112,20 @@ impl<B: BusInterface> WriteU8<B, RegisterU8> for Cpu {
     }
 }
 
-/// 16-bit registers (r16)
+/// A list of all 16-bit registers (r16)
 #[derive(Debug, Clone, Copy)]
 pub enum RegisterU16 {
+    /// Accumulator and Flags
     AF,
+    /// Register BC
     BC,
+    /// Register DE
     DE,
+    /// Register HL
     HL,
+    /// Stack Pointer
     SP,
+    /// Program Counter
     PC,
 }
 
@@ -128,7 +142,7 @@ impl<B: BusInterface> WriteU16<B, RegisterU16> for Cpu {
 }
 
 /// Unit struct to represent Immediate memory access.
-/// next byte or word (n8 or n16)
+/// Next byte or word (n8 or n16)
 #[derive(Debug, Clone, Copy)]
 pub struct Immediate;
 
@@ -253,7 +267,6 @@ pub struct Cpu {
     c: u8,
     d: u8,
     e: u8,
-    /// Flags Register
     f: FlagsRegister,
     h: u8,
     l: u8,
@@ -262,7 +275,7 @@ pub struct Cpu {
     /// Program Counter
     pc: u16,
     halted: bool,
-    // IME: Interrupt Master Enable
+    /// Interrupt Master Enable (IME)
     interrupt_enabled: bool,
     // Used to delay setting IME after calling EI
     interrupt_delay: Option<u8>,

@@ -1,5 +1,19 @@
+//! An emulated game cartridge.
+//!
+//! # Examples
+//!
+//! You can create a [`Cartridge`] with [`Cartridge::new`]:
+//!
+//! ```
+//! use std::fs;
+//! use gb_core::cartridge::Cartridge;
+//!
+//! let rom = fs::read("example_rom.gb")?;
+//! let cartridge = Cartridge::new(rom)?;
+//! ```
+
 mod mbc;
-mod metadata;
+pub mod metadata;
 
 use crate::cartridge::mbc::{MBC1, MBC2, MBC3, MBC5, MemoryBankController, NoMBC};
 use crate::cartridge::metadata::{Metadata, MetadataError};
@@ -7,9 +21,17 @@ use crate::cartridge::metadata::{Metadata, MetadataError};
 const ROM_BANK_SIZE: usize = 16 * 1024;
 const RAM_BANK_SIZE: usize = 8 * 1024;
 
+/// An enumeration of possible errors which can occur when creating a new [`Cartridge`] from the [`new`] method.
+///
+/// [`Cartridge`]: crate::cartridge::Cartridge
+/// [`new`]: crate::cartridge::Cartridge::new
 #[derive(Debug)]
 pub enum CartridgeError {
+    /// rom is too small.
     TooSmall,
+    /// rom is too large.
+    TooLarge,
+    /// Header contained in rom is invalid.
     Metadata(MetadataError),
 }
 
@@ -23,7 +45,10 @@ impl std::fmt::Display for CartridgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TooSmall => {
-                write!(f, "Cartridge is too small; should be at least 32 KiB")
+                write!(f, "ROM is too small; should be at least 32 KiB")
+            }
+            Self::TooLarge => {
+                write!(f, "ROM is too large; should be at most 8 MiB")
             }
             Self::Metadata(err) => write!(f, "Bad cartridge header: {err}"),
         }
@@ -33,19 +58,30 @@ impl std::fmt::Display for CartridgeError {
 impl std::error::Error for CartridgeError {}
 
 // TODO: add support for save files
+/// An emulated game cartridge.
 pub struct Cartridge {
     mbc: Box<dyn MemoryBankController>,
     metadata: Metadata,
 }
 
 impl Cartridge {
+    /// Attempts to create a new `Cartridge` wrapping the provided `rom`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `rom` is smaller than 32 KiB,
+    /// or if the header contained in `rom` fails validation.
     pub fn new(mut rom: Vec<u8>) -> Result<Self, CartridgeError> {
         if rom.len() < (2 * ROM_BANK_SIZE) {
             return Err(CartridgeError::TooSmall);
         }
 
+        if rom.len() > (512 * ROM_BANK_SIZE) {
+            return Err(CartridgeError::TooLarge);
+        }
+
         if !(rom.len() / ROM_BANK_SIZE).is_power_of_two() {
-            // Resize rom to proper size
+            // Resize rom to a defined size
             let len = (rom.len() / ROM_BANK_SIZE).next_power_of_two() * ROM_BANK_SIZE;
             rom.resize(len, 0xFF);
         }
@@ -107,6 +143,7 @@ impl Cartridge {
         self.mbc.write_ram_bank(addr, value);
     }
 
+    /// Metadata from the cartridge header.
     #[must_use]
     pub const fn metadata(&self) -> &Metadata {
         &self.metadata
