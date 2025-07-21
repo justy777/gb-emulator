@@ -1,7 +1,13 @@
 [package]
 name = "gb-emulator"
+description = "An original Game Boy (DMG) emulator"
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [dependencies]
 anyhow = "1.0"
@@ -13,3 +19,7 @@ members = ["core"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/justy777/gb-emulator"
+categories = ["emulators"]
+keywords = ["gb", "dmg"]
