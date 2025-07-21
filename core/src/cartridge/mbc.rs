@@ -352,7 +352,7 @@ impl MemoryBankController for MBC5 {
     }
 
     fn read_rom_bank1(&self, addr: u16) -> u8 {
-        let bank = ((self.rom_bank_number2 as u16) << 8) | (self.rom_bank_number as u16);
+        let bank = u16::from_le_bytes([self.rom_bank_number, self.rom_bank_number2]);
         let bank = truncate_bank(bank as usize, self.rom_banks);
 
         let index = (ROM_BANK_SIZE * bank) + (addr as usize);

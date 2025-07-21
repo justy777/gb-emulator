@@ -201,7 +201,10 @@ impl Ppu {
             MEM_SCX => self.scroll_x,
             MEM_LY => self.ly,
             MEM_LYC => self.lyc,
-            MEM_DMA => (self.sprite_transfer_addr >> 8) as u8,
+            MEM_DMA => {
+                let [_low, high] = self.sprite_transfer_addr.to_le_bytes();
+                high
+            }
             MEM_BGP => self.background_palette,
             MEM_OBP0 => self.sprite_palette_0,
             MEM_OBP1 => self.sprite_palette_1,
@@ -219,7 +222,7 @@ impl Ppu {
             MEM_SCX => self.scroll_x = value,
             MEM_LY => self.ly = value,
             MEM_LYC => self.lyc = value,
-            MEM_DMA => self.sprite_transfer_addr = (value as u16) << 8,
+            MEM_DMA => self.sprite_transfer_addr = u16::from_le_bytes([0x00, value]),
             MEM_BGP => self.background_palette = value,
             MEM_OBP0 => self.sprite_palette_0 = value,
             MEM_OBP1 => self.sprite_palette_1 = value,
