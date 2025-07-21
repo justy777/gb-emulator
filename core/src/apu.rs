@@ -88,16 +88,37 @@ impl VolumeAndEnvelope {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct PeriodHighAndControl(u8);
+struct Period(u16);
 
-impl PeriodHighAndControl {
-    const TRIGGER: u8 = 0b1000_0000;
+impl Period {
+    const UNUSED: u16 = 0b1111_1000_0000_0000;
+
+    const fn empty() -> Self {
+        Self(Self::UNUSED)
+    }
+
+    const fn replace_low(self, low: u8) -> Self {
+        let [_low, high] = self.0.to_le_bytes();
+        let bits = u16::from_le_bytes([low, high]);
+        Self(bits | Self::UNUSED)
+    }
+
+    const fn replace_high(self, high: u8) -> Self {
+        let [low, _high] = self.0.to_le_bytes();
+        let bits = u16::from_le_bytes([low, high]);
+        Self(bits | Self::UNUSED)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct Control(u8);
+
+impl Control {
     const LENGTH_ENABLE: u8 = 0b0100_0000;
-    const PERIOD: u8 = 0b0000_0111;
-    const UNUSED: u8 = 0b0011_1000;
+    const UNUSED: u8 = 0b1011_1111;
 
     const fn new() -> Self {
-        Self::from_bits(Self::TRIGGER | Self::PERIOD)
+        Self::from_bits(0)
     }
 
     const fn from_bits(bits: u8) -> Self {
@@ -150,26 +171,6 @@ impl OutputLevel {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct LengthTimer(u8);
-
-impl LengthTimer {
-    const INITIAL_LENGTH_TIMER: u8 = 0b0011_1111;
-    const UNUSED: u8 = 0b1100_0000;
-
-    const fn new() -> Self {
-        Self::from_bits(Self::INITIAL_LENGTH_TIMER)
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits | Self::UNUSED)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
 struct FrequencyAndRandomness(u8);
 
 impl FrequencyAndRandomness {
@@ -183,27 +184,6 @@ impl FrequencyAndRandomness {
 
     const fn from_bits(bits: u8) -> Self {
         Self(bits)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-struct Control(u8);
-
-impl Control {
-    const TRIGGER: u8 = 0b1000_0000;
-    const LENGTH_ENABLE: u8 = 0b0100_0000;
-    const UNUSED: u8 = 0b0011_1111;
-
-    const fn new() -> Self {
-        Self::from_bits(Self::TRIGGER)
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits | Self::UNUSED)
     }
 
     const fn bits(self) -> u8 {
@@ -294,13 +274,11 @@ struct Channel1 {
     // NR10
     sweep: Sweep,
     duty_cycle: DutyCycle,
-    length_timer: LengthTimer,
+    length_timer: u8,
     // NR12
     volume_and_envelope: VolumeAndEnvelope,
-    // NR13
-    period_low: u8,
-    // NR14
-    period_high_and_control: PeriodHighAndControl,
+    period: Period,
+    control: Control,
 }
 
 impl Channel1 {
@@ -308,35 +286,33 @@ impl Channel1 {
         Self {
             sweep: Sweep::empty(),
             duty_cycle: DutyCycle::from_bits(0b1000_0000),
-            length_timer: LengthTimer::new(),
+            length_timer: 0,
             volume_and_envelope: VolumeAndEnvelope::from_bits(
                 VolumeAndEnvelope::INITIAL_VOLUME | 0b11,
             ),
-            period_low: 0xFF,
-            period_high_and_control: PeriodHighAndControl::new(),
+            period: Period::empty(),
+            control: Control::new(),
         }
     }
 }
 
 struct Channel2 {
     duty_cycle: DutyCycle,
-    length_timer: LengthTimer,
+    length_timer: u8,
     // NR22
     volume_and_envelope: VolumeAndEnvelope,
-    // NR23
-    period_low: u8,
-    // NR24
-    period_high_and_control: PeriodHighAndControl,
+    period: Period,
+    control: Control,
 }
 
 impl Channel2 {
     const fn new() -> Self {
         Self {
             duty_cycle: DutyCycle::empty(),
-            length_timer: LengthTimer::new(),
+            length_timer: 0,
             volume_and_envelope: VolumeAndEnvelope::empty(),
-            period_low: 0xFF,
-            period_high_and_control: PeriodHighAndControl::new(),
+            period: Period::empty(),
+            control: Control::new(),
         }
     }
 }
@@ -348,10 +324,8 @@ struct Channel3 {
     length_timer: u8,
     // NR32
     output_level: OutputLevel,
-    // NR33
-    period_low: u8,
-    // NR34
-    period_high_and_control: PeriodHighAndControl,
+    period: Period,
+    control: Control,
 }
 
 impl Channel3 {
@@ -360,15 +334,15 @@ impl Channel3 {
             dac_enable: DacEnable::empty(),
             length_timer: 0xFF,
             output_level: OutputLevel::empty(),
-            period_low: 0xFF,
-            period_high_and_control: PeriodHighAndControl::new(),
+            period: Period::empty(),
+            control: Control::new(),
         }
     }
 }
 
 struct Channel4 {
     // NR41
-    length_timer: LengthTimer,
+    length_timer: u8,
     // NR42
     volume_and_envelope: VolumeAndEnvelope,
     // NR43
@@ -380,7 +354,7 @@ struct Channel4 {
 impl Channel4 {
     const fn new() -> Self {
         Self {
-            length_timer: LengthTimer::new(),
+            length_timer: 0,
             volume_and_envelope: VolumeAndEnvelope::empty(),
             frequency_and_randomness: FrequencyAndRandomness::empty(),
             control: Control::new(),
@@ -421,13 +395,13 @@ impl Apu {
             MEM_NR10 => self.channel1.sweep.bits(),
             MEM_NR11 => self.channel1.duty_cycle.bits(),
             MEM_NR12 => self.channel1.volume_and_envelope.bits(),
-            MEM_NR14 => self.channel1.period_high_and_control.bits(),
+            MEM_NR14 => self.channel1.control.bits(),
             MEM_NR21 => self.channel2.duty_cycle.bits(),
             MEM_NR22 => self.channel2.volume_and_envelope.bits(),
-            MEM_NR24 => self.channel2.period_high_and_control.bits(),
+            MEM_NR24 => self.channel2.control.bits(),
             MEM_NR30 => self.channel3.dac_enable.bits(),
             MEM_NR32 => self.channel3.output_level.bits(),
-            MEM_NR34 => self.channel3.period_high_and_control.bits(),
+            MEM_NR34 => self.channel3.control.bits(),
             MEM_NR42 => self.channel4.volume_and_envelope.bits(),
             MEM_NR43 => self.channel4.frequency_and_randomness.bits(),
             MEM_NR44 => self.channel4.control.bits(),
@@ -447,35 +421,44 @@ impl Apu {
             MEM_NR10 => self.channel1.sweep = Sweep::from_bits(value),
             MEM_NR11 => {
                 self.channel1.duty_cycle = DutyCycle::from_bits(value);
-                self.channel1.length_timer = LengthTimer::from_bits(value);
+                self.channel1.length_timer = value & 0x3F;
             }
             MEM_NR12 => self.channel1.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
-            MEM_NR13 => self.channel1.period_low = value,
+            MEM_NR13 => self.channel1.period = self.channel1.period.replace_low(value),
             MEM_NR14 => {
-                self.channel1.period_high_and_control = PeriodHighAndControl::from_bits(value);
+                let _trigger = value & 0x80 == 0x80;
+                self.channel1.period = self.channel1.period.replace_high(value);
+                self.channel1.control = Control::from_bits(value);
             }
             MEM_NR21 => {
                 self.channel2.duty_cycle = DutyCycle::from_bits(value);
-                self.channel2.length_timer = LengthTimer::from_bits(value);
+                self.channel2.length_timer = value & 0x3F;
             }
             MEM_NR22 => self.channel2.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
-            MEM_NR23 => self.channel2.period_low = value,
+            MEM_NR23 => self.channel2.period = self.channel2.period.replace_low(value),
             MEM_NR24 => {
-                self.channel2.period_high_and_control = PeriodHighAndControl::from_bits(value);
+                let _trigger = value & 0x80 == 0x80;
+                self.channel2.period = self.channel2.period.replace_high(value);
+                self.channel2.control = Control::from_bits(value);
             }
             MEM_NR30 => self.channel3.dac_enable = DacEnable::from_bits(value),
             MEM_NR31 => self.channel3.length_timer = value,
             MEM_NR32 => self.channel3.output_level = OutputLevel::from_bits(value),
-            MEM_NR33 => self.channel3.period_low = value,
+            MEM_NR33 => self.channel3.period = self.channel3.period.replace_low(value),
             MEM_NR34 => {
-                self.channel3.period_high_and_control = PeriodHighAndControl::from_bits(value);
+                let _trigger = value & 0x80 == 0x80;
+                self.channel3.period = self.channel3.period.replace_high(value);
+                self.channel3.control = Control::from_bits(value);
             }
-            MEM_NR41 => self.channel4.length_timer = LengthTimer::from_bits(value),
+            MEM_NR41 => self.channel4.length_timer = value & 0x3F,
             MEM_NR42 => self.channel4.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
             MEM_NR43 => {
                 self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
             }
-            MEM_NR44 => self.channel4.control = Control::from_bits(value),
+            MEM_NR44 => {
+                let _trigger = value & 0x80 == 0x80;
+                self.channel4.control = Control::from_bits(value);
+            }
             MEM_NR50 => self.master_volume = MasterVolume::from_bits(value),
             MEM_NR51 => self.sound_panning = SoundPanning::from_bits(value),
             MEM_NR52 => self.audio_master_control = MasterControl::from_bits(value),
