@@ -25,9 +25,9 @@ const WAVE_RAM_END: u16 = 0xFF3F;
 const WAVE_RAM_SIZE: usize = (WAVE_RAM_END as usize) - (WAVE_RAM_START as usize) + 1;
 
 #[derive(Debug, Copy, Clone)]
-struct ChannelSweep(u8);
+struct Sweep(u8);
 
-impl ChannelSweep {
+impl Sweep {
     const PACE: u8 = 0b0111_0000;
     const DIRECTION: u8 = 0b0000_1000;
     const INDIVIDUAL_STEP: u8 = 0b0000_0111;
@@ -47,14 +47,18 @@ impl ChannelSweep {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct LengthTimerAndDutyCycle(u8);
+struct DutyCycle(u8);
 
-impl LengthTimerAndDutyCycle {
+impl DutyCycle {
     const WAVE_DUTY: u8 = 0b1100_0000;
-    const INITIAL_LENGTH_TIMER: u8 = 0b0011_1111;
+    const UNUSED: u8 = 0b0011_1111;
+
+    const fn empty() -> Self {
+        Self::from_bits(0)
+    }
 
     const fn from_bits(bits: u8) -> Self {
-        Self(bits)
+        Self(bits | Self::UNUSED)
     }
 
     const fn bits(self) -> u8 {
@@ -263,9 +267,9 @@ impl SoundPanning {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct AudioMasterControl(u8);
+struct MasterControl(u8);
 
-impl AudioMasterControl {
+impl MasterControl {
     const AUDIO_ENABLE: u8 = 0b1000_0000;
     const CHANNEL_4_ENABLE: u8 = 0b0000_1000;
     const CHANNEL_3_ENABLE: u8 = 0b0000_0100;
@@ -288,9 +292,9 @@ impl AudioMasterControl {
 
 struct Channel1 {
     // NR10
-    sweep: ChannelSweep,
-    // NR11
-    length_timer_and_duty_cycle: LengthTimerAndDutyCycle,
+    sweep: Sweep,
+    duty_cycle: DutyCycle,
+    length_timer: LengthTimer,
     // NR12
     volume_and_envelope: VolumeAndEnvelope,
     // NR13
@@ -302,10 +306,9 @@ struct Channel1 {
 impl Channel1 {
     const fn new() -> Self {
         Self {
-            sweep: ChannelSweep::empty(),
-            length_timer_and_duty_cycle: LengthTimerAndDutyCycle::from_bits(
-                0b1000_0000 | LengthTimerAndDutyCycle::INITIAL_LENGTH_TIMER,
-            ),
+            sweep: Sweep::empty(),
+            duty_cycle: DutyCycle::from_bits(0b1000_0000),
+            length_timer: LengthTimer::new(),
             volume_and_envelope: VolumeAndEnvelope::from_bits(
                 VolumeAndEnvelope::INITIAL_VOLUME | 0b11,
             ),
@@ -316,8 +319,8 @@ impl Channel1 {
 }
 
 struct Channel2 {
-    // NR21
-    length_timer_and_duty_cycle: LengthTimerAndDutyCycle,
+    duty_cycle: DutyCycle,
+    length_timer: LengthTimer,
     // NR22
     volume_and_envelope: VolumeAndEnvelope,
     // NR23
@@ -329,9 +332,8 @@ struct Channel2 {
 impl Channel2 {
     const fn new() -> Self {
         Self {
-            length_timer_and_duty_cycle: LengthTimerAndDutyCycle::from_bits(
-                LengthTimerAndDutyCycle::INITIAL_LENGTH_TIMER,
-            ),
+            duty_cycle: DutyCycle::empty(),
+            length_timer: LengthTimer::new(),
             volume_and_envelope: VolumeAndEnvelope::empty(),
             period_low: 0xFF,
             period_high_and_control: PeriodHighAndControl::new(),
@@ -387,48 +389,48 @@ impl Channel4 {
 }
 
 pub struct Apu {
-    channel_1: Channel1,
-    channel_2: Channel2,
-    channel_3: Channel3,
-    channel_4: Channel4,
+    channel1: Channel1,
+    channel2: Channel2,
+    channel3: Channel3,
+    channel4: Channel4,
     // NR50
     master_volume: MasterVolume,
     // NR51
     sound_panning: SoundPanning,
     // NR52
-    audio_master_control: AudioMasterControl,
+    audio_master_control: MasterControl,
     wave_ram: [u8; WAVE_RAM_SIZE],
 }
 
 impl Apu {
     pub const fn new() -> Self {
         Self {
-            channel_1: Channel1::new(),
-            channel_2: Channel2::new(),
-            channel_3: Channel3::new(),
-            channel_4: Channel4::new(),
+            channel1: Channel1::new(),
+            channel2: Channel2::new(),
+            channel3: Channel3::new(),
+            channel4: Channel4::new(),
             master_volume: MasterVolume::new(),
             sound_panning: SoundPanning::new(),
-            audio_master_control: AudioMasterControl::new(),
+            audio_master_control: MasterControl::new(),
             wave_ram: [0xFF; WAVE_RAM_SIZE],
         }
     }
 
     pub const fn read_audio(&self, addr: u16) -> u8 {
         match addr {
-            MEM_NR10 => self.channel_1.sweep.bits(),
-            MEM_NR11 => self.channel_1.length_timer_and_duty_cycle.bits(),
-            MEM_NR12 => self.channel_1.volume_and_envelope.bits(),
-            MEM_NR14 => self.channel_1.period_high_and_control.bits(),
-            MEM_NR21 => self.channel_2.length_timer_and_duty_cycle.bits(),
-            MEM_NR22 => self.channel_2.volume_and_envelope.bits(),
-            MEM_NR24 => self.channel_2.period_high_and_control.bits(),
-            MEM_NR30 => self.channel_3.dac_enable.bits(),
-            MEM_NR32 => self.channel_3.output_level.bits(),
-            MEM_NR34 => self.channel_3.period_high_and_control.bits(),
-            MEM_NR42 => self.channel_4.volume_and_envelope.bits(),
-            MEM_NR43 => self.channel_4.frequency_and_randomness.bits(),
-            MEM_NR44 => self.channel_4.control.bits(),
+            MEM_NR10 => self.channel1.sweep.bits(),
+            MEM_NR11 => self.channel1.duty_cycle.bits(),
+            MEM_NR12 => self.channel1.volume_and_envelope.bits(),
+            MEM_NR14 => self.channel1.period_high_and_control.bits(),
+            MEM_NR21 => self.channel2.duty_cycle.bits(),
+            MEM_NR22 => self.channel2.volume_and_envelope.bits(),
+            MEM_NR24 => self.channel2.period_high_and_control.bits(),
+            MEM_NR30 => self.channel3.dac_enable.bits(),
+            MEM_NR32 => self.channel3.output_level.bits(),
+            MEM_NR34 => self.channel3.period_high_and_control.bits(),
+            MEM_NR42 => self.channel4.volume_and_envelope.bits(),
+            MEM_NR43 => self.channel4.frequency_and_randomness.bits(),
+            MEM_NR44 => self.channel4.control.bits(),
             MEM_NR50 => self.master_volume.bits(),
             MEM_NR51 => self.sound_panning.bits(),
             MEM_NR52 => self.audio_master_control.bits(),
@@ -442,41 +444,41 @@ impl Apu {
 
     pub const fn write_audio(&mut self, addr: u16, value: u8) {
         match addr {
-            MEM_NR10 => self.channel_1.sweep = ChannelSweep::from_bits(value),
+            MEM_NR10 => self.channel1.sweep = Sweep::from_bits(value),
             MEM_NR11 => {
-                self.channel_1.length_timer_and_duty_cycle =
-                    LengthTimerAndDutyCycle::from_bits(value);
+                self.channel1.duty_cycle = DutyCycle::from_bits(value);
+                self.channel1.length_timer = LengthTimer::from_bits(value);
             }
-            MEM_NR12 => self.channel_1.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
-            MEM_NR13 => self.channel_1.period_low = value,
+            MEM_NR12 => self.channel1.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_NR13 => self.channel1.period_low = value,
             MEM_NR14 => {
-                self.channel_1.period_high_and_control = PeriodHighAndControl::from_bits(value);
+                self.channel1.period_high_and_control = PeriodHighAndControl::from_bits(value);
             }
             MEM_NR21 => {
-                self.channel_2.length_timer_and_duty_cycle =
-                    LengthTimerAndDutyCycle::from_bits(value);
+                self.channel2.duty_cycle = DutyCycle::from_bits(value);
+                self.channel2.length_timer = LengthTimer::from_bits(value);
             }
-            MEM_NR22 => self.channel_2.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
-            MEM_NR23 => self.channel_2.period_low = value,
+            MEM_NR22 => self.channel2.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_NR23 => self.channel2.period_low = value,
             MEM_NR24 => {
-                self.channel_2.period_high_and_control = PeriodHighAndControl::from_bits(value);
+                self.channel2.period_high_and_control = PeriodHighAndControl::from_bits(value);
             }
-            MEM_NR30 => self.channel_3.dac_enable = DacEnable::from_bits(value),
-            MEM_NR31 => self.channel_3.length_timer = value,
-            MEM_NR32 => self.channel_3.output_level = OutputLevel::from_bits(value),
-            MEM_NR33 => self.channel_3.period_low = value,
+            MEM_NR30 => self.channel3.dac_enable = DacEnable::from_bits(value),
+            MEM_NR31 => self.channel3.length_timer = value,
+            MEM_NR32 => self.channel3.output_level = OutputLevel::from_bits(value),
+            MEM_NR33 => self.channel3.period_low = value,
             MEM_NR34 => {
-                self.channel_3.period_high_and_control = PeriodHighAndControl::from_bits(value);
+                self.channel3.period_high_and_control = PeriodHighAndControl::from_bits(value);
             }
-            MEM_NR41 => self.channel_4.length_timer = LengthTimer::from_bits(value),
-            MEM_NR42 => self.channel_4.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_NR41 => self.channel4.length_timer = LengthTimer::from_bits(value),
+            MEM_NR42 => self.channel4.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
             MEM_NR43 => {
-                self.channel_4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
+                self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
             }
-            MEM_NR44 => self.channel_4.control = Control::from_bits(value),
+            MEM_NR44 => self.channel4.control = Control::from_bits(value),
             MEM_NR50 => self.master_volume = MasterVolume::from_bits(value),
             MEM_NR51 => self.sound_panning = SoundPanning::from_bits(value),
-            MEM_NR52 => self.audio_master_control = AudioMasterControl::from_bits(value),
+            MEM_NR52 => self.audio_master_control = MasterControl::from_bits(value),
             WAVE_RAM_START..=WAVE_RAM_END => {
                 self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
             }
