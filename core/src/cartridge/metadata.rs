@@ -3,12 +3,16 @@
 //! # Examples
 //!
 //! You can parse a rom's header:
-//! ```
+//! ```no_run
+//! use std::error::Error;
 //! use std::fs;
 //! use gb_core::cartridge::metadata::Metadata;
 //!
-//! let rom = fs::read("example_rom.gb")?;
-//! let metadata = Metadata::new(&rom)?;
+//! fn main() -> Result<(), Box<dyn Error>> {
+//!     let rom = fs::read("example_rom.gb")?;
+//!     let metadata = Metadata::new(&rom)?;
+//!     Ok(())
+//! }
 //! ```
 
 const CART_TITLE_START: usize = 0x134;

@@ -1,4 +1,5 @@
 use crate::interrupt::{Interrupt, InterruptFlags};
+use std::fmt::Write;
 
 const MEM_SB: u16 = 0xFF01;
 const MEM_SC: u16 = 0xFF02;
@@ -49,6 +50,7 @@ pub struct SerialPort {
     // SC
     control: SerialTransferControl,
     state: TransferState,
+    output: String,
 }
 
 impl SerialPort {
@@ -57,6 +59,7 @@ impl SerialPort {
             data: 0,
             control: SerialTransferControl::empty(),
             state: TransferState::Idle,
+            output: String::new(),
         }
     }
 
@@ -64,9 +67,12 @@ impl SerialPort {
         if self.control.is_transfer_enabled() {
             self.state = match self.state {
                 TransferState::Ongoing(8) => {
+                    // Writes ASCII chars to screen
                     //let c = char::from(self.data);
                     //print!("{c}");
                     println!("{}", self.data);
+                    // Accumulates output for tests
+                    let _ = write!(self.output, "{} ", self.data);
                     self.control.set_transfer_enable(false);
                     interrupt_flags.set(Interrupt::Serial, true);
 
@@ -99,5 +105,9 @@ impl SerialPort {
             }
             _ => unreachable!(),
         }
+    }
+
+    pub fn output(&self) -> String {
+        self.output.trim().into()
     }
 }

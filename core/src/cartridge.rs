@@ -4,12 +4,16 @@
 //!
 //! You can create a [`Cartridge`] with [`Cartridge::new`]:
 //!
-//! ```
+//! ```no_run
+//! use std::error::Error;
 //! use std::fs;
 //! use gb_core::cartridge::Cartridge;
 //!
-//! let rom = fs::read("example_rom.gb")?;
-//! let cartridge = Cartridge::new(rom)?;
+//! fn main() -> Result<(), Box<dyn Error>> {
+//!     let rom = fs::read("example_rom.gb")?;
+//!     let cartridge = Cartridge::new(rom)?;
+//!     Ok(())
+//! }
 //! ```
 
 mod mbc;
