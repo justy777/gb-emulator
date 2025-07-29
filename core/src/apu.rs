@@ -429,7 +429,7 @@ impl Apu {
                     bits |= 0x01;
                 }
                 bits
-            },
+            }
             WAVE_RAM_START..=WAVE_RAM_END => self.wave_ram[(addr - WAVE_RAM_START) as usize],
             _ => {
                 // NR13, NR23, NR31, NR33, NR41 are write-only
@@ -493,7 +493,7 @@ impl Apu {
                 if !self.enabled {
                     self.disable();
                 }
-            },
+            }
             WAVE_RAM_START..=WAVE_RAM_END => {
                 self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
             }

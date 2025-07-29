@@ -1,8 +1,8 @@
+use gb_core::cartridge::Cartridge;
+use gb_core::hardware::GameboyHardware;
 use std::fs;
 use std::time::{Duration, Instant};
 use yare::parameterized;
-use gb_core::cartridge::Cartridge;
-use gb_core::hardware::GameboyHardware;
 
 #[test]
 fn do_nothing() {}
@@ -19,32 +19,12 @@ fn do_nothing() {}
   cpu_instrs_09 = {"tests/roms/blargg/cpu_instrs/09-op r,r.gb", "tests/roms/blargg/cpu_instrs/09-op r,r.txt", 9},
   cpu_instrs_10 = {"tests/roms/blargg/cpu_instrs/10-bit ops.gb", "tests/roms/blargg/cpu_instrs/10-bit ops.txt", 14},
   cpu_instrs_11 = {"tests/roms/blargg/cpu_instrs/11-op a,(hl).gb", "tests/roms/blargg/cpu_instrs/11-op a,(hl).txt", 15},
-  dmg_sound_01 = {"tests/roms/blargg/dmg_sound/01-registers.gb", "tests/roms/blargg/dmg_sound/01-registers.txt", 10},
-  dmg_sound_02 = {"tests/roms/blargg/dmg_sound/02-len ctr.gb", "tests/roms/blargg/dmg_sound/02-len ctr.txt", 10},
-  dmg_sound_03 = {"tests/roms/blargg/dmg_sound/03-trigger.gb", "tests/roms/blargg/dmg_sound/03-trigger.txt", 10},
-  dmg_sound_04 = {"tests/roms/blargg/dmg_sound/04-sweep.gb", "tests/roms/blargg/dmg_sound/04-sweep.txt", 10},
-  dmg_sound_05 = {"tests/roms/blargg/dmg_sound/05-sweep details.gb", "tests/roms/blargg/dmg_sound/05-sweep details.txt", 10},
-  dmg_sound_06 = {"tests/roms/blargg/dmg_sound/06-overflow on trigger.gb", "tests/roms/blargg/dmg_sound/06-overflow on trigger.txt", 10},
-  dmg_sound_07 = {"tests/roms/blargg/dmg_sound/07-len sweep period sync.gb", "tests/roms/blargg/dmg_sound/07-len sweep period sync.txt", 10},
-  dmg_sound_08 = {"tests/roms/blargg/dmg_sound/08-len ctr during power.gb", "tests/roms/blargg/dmg_sound/08-len ctr during power.txt", 10},
-  dmg_sound_09 = {"tests/roms/blargg/dmg_sound/09-wave read while on.gb", "tests/roms/blargg/dmg_sound/09-wave read while on.txt", 10},
-  dmg_sound_10 = {"tests/roms/blargg/dmg_sound/10-wave trigger while on.gb", "tests/roms/blargg/dmg_sound/10-wave trigger while on.txt", 10},
-  dmg_sound_11 = {"tests/roms/blargg/dmg_sound/11-regs after power.gb", "tests/roms/blargg/dmg_sound/11-regs after power.txt", 10},
-  dmg_sound_12 = {"tests/roms/blargg/dmg_sound/12-wave write while on.gb", "tests/roms/blargg/dmg_sound/12-wave write while on.txt", 10},
   instr_timing = {"tests/roms/blargg/instr_timing.gb", "tests/roms/blargg/instr_timing.txt", 1},
   mem_timing_01 = {"tests/roms/blargg/mem_timing/01-read_timing.gb", "tests/roms/blargg/mem_timing/01-read_timing.txt", 1},
   mem_timing_02 = {"tests/roms/blargg/mem_timing/02-write_timing.gb", "tests/roms/blargg/mem_timing/02-write_timing.txt", 1},
   mem_timing_03 = {"tests/roms/blargg/mem_timing/03-modify_timing.gb", "tests/roms/blargg/mem_timing/03-modify_timing.txt", 1},
-  oam_bug_1 = {"tests/roms/blargg/oam_bug/1-lcd_sync.gb", "tests/roms/blargg/oam_bug/1-lcd_sync.txt", 10},
-  oam_bug_2 = {"tests/roms/blargg/oam_bug/2-causes.gb", "tests/roms/blargg/oam_bug/2-causes.txt", 10},
-  oam_bug_3 = {"tests/roms/blargg/oam_bug/3-non_causes.gb", "tests/roms/blargg/oam_bug/3-non_causes.txt", 10},
-  oam_bug_4 = {"tests/roms/blargg/oam_bug/4-scanline_timing.gb", "tests/roms/blargg/oam_bug/4-scanline_timing.txt", 10},
-  oam_bug_5 = {"tests/roms/blargg/oam_bug/5-timing_bug.gb", "tests/roms/blargg/oam_bug/5-timing_bug.txt", 10},
-  oam_bug_6 = {"tests/roms/blargg/oam_bug/6-timing_no_bug.gb", "tests/roms/blargg/oam_bug/6-timing_no_bug.txt", 10},
-  oam_bug_7 = {"tests/roms/blargg/oam_bug/7-timing_effect.gb", "tests/roms/blargg/oam_bug/7-timing_effect.txt", 10},
-  oam_bug_8 = {"tests/roms/blargg/oam_bug/8-instr_effect.gb", "tests/roms/blargg/oam_bug/8-instr_effect.txt", 10},
 )]
-fn test_rom(input: &str, output: &str, secs: u64) -> Result<(), Box<dyn std::error::Error>> {
+fn test_rom_serial(input: &str, output: &str, secs: u64) -> Result<(), Box<dyn std::error::Error>> {
     let rom = fs::read(input)?;
     let cartridge = Cartridge::new(rom)?;
     let mut gameboy = GameboyHardware::new(cartridge);
@@ -65,5 +45,64 @@ fn test_rom(input: &str, output: &str, secs: u64) -> Result<(), Box<dyn std::err
     let expected = fs::read_to_string(output)?;
 
     assert_eq!(result, expected);
+    Ok(())
+}
+
+#[parameterized(
+  dmg_sound_01 = {"tests/roms/blargg/dmg_sound/01-registers.gb"},
+  dmg_sound_02 = {"tests/roms/blargg/dmg_sound/02-len ctr.gb"},
+  dmg_sound_03 = {"tests/roms/blargg/dmg_sound/03-trigger.gb"},
+  dmg_sound_04 = {"tests/roms/blargg/dmg_sound/04-sweep.gb"},
+  dmg_sound_05 = {"tests/roms/blargg/dmg_sound/05-sweep details.gb"},
+  dmg_sound_06 = {"tests/roms/blargg/dmg_sound/06-overflow on trigger.gb"},
+  dmg_sound_07 = {"tests/roms/blargg/dmg_sound/07-len sweep period sync.gb"},
+  dmg_sound_08 = {"tests/roms/blargg/dmg_sound/08-len ctr during power.gb"},
+  dmg_sound_09 = {"tests/roms/blargg/dmg_sound/09-wave read while on.gb"},
+  dmg_sound_10 = {"tests/roms/blargg/dmg_sound/10-wave trigger while on.gb"},
+  dmg_sound_11 = {"tests/roms/blargg/dmg_sound/11-regs after power.gb"},
+  dmg_sound_12 = {"tests/roms/blargg/dmg_sound/12-wave write while on.gb"},
+  mem_timing_01 = {"tests/roms/blargg/mem_timing-2/01-read_timing.gb"},
+  mem_timing_02 = {"tests/roms/blargg/mem_timing-2/02-write_timing.gb"},
+  mem_timing_03 = {"tests/roms/blargg/mem_timing-2/03-modify_timing.gb"},
+  oam_bug_1 = {"tests/roms/blargg/oam_bug/1-lcd_sync.gb"},
+  oam_bug_2 = {"tests/roms/blargg/oam_bug/2-causes.gb"},
+  oam_bug_3 = {"tests/roms/blargg/oam_bug/3-non_causes.gb"},
+  oam_bug_4 = {"tests/roms/blargg/oam_bug/4-scanline_timing.gb"},
+  oam_bug_5 = {"tests/roms/blargg/oam_bug/5-timing_bug.gb"},
+  oam_bug_6 = {"tests/roms/blargg/oam_bug/6-timing_no_bug.gb"},
+  oam_bug_7 = {"tests/roms/blargg/oam_bug/7-timing_effect.gb"},
+  oam_bug_8 = {"tests/roms/blargg/oam_bug/8-instr_effect.gb"},
+)]
+fn test_rom_memory(input: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let rom = fs::read(input)?;
+    let cartridge = Cartridge::new(rom)?;
+    let mut gameboy = GameboyHardware::new(cartridge);
+
+    let mut initialized = false;
+    let mut done = false;
+    while !done {
+        gameboy.step();
+        let result = gameboy.memory(0xA000);
+        if !initialized && result == 0x80 {
+            initialized = true;
+        } else if initialized && result != 0x80 {
+            done = true;
+        }
+    }
+
+    let result = gameboy.memory(0xA000);
+
+    let mut i = 0;
+    loop {
+        let print = gameboy.memory(0xA004 + i);
+        if print == 0 {
+            break;
+        }
+        print!("{}", char::from(print));
+        i += 1;
+    }
+
+    assert_eq!(result, 0);
+
     Ok(())
 }
