@@ -267,31 +267,8 @@ impl SoundPanning {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct MasterControl(u8);
-
-impl MasterControl {
-    const AUDIO_ENABLE: u8 = 0b1000_0000;
-    const CHANNEL_4_ENABLE: u8 = 0b0000_1000;
-    const CHANNEL_3_ENABLE: u8 = 0b0000_0100;
-    const CHANNEL_2_ENABLE: u8 = 0b0000_0010;
-    const CHANNEL_1_ENABLE: u8 = 0b0000_0001;
-    const UNUSED: u8 = 0b0111_0000;
-
-    const fn new() -> Self {
-        Self::from_bits(Self::AUDIO_ENABLE | Self::CHANNEL_1_ENABLE)
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits | Self::UNUSED)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
-    }
-}
-
 struct Channel1 {
+    enabled: bool,
     // NR10
     sweep: Sweep,
     duty_cycle: DutyCycle,
@@ -305,6 +282,7 @@ struct Channel1 {
 impl Channel1 {
     const fn new() -> Self {
         Self {
+            enabled: true,
             sweep: Sweep::empty(),
             duty_cycle: DutyCycle::from_bits(0b1000_0000),
             length_timer: 0,
@@ -318,6 +296,7 @@ impl Channel1 {
 }
 
 struct Channel2 {
+    enabled: bool,
     duty_cycle: DutyCycle,
     length_timer: u8,
     // NR22
@@ -329,6 +308,7 @@ struct Channel2 {
 impl Channel2 {
     const fn new() -> Self {
         Self {
+            enabled: false,
             duty_cycle: DutyCycle::empty(),
             length_timer: 0,
             volume_and_envelope: VolumeAndEnvelope::empty(),
@@ -339,6 +319,7 @@ impl Channel2 {
 }
 
 struct Channel3 {
+    enabled: bool,
     // NR30
     dac_enable: DacEnable,
     // NR31
@@ -352,6 +333,7 @@ struct Channel3 {
 impl Channel3 {
     const fn new() -> Self {
         Self {
+            enabled: false,
             dac_enable: DacEnable::empty(),
             length_timer: 0xFF,
             output_level: OutputLevel::empty(),
@@ -362,6 +344,7 @@ impl Channel3 {
 }
 
 struct Channel4 {
+    enabled: bool,
     // NR41
     length_timer: u8,
     // NR42
@@ -375,6 +358,7 @@ struct Channel4 {
 impl Channel4 {
     const fn new() -> Self {
         Self {
+            enabled: false,
             length_timer: 0,
             volume_and_envelope: VolumeAndEnvelope::empty(),
             frequency_and_randomness: FrequencyAndRandomness::empty(),
@@ -384,6 +368,7 @@ impl Channel4 {
 }
 
 pub struct Apu {
+    enabled: bool,
     channel1: Channel1,
     channel2: Channel2,
     channel3: Channel3,
@@ -392,21 +377,19 @@ pub struct Apu {
     master_volume: MasterVolume,
     // NR51
     sound_panning: SoundPanning,
-    // NR52
-    audio_master_control: MasterControl,
     wave_ram: [u8; WAVE_RAM_SIZE],
 }
 
 impl Apu {
     pub const fn new() -> Self {
         Self {
+            enabled: true,
             channel1: Channel1::new(),
             channel2: Channel2::new(),
             channel3: Channel3::new(),
             channel4: Channel4::new(),
             master_volume: MasterVolume::new(),
             sound_panning: SoundPanning::new(),
-            audio_master_control: MasterControl::new(),
             wave_ram: [0xFF; WAVE_RAM_SIZE],
         }
     }
@@ -428,7 +411,25 @@ impl Apu {
             MEM_AUD4GO => self.channel4.control.bits(),
             MEM_AUDVOL => self.master_volume.bits(),
             MEM_AUDTERM => self.sound_panning.bits(),
-            MEM_AUDENA => self.audio_master_control.bits(),
+            MEM_AUDENA => {
+                let mut bits = 0x70;
+                if self.enabled {
+                    bits |= 0x80;
+                }
+                if self.channel4.enabled {
+                    bits |= 0x08;
+                }
+                if self.channel3.enabled {
+                    bits |= 0x04;
+                }
+                if self.channel2.enabled {
+                    bits |= 0x02;
+                }
+                if self.channel1.enabled {
+                    bits |= 0x01;
+                }
+                bits
+            },
             WAVE_RAM_START..=WAVE_RAM_END => self.wave_ram[(addr - WAVE_RAM_START) as usize],
             _ => {
                 // NR13, NR23, NR31, NR33, NR41 are write-only
@@ -438,6 +439,11 @@ impl Apu {
     }
 
     pub const fn write_audio(&mut self, addr: u16, value: u8) {
+        // Cannot write to most registers while off
+        if !self.enabled && addr < MEM_AUDENA {
+            return;
+        }
+
         match addr {
             MEM_AUD1SWEEP => self.channel1.sweep = Sweep::from_bits(value),
             MEM_AUD1LEN => {
@@ -482,11 +488,39 @@ impl Apu {
             }
             MEM_AUDVOL => self.master_volume = MasterVolume::from_bits(value),
             MEM_AUDTERM => self.sound_panning = SoundPanning::from_bits(value),
-            MEM_AUDENA => self.audio_master_control = MasterControl::from_bits(value),
+            MEM_AUDENA => {
+                self.enabled = value & 0x80 == 0x80;
+                if !self.enabled {
+                    self.disable();
+                }
+            },
             WAVE_RAM_START..=WAVE_RAM_END => {
                 self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
             }
             _ => {}
         }
+    }
+
+    const fn disable(&mut self) {
+        self.enabled = false;
+        self.channel4.enabled = false;
+        self.channel3.enabled = false;
+        self.channel2.enabled = false;
+        self.channel1.enabled = false;
+        self.channel1.sweep = Sweep::from_bits(0);
+        self.channel1.duty_cycle = DutyCycle::from_bits(0);
+        self.channel1.volume_and_envelope = VolumeAndEnvelope::from_bits(0);
+        self.channel1.control = Control::from_bits(0);
+        self.channel2.duty_cycle = DutyCycle::from_bits(0);
+        self.channel2.volume_and_envelope = VolumeAndEnvelope::from_bits(0);
+        self.channel2.control = Control::from_bits(0);
+        self.channel3.dac_enable = DacEnable::from_bits(0);
+        self.channel3.output_level = OutputLevel::from_bits(0);
+        self.channel3.control = Control::from_bits(0);
+        self.channel4.volume_and_envelope = VolumeAndEnvelope::from_bits(0);
+        self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(0);
+        self.channel4.control = Control::from_bits(0);
+        self.master_volume = MasterVolume::from_bits(0);
+        self.sound_panning = SoundPanning::from_bits(0);
     }
 }
