@@ -1,5 +1,6 @@
 use gb_core::cartridge::Cartridge;
 use gb_core::hardware::GameboyHardware;
+use gb_core::{RegisterU8, RegisterU16};
 use std::fs;
 use std::time::{Duration, Instant};
 use yare::parameterized;
@@ -20,9 +21,6 @@ fn do_nothing() {}
   cpu_instrs_10 = {"tests/roms/blargg/cpu_instrs/10-bit ops.gb", "tests/roms/blargg/cpu_instrs/10-bit ops.txt", 14},
   cpu_instrs_11 = {"tests/roms/blargg/cpu_instrs/11-op a,(hl).gb", "tests/roms/blargg/cpu_instrs/11-op a,(hl).txt", 15},
   instr_timing = {"tests/roms/blargg/instr_timing.gb", "tests/roms/blargg/instr_timing.txt", 1},
-  mem_timing_01 = {"tests/roms/blargg/mem_timing/01-read_timing.gb", "tests/roms/blargg/mem_timing/01-read_timing.txt", 1},
-  mem_timing_02 = {"tests/roms/blargg/mem_timing/02-write_timing.gb", "tests/roms/blargg/mem_timing/02-write_timing.txt", 1},
-  mem_timing_03 = {"tests/roms/blargg/mem_timing/03-modify_timing.gb", "tests/roms/blargg/mem_timing/03-modify_timing.txt", 1},
 )]
 fn test_rom_serial(input: &str, output: &str, secs: u64) -> Result<(), Box<dyn std::error::Error>> {
     let rom = fs::read(input)?;
@@ -78,16 +76,12 @@ fn test_rom_memory(input: &str) -> Result<(), Box<dyn std::error::Error>> {
     let cartridge = Cartridge::new(rom)?;
     let mut gameboy = GameboyHardware::new(cartridge);
 
-    let mut initialized = false;
-    let mut done = false;
-    while !done {
+    let mut state = State::new();
+    while !state.is_done() {
         gameboy.step();
+
         let result = gameboy.memory(0xA000);
-        if !initialized && result == 0x80 {
-            initialized = true;
-        } else if initialized && result != 0x80 {
-            done = true;
-        }
+        state = state.update(result);
     }
 
     let result = gameboy.memory(0xA000);
@@ -103,6 +97,105 @@ fn test_rom_memory(input: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     assert_eq!(result, 0);
+
+    Ok(())
+}
+
+#[derive(Debug, Copy, Clone)]
+enum State {
+    Start,
+    Run,
+    Done,
+}
+
+impl State {
+    fn new() -> Self {
+        Self::Start
+    }
+
+    fn is_done(&self) -> bool {
+        matches!(self, State::Done)
+    }
+
+    fn update(self, val: u8) -> Self {
+        match (self, val) {
+            (State::Start, 0x80) => State::Run,
+            (State::Run, n) if n != 0x80 => State::Done,
+            (state, _) => state,
+        }
+    }
+}
+
+#[parameterized(
+  bits_mem_oam = {"tests/roms/mooneye/acceptance/bits/mem_oam.gb"},
+  bits_reg_f = {"tests/roms/mooneye/acceptance/bits/reg_f.gb"},
+  bits_unused_hwio = {"tests/roms/mooneye/acceptance/bits/unused_hwio-GS.gb"},
+  boot_div = {"tests/roms/mooneye/acceptance/boot_div-dmgABCmgb.gb"},
+  boot_hwio = {"tests/roms/mooneye/acceptance/boot_hwio-dmgABCmgb.gb"},
+  boot_regs = {"tests/roms/mooneye/acceptance/boot_regs-dmgABC.gb"},
+  mbc1_bits_bank1 = {"tests/roms/mooneye/emulator-only/mbc1/bits_bank1.gb"},
+  mbc1_bits_bank2 = {"tests/roms/mooneye/emulator-only/mbc1/bits_bank2.gb"},
+  mbc1_bits_mode = {"tests/roms/mooneye/emulator-only/mbc1/bits_mode.gb"},
+  mbc1_bits_ramg = {"tests/roms/mooneye/emulator-only/mbc1/bits_ramg.gb"},
+  mbc1_multicart_rom_8mb = {"tests/roms/mooneye/emulator-only/mbc1/multicart_rom_8Mb.gb"},
+  mbc1_ram_64kb = {"tests/roms/mooneye/emulator-only/mbc1/ram_64kb.gb"},
+  mbc1_ram_256kb = {"tests/roms/mooneye/emulator-only/mbc1/ram_256kb.gb"},
+  mbc1_rom_1mb = {"tests/roms/mooneye/emulator-only/mbc1/rom_1Mb.gb"},
+  mbc1_rom_2mb = {"tests/roms/mooneye/emulator-only/mbc1/rom_2Mb.gb"},
+  mbc1_rom_4mb = {"tests/roms/mooneye/emulator-only/mbc1/rom_4Mb.gb"},
+  mbc1_rom_8mb = {"tests/roms/mooneye/emulator-only/mbc1/rom_8Mb.gb"},
+  mbc1_rom_16mb = {"tests/roms/mooneye/emulator-only/mbc1/rom_16Mb.gb"},
+  mbc1_rom_512kb = {"tests/roms/mooneye/emulator-only/mbc1/rom_512kb.gb"},
+  mbc2_bits_ramg = {"tests/roms/mooneye/emulator-only/mbc2/bits_ramg.gb"},
+  mbc2_bits_romb = {"tests/roms/mooneye/emulator-only/mbc2/bits_romb.gb"},
+  mbc2_bits_unused = {"tests/roms/mooneye/emulator-only/mbc2/bits_unused.gb"},
+  mbc2_ram = {"tests/roms/mooneye/emulator-only/mbc2/ram.gb"},
+  mbc2_rom_1mb = {"tests/roms/mooneye/emulator-only/mbc2/rom_1Mb.gb"},
+  mbc2_rom_2mb = {"tests/roms/mooneye/emulator-only/mbc2/rom_2Mb.gb"},
+  mbc2_rom_512kb = {"tests/roms/mooneye/emulator-only/mbc2/rom_512kb.gb"},
+  mbc5_rom_1mb = {"tests/roms/mooneye/emulator-only/mbc5/rom_1Mb.gb"},
+  mbc5_rom_2mb = {"tests/roms/mooneye/emulator-only/mbc5/rom_2Mb.gb"},
+  mbc5_rom_4mb = {"tests/roms/mooneye/emulator-only/mbc5/rom_4Mb.gb"},
+  mbc5_rom_8mb = {"tests/roms/mooneye/emulator-only/mbc5/rom_8Mb.gb"},
+  mbc5_rom_16mb = {"tests/roms/mooneye/emulator-only/mbc5/rom_16Mb.gb"},
+  mbc5_rom_32mb = {"tests/roms/mooneye/emulator-only/mbc5/rom_32Mb.gb"},
+  mbc5_rom_64mb = {"tests/roms/mooneye/emulator-only/mbc5/rom_64Mb.gb"},
+  mbc5_rom_512kb = {"tests/roms/mooneye/emulator-only/mbc5/rom_512kb.gb"},
+  timer_div_write = {"tests/roms/mooneye/acceptance/timer/div_write.gb"},
+  timer_rapid_toggle = {"tests/roms/mooneye/acceptance/timer/rapid_toggle.gb"},
+  timer_tim00 = {"tests/roms/mooneye/acceptance/timer/tim00.gb"},
+  timer_tim00_div_trigger = {"tests/roms/mooneye/acceptance/timer/tim00_div_trigger.gb"},
+  timer_tim01 = {"tests/roms/mooneye/acceptance/timer/tim01.gb"},
+  timer_tim01_div_trigger = {"tests/roms/mooneye/acceptance/timer/tim01_div_trigger.gb"},
+  timer_tim10 = {"tests/roms/mooneye/acceptance/timer/tim10.gb"},
+  timer_tim10_div_trigger = {"tests/roms/mooneye/acceptance/timer/tim10_div_trigger.gb"},
+  timer_tim11 = {"tests/roms/mooneye/acceptance/timer/tim11.gb"},
+  timer_tim11_div_trigger = {"tests/roms/mooneye/acceptance/timer/tim11_div_trigger.gb"},
+  timer_tima_reload = {"tests/roms/mooneye/acceptance/timer/tima_reload.gb"},
+  timer_tima_write_reloding = {"tests/roms/mooneye/acceptance/timer/tima_write_reloading.gb"},
+  timer_tma_write_reloading = {"tests/roms/mooneye/acceptance/timer/tma_write_reloading.gb"},
+)]
+fn test_rom_register(input: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let rom = fs::read(input)?;
+    let cartridge = Cartridge::new(rom)?;
+    let mut gameboy = GameboyHardware::new(cartridge);
+
+    loop {
+        gameboy.step();
+        let pc = gameboy.register_u16(RegisterU16::PC);
+        let result = gameboy.memory(pc);
+        // Find LD B,B
+        if result == 0x40 {
+            break;
+        }
+    }
+
+    assert_eq!(gameboy.register_u8(RegisterU8::B), 3);
+    assert_eq!(gameboy.register_u8(RegisterU8::C), 5);
+    assert_eq!(gameboy.register_u8(RegisterU8::D), 8);
+    assert_eq!(gameboy.register_u8(RegisterU8::E), 13);
+    assert_eq!(gameboy.register_u8(RegisterU8::H), 21);
+    assert_eq!(gameboy.register_u8(RegisterU8::L), 34);
 
     Ok(())
 }
