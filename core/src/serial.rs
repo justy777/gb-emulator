@@ -4,6 +4,10 @@ use std::fmt::Write;
 const MEM_SB: u16 = 0xFF01;
 const MEM_SC: u16 = 0xFF02;
 
+const SC_UNUSED: u8 = 0x7E;
+const TRANSFER_ENABLED_MASK: u8 = 0x80;
+const CLOCK_SELECT_MASK: u8 = 0x01;
+
 #[derive(Debug, Clone, Copy)]
 enum ClockSelect {
     External = 0,
@@ -12,7 +16,7 @@ enum ClockSelect {
 
 impl From<u8> for ClockSelect {
     fn from(value: u8) -> Self {
-        match value & 0x01 {
+        match value & 0b1 {
             0 => Self::External,
             1 => Self::Internal,
             _ => unreachable!(),
@@ -71,7 +75,7 @@ impl SerialPort {
     pub const fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             MEM_SB => self.data,
-            MEM_SC => self.control_bits(),
+            MEM_SC => self.sc_bits(),
             _ => unreachable!(),
         }
     }
@@ -79,7 +83,7 @@ impl SerialPort {
     pub fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
             MEM_SB => self.data = value,
-            MEM_SC => self.set_control(value),
+            MEM_SC => self.set_sc(value),
             _ => unreachable!(),
         }
     }
@@ -88,18 +92,18 @@ impl SerialPort {
         self.output.trim().into()
     }
 
-    const fn control_bits(&self) -> u8 {
-        let mut bits = 0x7E;
+    const fn sc_bits(&self) -> u8 {
+        let mut bits = SC_UNUSED;
         if self.transfer_enabled {
-            bits |= 0x80;
+            bits |= TRANSFER_ENABLED_MASK;
         }
         bits |= self.clock_select as u8;
         bits
     }
 
-    fn set_control(&mut self, value: u8) {
-        self.transfer_enabled = value & 0x80 == 0x80;
-        self.clock_select = ClockSelect::from(value & 0x01);
+    fn set_sc(&mut self, value: u8) {
+        self.transfer_enabled = value & TRANSFER_ENABLED_MASK != 0;
+        self.clock_select = ClockSelect::from(value & CLOCK_SELECT_MASK);
         if self.transfer_enabled {
             self.state = TransferState::Ongoing(0);
         } else {
