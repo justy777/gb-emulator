@@ -220,7 +220,6 @@ impl Ppu {
             MEM_STAT => self.status = DisplayStatus::from_bits(value),
             MEM_SCY => self.scroll_y = value,
             MEM_SCX => self.scroll_x = value,
-            MEM_LY => self.ly = value,
             MEM_LYC => self.lyc = value,
             MEM_DMA => self.sprite_transfer_addr = u16::from_le_bytes([0x00, value]),
             MEM_BGP => self.background_palette = value,
@@ -228,7 +227,8 @@ impl Ppu {
             MEM_OBP1 => self.sprite_palette_1 = value,
             MEM_WY => self.window_y = value,
             MEM_WX => self.window_x = value,
-            _ => unreachable!(),
+            // LY is read-only
+            _ => {}
         }
     }
 }

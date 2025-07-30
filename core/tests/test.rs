@@ -8,6 +8,7 @@ use yare::parameterized;
 #[test]
 fn do_nothing() {}
 
+// TODO: Make test roms compatible with memory validation
 #[parameterized(
   cpu_instrs_01 = {"tests/roms/blargg/cpu_instrs/01-special.gb", "tests/roms/blargg/cpu_instrs/01-special.txt", 3},
   cpu_instrs_02 = {"tests/roms/blargg/cpu_instrs/02-interrupts.gb", "tests/roms/blargg/cpu_instrs/02-interrupts.txt", 1},
