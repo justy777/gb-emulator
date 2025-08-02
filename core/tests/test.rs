@@ -21,7 +21,6 @@ fn do_nothing() {}
   cpu_instrs_09 = {"tests/roms/blargg/cpu_instrs/09-op r,r.gb", "tests/roms/blargg/cpu_instrs/09-op r,r.txt", 9},
   cpu_instrs_10 = {"tests/roms/blargg/cpu_instrs/10-bit ops.gb", "tests/roms/blargg/cpu_instrs/10-bit ops.txt", 14},
   cpu_instrs_11 = {"tests/roms/blargg/cpu_instrs/11-op a,(hl).gb", "tests/roms/blargg/cpu_instrs/11-op a,(hl).txt", 15},
-  instr_timing = {"tests/roms/blargg/instr_timing.gb", "tests/roms/blargg/instr_timing.txt", 1},
 )]
 fn test_rom_serial(input: &str, output: &str, secs: u64) -> Result<(), Box<dyn std::error::Error>> {
     let rom = fs::read(input)?;
@@ -60,6 +59,7 @@ fn test_rom_serial(input: &str, output: &str, secs: u64) -> Result<(), Box<dyn s
   dmg_sound_10 = {"tests/roms/blargg/dmg_sound/10-wave trigger while on.gb"},
   dmg_sound_11 = {"tests/roms/blargg/dmg_sound/11-regs after power.gb"},
   dmg_sound_12 = {"tests/roms/blargg/dmg_sound/12-wave write while on.gb"},
+  instr_timing = {"tests/roms/blargg/instr_timing.gb"},
   mem_timing_01 = {"tests/roms/blargg/mem_timing-2/01-read_timing.gb"},
   mem_timing_02 = {"tests/roms/blargg/mem_timing-2/02-write_timing.gb"},
   mem_timing_03 = {"tests/roms/blargg/mem_timing-2/03-modify_timing.gb"},
