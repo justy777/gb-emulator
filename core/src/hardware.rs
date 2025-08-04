@@ -102,12 +102,6 @@ impl GameboyHardware {
 
         bus.read(addr)
     }
-
-    /// Returns output from the serial port
-    #[must_use]
-    pub fn serial_output(&self) -> String {
-        self.serial_port.output()
-    }
 }
 
 pub(crate) trait BusInterface {

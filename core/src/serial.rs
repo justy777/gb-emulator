@@ -1,5 +1,4 @@
 use crate::interrupt::{Interrupt, InterruptFlags};
-use std::fmt::Write;
 
 const MEM_SB: u16 = 0xFF01;
 const MEM_SC: u16 = 0xFF02;
@@ -37,7 +36,6 @@ pub struct SerialPort {
     transfer_enabled: bool,
     clock_select: ClockSelect,
     state: TransferState,
-    output: String,
 }
 
 impl SerialPort {
@@ -47,20 +45,13 @@ impl SerialPort {
             transfer_enabled: false,
             clock_select: ClockSelect::External,
             state: TransferState::Idle,
-            output: String::new(),
         }
     }
 
-    pub fn step(&mut self, interrupt_flags: &mut InterruptFlags) {
+    pub const fn step(&mut self, interrupt_flags: &mut InterruptFlags) {
         if self.transfer_enabled {
             self.state = match self.state {
                 TransferState::Ongoing(8) => {
-                    // Writes ASCII chars to screen
-                    //let c = char::from(self.data);
-                    //print!("{c}");
-                    println!("{}", self.data);
-                    // Accumulates output for tests
-                    let _ = write!(self.output, "{} ", self.data);
                     self.transfer_enabled = false;
                     interrupt_flags.set(Interrupt::Serial, true);
 
@@ -86,10 +77,6 @@ impl SerialPort {
             MEM_SC => self.set_sc(value),
             _ => unreachable!(),
         }
-    }
-
-    pub fn output(&self) -> String {
-        self.output.trim().into()
     }
 
     const fn sc_bits(&self) -> u8 {
