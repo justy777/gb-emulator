@@ -185,13 +185,11 @@ impl BusInterface for AddressBus<'_> {
             0x8000..=0x9FFF => self.ppu.read_vram(addr - 0x8000),
             0xA000..=0xBFFF => self.cartridge.read_ram_bank(addr - 0xA000),
             0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize],
-            0xFE00..=0xFE9F => self.ppu.read_sprite(addr - 0xFE00),
+            0xE000..=0xFDFF => self.work_ram[(addr - 0xE000) as usize],
+            0xFE00..=0xFEFF => self.ppu.read_sprite(addr - 0xFE00),
             0xFF00..=0xFF7F => self.read_io(addr),
             0xFF80..=0xFFFE => self.high_ram[(addr - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable.bits(),
-            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
-                panic!("Use of this area is prohibited {addr:#X}")
-            }
         }
     }
 
@@ -201,13 +199,11 @@ impl BusInterface for AddressBus<'_> {
             0x8000..=0x9FFF => self.ppu.write_vram(addr - 0x8000, value),
             0xA000..=0xBFFF => self.cartridge.write_ram_bank(addr - 0xA000, value),
             0xC000..=0xDFFF => self.work_ram[(addr - 0xC000) as usize] = value,
-            0xFE00..=0xFE9F => self.ppu.write_sprite(addr - 0xFE00, value),
+            0xE000..=0xFDFF => self.work_ram[(addr - 0xE000) as usize] = value,
+            0xFE00..=0xFEFF => self.ppu.write_sprite(addr - 0xFE00, value),
             0xFF00..=0xFF7F => self.write_io(addr, value),
             0xFF80..=0xFFFE => self.high_ram[(addr - 0xFF80) as usize] = value,
             0xFFFF => *self.interrupt_enable = InterruptEnable::from_bits(value),
-            0xE000..=0xFDFF | 0xFEA0..=0xFEFF => {
-                panic!("Use of this area is prohibited {addr:#X}")
-            }
         }
     }
 

@@ -178,11 +178,19 @@ impl Ppu {
     }
 
     pub const fn read_sprite(&self, addr: u16) -> u8 {
-        self.sprite_ram[addr as usize]
+        match addr {
+            0x0000..=0x009F => self.sprite_ram[addr as usize],
+            0x00A0..=0x00FF => 0x00,
+            _ => unimplemented!(),
+        }
     }
 
     pub const fn write_sprite(&mut self, addr: u16, data: u8) {
-        self.sprite_ram[addr as usize] = data;
+        match addr {
+            0x0000..=0x009F => self.sprite_ram[addr as usize] = data,
+            0x00A0..=0x00FF => {}
+            _ => unimplemented!(),
+        }
     }
 
     pub(crate) const fn sprite_transfer_addr(&self) -> u16 {
