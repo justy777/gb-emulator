@@ -1,7 +1,7 @@
 use gb_core::hardware::GameboyHardware;
 use gb_core::{RegisterU8, RegisterU16};
 use std::cmp::min;
-use std::collections::HashSet;
+use std::fmt::Display;
 use std::io::{Write, stdin, stdout};
 
 #[rustfmt::skip]
@@ -87,15 +87,30 @@ const PREFIX_OPCODE_NAMES: [&str; 0x100] = [
     "SET 7, B", "SET 7, C", "SET 7, D", "SET 7, E", "SET 7, H", "SET 7, L", "SET 7, (HL)", "SET 7, A", // $F8
 ];
 
+#[derive(Debug, Clone)]
+enum Point {
+    Break(u16),
+    Catch(u8),
+    Watch { addr: u16, old_value: u8 },
+}
+
+impl Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Break(addr) => write!(f, "Break: {addr:#06X}"),
+            Self::Catch(addr) => write!(f, "Catch: {addr:#04x}"),
+            Self::Watch { addr, .. } => write!(f, "Watch: {addr:#06X}"),
+        }
+    }
+}
+
 pub struct Debugger {
-    breakpoints: HashSet<u16>,
+    points: Vec<Point>,
 }
 
 impl Debugger {
-    pub fn new() -> Self {
-        Self {
-            breakpoints: HashSet::new(),
-        }
+    pub const fn new() -> Self {
+        Self { points: Vec::new() }
     }
 
     pub fn debug(&mut self, gb: &mut GameboyHardware) -> std::io::Result<bool> {
@@ -111,20 +126,25 @@ impl Debugger {
             match words[0] {
                 "break" | "b" => {
                     if let Some(addr) = parse_address(words[1]) {
-                        self.breakpoints.insert(addr);
+                        self.points.push(Point::Break(addr));
+                    }
+                }
+                "catch" => {
+                    if let Some(opcode) = parse_value(words[1]) {
+                        self.points.push(Point::Catch(opcode));
                     }
                 }
                 "continue" | "c" => return Ok(false),
-                "clear" => self.breakpoints.clear(),
+                "clear" => self.points.clear(),
                 "delete" | "d" => {
-                    if let Some(addr) = parse_address(words[1]) {
-                        self.breakpoints.remove(&addr);
+                    if let Ok(idx) = words[1].parse::<usize>() {
+                        self.points.remove(idx);
                     }
                 }
                 "disassemble" | "disass" => disassemble(gb),
                 "exit" | "quit" | "q" => return Ok(true),
                 "info" | "i" => match words[1] {
-                    "breakpoints" | "b" => self.print_breakpoints(),
+                    "points" | "p" => self.print_points(),
                     "mem" => {
                         if let Some(addr) = parse_address(words[2]) {
                             print_memory(gb, addr);
@@ -137,30 +157,70 @@ impl Debugger {
                     gb.step();
                     println!("{:#06X}", gb.register_u16(RegisterU16::PC));
                 }
+                "watch" => {
+                    if let Some(addr) = parse_address(words[1]) {
+                        let value = gb.memory(addr);
+                        self.points.push(Point::Watch {
+                            addr,
+                            old_value: value,
+                        });
+                    }
+                }
                 _ => println!("Unknown command: {}", words[0]),
             }
         }
     }
 
-    fn print_breakpoints(&self) {
-        if self.breakpoints.is_empty() {
-            println!("No breakpoints.");
+    fn print_points(&self) {
+        if self.points.is_empty() {
+            println!("No breakpoints, catchpoints, or watchpoints.");
             return;
         }
 
-        self.breakpoints
+        self.points
             .iter()
-            .for_each(|point| println!("{point:#04X}"));
+            .enumerate()
+            .for_each(|(idx, point)| println!("{idx} {point}"));
     }
 
-    pub(crate) fn is_breakpoint(&self, addr: u16) -> bool {
-        self.breakpoints.contains(&addr)
+    pub fn check_points(&self, gb: &mut GameboyHardware) -> bool {
+        let pc = gb.register_u16(RegisterU16::PC);
+        self.points.iter().any(|point| match point {
+            Point::Break(addr) => *addr == pc,
+            Point::Catch(opcode) => {
+                let instr = gb.memory(pc);
+                *opcode == instr
+            }
+            Point::Watch { addr, old_value } => {
+                let value = gb.memory(*addr);
+                value != *old_value
+            }
+        })
+    }
+
+    pub fn update_watchpoints(&mut self, gb: &mut GameboyHardware) {
+        for point in &mut self.points {
+            if let Point::Watch { addr, old_value } = point {
+                let value = gb.memory(*addr);
+                if value != *old_value {
+                    *point = Point::Watch {
+                        addr: *addr,
+                        old_value: value,
+                    };
+                }
+            }
+        }
     }
 }
 
 fn parse_address(input: &str) -> Option<u16> {
     let input = input.trim_start_matches("0x");
     u16::from_str_radix(input, 16).ok()
+}
+
+fn parse_value(input: &str) -> Option<u8> {
+    let input = input.trim_start_matches("0x");
+    u8::from_str_radix(input, 16).ok()
 }
 
 fn print_registers(gb: &GameboyHardware) {

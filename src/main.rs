@@ -2,7 +2,6 @@
 
 use crate::debug::Debugger;
 use crate::util::DataUnit;
-use gb_core::RegisterU16;
 use gb_core::cartridge::Cartridge;
 use gb_core::hardware::GameboyHardware;
 use std::{env, fs};
@@ -47,8 +46,8 @@ fn main() -> anyhow::Result<()> {
     }
 
     loop {
-        let pc = gameboy.register_u16(RegisterU16::PC);
-        if debugger.is_breakpoint(pc) {
+        if debugger.check_points(&mut gameboy) {
+            debugger.update_watchpoints(&mut gameboy);
             let exit = debugger.debug(&mut gameboy)?;
             if exit {
                 return Ok(());
