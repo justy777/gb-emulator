@@ -133,7 +133,8 @@ impl Metadata {
     pub fn new(rom: &[u8]) -> Result<Self, MetadataError> {
         let title = rom[CART_TITLE_START..=CART_TITLE_END]
             .iter()
-            .map(|&byte| char::from(byte))
+            .take_while(|&&c| c != 0)
+            .map(|&c| c as char)
             .filter(char::is_ascii)
             .collect();
 

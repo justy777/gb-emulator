@@ -135,7 +135,7 @@ pub(crate) struct AddressBus<'a> {
 }
 
 impl AddressBus<'_> {
-    fn read_io(&self, addr: u16) -> u8 {
+    const fn read_io(&self, addr: u16) -> u8 {
         match addr {
             0xFF00 => self.joypad.bits(),
             0xFF01..=0xFF02 => self.serial_port.read_byte(addr),
@@ -143,10 +143,7 @@ impl AddressBus<'_> {
             0xFF0F => self.interrupt_flags.bits(),
             0xFF10..=0xFF3F => self.apu.read_audio(addr),
             0xFF40..=0xFF4B => self.ppu.read_display(addr),
-            _ => {
-                println!("Warning: Address {addr:#X} is not mapped to an I/O register.");
-                0xFF
-            }
+            _ => 0xFF,
         }
     }
 
@@ -158,7 +155,7 @@ impl AddressBus<'_> {
             0xFF0F => *self.interrupt_flags = InterruptFlags::from_bits(value),
             0xFF10..=0xFF3F => self.apu.write_audio(addr, value),
             0xFF40..=0xFF4B => self.ppu.write_display(addr, value),
-            _ => println!("Warning: Address {addr:#X} is not mapped to an I/O register."),
+            _ => {}
         }
     }
 
