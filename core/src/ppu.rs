@@ -10,7 +10,6 @@ const MEM_SCY: u16 = 0xFF42;
 const MEM_SCX: u16 = 0xFF43;
 const MEM_LY: u16 = 0xFF44;
 const MEM_LYC: u16 = 0xFF45;
-const MEM_DMA: u16 = 0xFF46;
 const MEM_BGP: u16 = 0xFF47;
 const MEM_OBP0: u16 = 0xFF48;
 const MEM_OBP1: u16 = 0xFF49;
@@ -125,8 +124,6 @@ pub struct Ppu {
     ly: u8,
     // LYC
     lyc: u8,
-    // DMA
-    sprite_transfer_addr: u16,
     // BGP
     background_palette: u8,
     // OBP0
@@ -138,6 +135,7 @@ pub struct Ppu {
     // WX
     window_x: u8,
     frame_cycles: usize,
+    dma_running: bool,
 }
 
 impl Ppu {
@@ -151,22 +149,23 @@ impl Ppu {
             scroll_x: 0,
             ly: 0,
             lyc: 0,
-            sprite_transfer_addr: 0xFF,
             background_palette: 0xFC,
             sprite_palette_0: 0xFF,
             sprite_palette_1: 0xFF,
             window_y: 0,
             window_x: 0,
             frame_cycles: 0,
+            dma_running: false,
         }
     }
 
-    pub const fn step(&mut self, interrupt_flags: &mut InterruptFlags) {
+    pub const fn step(&mut self, interrupt_flags: &mut InterruptFlags, dma_running: bool) {
         self.frame_cycles = (self.frame_cycles + 4) % CYCLES_PER_FRAME;
         self.ly = (self.frame_cycles / CYCLES_PER_LINE) as u8;
         if self.frame_cycles == (144 * CYCLES_PER_LINE) {
             interrupt_flags.set(Interrupt::VBlank, true);
         }
+        self.dma_running = dma_running;
     }
 
     pub const fn read_vram(&self, addr: u16) -> u8 {
@@ -177,7 +176,11 @@ impl Ppu {
         self.video_ram[addr as usize] = data;
     }
 
-    pub const fn read_sprite(&self, addr: u16) -> u8 {
+    pub fn read_sprite(&self, addr: u16) -> u8 {
+        if self.dma_running {
+            return 0xFF;
+        }
+
         match addr {
             0x0000..=0x009F => self.sprite_ram[addr as usize],
             0x00A0..=0x00FF => 0x00,
@@ -186,6 +189,10 @@ impl Ppu {
     }
 
     pub const fn write_sprite(&mut self, addr: u16, data: u8) {
+        if self.dma_running {
+            return;
+        }
+
         match addr {
             0x0000..=0x009F => self.sprite_ram[addr as usize] = data,
             0x00A0..=0x00FF => {}
@@ -193,12 +200,10 @@ impl Ppu {
         }
     }
 
-    pub(crate) const fn sprite_transfer_addr(&self) -> u16 {
-        self.sprite_transfer_addr
-    }
-
-    pub(crate) const fn set_sprite_transfer_addr(&mut self, addr: u16) {
-        self.sprite_transfer_addr = addr;
+    pub const fn write_sprite_unchecked(&mut self, addr: u16, data: u8) {
+        if let 0x0000..=0x009F = addr {
+            self.sprite_ram[addr as usize] = data;
+        }
     }
 
     pub const fn read_display(&self, addr: u16) -> u8 {
@@ -209,10 +214,6 @@ impl Ppu {
             MEM_SCX => self.scroll_x,
             MEM_LY => self.ly,
             MEM_LYC => self.lyc,
-            MEM_DMA => {
-                let [_low, high] = self.sprite_transfer_addr.to_le_bytes();
-                high
-            }
             MEM_BGP => self.background_palette,
             MEM_OBP0 => self.sprite_palette_0,
             MEM_OBP1 => self.sprite_palette_1,
@@ -229,7 +230,6 @@ impl Ppu {
             MEM_SCY => self.scroll_y = value,
             MEM_SCX => self.scroll_x = value,
             MEM_LYC => self.lyc = value,
-            MEM_DMA => self.sprite_transfer_addr = u16::from_le_bytes([0x00, value]),
             MEM_BGP => self.background_palette = value,
             MEM_OBP0 => self.sprite_palette_0 = value,
             MEM_OBP1 => self.sprite_palette_1 = value,

@@ -9,6 +9,7 @@ use crate::ppu::Ppu;
 use crate::serial::SerialPort;
 use crate::timer::Timer;
 
+const MEM_DMA: u16 = 0xFF46;
 const WORK_RAM_SIZE: usize = 8 * 1024;
 const HIGH_RAM_SIZE: usize = 0xFFFE - 0xFF80 + 1;
 
@@ -17,6 +18,7 @@ pub struct GameboyHardware {
     cpu: Cpu,
     // ROM and External RAM
     cartridge: Cartridge,
+    dma: DmaTransfer,
     // Picture Processing Unit
     ppu: Ppu,
     // WRAM
@@ -43,6 +45,7 @@ impl GameboyHardware {
         Self {
             cpu: Cpu::new(),
             cartridge,
+            dma: DmaTransfer::empty(),
             ppu: Ppu::new(),
             work_ram: [0; WORK_RAM_SIZE],
             joypad: Joypad::new(),
@@ -59,6 +62,7 @@ impl GameboyHardware {
     pub fn step(&mut self) {
         let mut bus = AddressBus {
             cartridge: &mut self.cartridge,
+            dma: &mut self.dma,
             ppu: &mut self.ppu,
             work_ram: &mut self.work_ram,
             joypad: &mut self.joypad,
@@ -89,6 +93,7 @@ impl GameboyHardware {
     pub fn memory(&mut self, addr: u16) -> u8 {
         let bus = AddressBus {
             cartridge: &mut self.cartridge,
+            dma: &mut self.dma,
             ppu: &mut self.ppu,
             work_ram: &mut self.work_ram,
             joypad: &mut self.joypad,
@@ -115,6 +120,7 @@ pub(crate) trait BusInterface {
 pub(crate) struct AddressBus<'a> {
     // ROM and External RAM
     cartridge: &'a mut Cartridge,
+    dma: &'a mut DmaTransfer,
     // Picture Processing Unit
     ppu: &'a mut Ppu,
     // WRAM
@@ -142,6 +148,7 @@ impl AddressBus<'_> {
             0xFF04..=0xFF07 => self.timer.read_byte(addr),
             0xFF0F => self.interrupt_flags.bits(),
             0xFF10..=0xFF3F => self.apu.read_audio(addr),
+            MEM_DMA => self.dma.src_addr,
             0xFF40..=0xFF4B => self.ppu.read_display(addr),
             _ => 0xFF,
         }
@@ -154,19 +161,21 @@ impl AddressBus<'_> {
             0xFF04..=0xFF07 => self.timer.write_byte(addr, value),
             0xFF0F => *self.interrupt_flags = InterruptFlags::from_bits(value),
             0xFF10..=0xFF3F => self.apu.write_audio(addr, value),
+            MEM_DMA => *self.dma = DmaTransfer::with_addr(value),
             0xFF40..=0xFF4B => self.ppu.write_display(addr, value),
             _ => {}
         }
     }
 
-    fn sprite_dma_transfer(&mut self) {
-        let src_addr = self.ppu.sprite_transfer_addr();
-        if (src_addr & 0xFF00) <= 0xDF00 && (src_addr & 0xFF) <= 0x9F {
+    fn sprite_dma_transfer(&mut self) -> bool {
+        if let Some(low) = self.dma.transfer() {
+            let src_addr = u16::from_le_bytes([low, self.dma.src_addr]);
             let value = self.read(src_addr);
-            let dest_addr = 0xFE00 | (src_addr & 0xFF);
-            self.write(dest_addr, value);
-            self.ppu.set_sprite_transfer_addr(src_addr + 1);
+            self.ppu.write_sprite_unchecked(low as u16, value);
         }
+        self.dma.update();
+
+        matches!(self.dma.state, TransferState::Run(_))
     }
 
     const fn is_interrupt_serviceable(&self, interrupt: Interrupt) -> bool {
@@ -206,8 +215,8 @@ impl BusInterface for AddressBus<'_> {
 
     fn tick(&mut self) {
         self.timer.increment_divider(self.interrupt_flags);
-        self.sprite_dma_transfer();
-        self.ppu.step(self.interrupt_flags);
+        let dma_running = self.sprite_dma_transfer();
+        self.ppu.step(self.interrupt_flags, dma_running);
         self.serial_port.step(self.interrupt_flags);
     }
 
@@ -219,5 +228,50 @@ impl BusInterface for AddressBus<'_> {
 
     fn acknowledge_interrupt(&mut self, interrupt: Interrupt) {
         self.interrupt_flags.set(interrupt, false);
+    }
+}
+
+enum TransferState {
+    New,
+    Setup,
+    Run(u8),
+    Idle,
+}
+
+struct DmaTransfer {
+    src_addr: u8,
+    state: TransferState,
+}
+
+impl DmaTransfer {
+    const fn empty() -> Self {
+        Self {
+            src_addr: 0xFF,
+            state: TransferState::Idle,
+        }
+    }
+
+    const fn with_addr(addr: u8) -> Self {
+        Self {
+            src_addr: addr,
+            state: TransferState::New,
+        }
+    }
+
+    const fn update(&mut self) {
+        match self.state {
+            TransferState::New => self.state = TransferState::Setup,
+            TransferState::Setup => self.state = TransferState::Run(0),
+            TransferState::Run(n) if n < 0x9F => self.state = TransferState::Run(n + 1),
+            TransferState::Run(_) => self.state = TransferState::Idle,
+            TransferState::Idle => {}
+        }
+    }
+
+    const fn transfer(&self) -> Option<u8> {
+        match self.state {
+            TransferState::Run(n) => Some(n),
+            _ => None,
+        }
     }
 }
