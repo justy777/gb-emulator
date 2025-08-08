@@ -3,10 +3,6 @@ use crate::interrupt::{Interrupt, InterruptFlags};
 const MEM_SB: u16 = 0xFF01;
 const MEM_SC: u16 = 0xFF02;
 
-const SC_UNUSED: u8 = 0x7E;
-const TRANSFER_ENABLED_MASK: u8 = 0x80;
-const CLOCK_SELECT_MASK: u8 = 0x01;
-
 #[derive(Debug, Clone, Copy)]
 enum ClockSelect {
     External = 0,
@@ -66,7 +62,7 @@ impl SerialPort {
     pub const fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             MEM_SB => self.data,
-            MEM_SC => self.sc_bits(),
+            MEM_SC => self.read_sc(),
             _ => unreachable!(),
         }
     }
@@ -74,23 +70,23 @@ impl SerialPort {
     pub fn write_byte(&mut self, addr: u16, value: u8) {
         match addr {
             MEM_SB => self.data = value,
-            MEM_SC => self.set_sc(value),
+            MEM_SC => self.write_sc(value),
             _ => unreachable!(),
         }
     }
 
-    const fn sc_bits(&self) -> u8 {
-        let mut bits = SC_UNUSED;
+    const fn read_sc(&self) -> u8 {
+        let mut bits = 0x7E;
         if self.transfer_enabled {
-            bits |= TRANSFER_ENABLED_MASK;
+            bits |= 0x80;
         }
         bits |= self.clock_select as u8;
         bits
     }
 
-    fn set_sc(&mut self, value: u8) {
-        self.transfer_enabled = value & TRANSFER_ENABLED_MASK != 0;
-        self.clock_select = ClockSelect::from(value & CLOCK_SELECT_MASK);
+    fn write_sc(&mut self, value: u8) {
+        self.transfer_enabled = value & 0x80 != 0;
+        self.clock_select = ClockSelect::from(value & 0x01);
         if self.transfer_enabled {
             self.state = TransferState::Ongoing(0);
         } else {

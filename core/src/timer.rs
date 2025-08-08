@@ -5,10 +5,6 @@ const MEM_TIMA: u16 = 0xFF05;
 const MEM_TMA: u16 = 0xFF06;
 const MEM_TAC: u16 = 0xFF07;
 
-const TAC_UNUSED: u8 = 0xF8;
-const TIMER_ENABLE_MASK: u8 = 0x04;
-const CLOCK_SELECT_MASK: u8 = 0x03;
-
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, Copy)]
 enum ClockSelect {
@@ -86,7 +82,7 @@ impl Timer {
             MEM_DIV => (self.divider >> 6) as u8,
             MEM_TIMA => self.counter,
             MEM_TMA => self.modulo,
-            MEM_TAC => self.tac_bits(),
+            MEM_TAC => self.read_tac(),
             _ => unreachable!(),
         }
     }
@@ -96,7 +92,7 @@ impl Timer {
             MEM_DIV => self.reset_div(),
             MEM_TIMA => self.set_tima(value),
             MEM_TMA => self.set_tma(value),
-            MEM_TAC => self.set_tac(value),
+            MEM_TAC => self.write_tac(value),
             _ => unreachable!(),
         }
     }
@@ -163,18 +159,18 @@ impl Timer {
         }
     }
 
-    const fn tac_bits(&self) -> u8 {
-        let mut bits = TAC_UNUSED;
+    const fn read_tac(&self) -> u8 {
+        let mut bits = 0xF8;
         if self.enabled {
-            bits |= TIMER_ENABLE_MASK;
+            bits |= 0x04;
         }
         bits |= self.clock_select as u8;
         bits
     }
 
-    fn set_tac(&mut self, value: u8) {
-        self.enabled = value & TIMER_ENABLE_MASK != 0;
-        self.clock_select = ClockSelect::from(value & CLOCK_SELECT_MASK);
+    fn write_tac(&mut self, value: u8) {
+        self.enabled = value & 0x04 != 0;
+        self.clock_select = ClockSelect::from(value & 0x03);
         self.sync_signals();
     }
 }

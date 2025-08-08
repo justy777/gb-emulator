@@ -1,4 +1,3 @@
-use crate::error::TryFromUintError;
 use crate::interrupt::{Interrupt, InterruptFlags};
 
 const VIDEO_RAM_SIZE: usize = 8 * 1024;
@@ -20,90 +19,11 @@ const CYCLES_PER_LINE: usize = 456;
 const CYCLES_PER_FRAME: usize = 70224;
 
 #[derive(Debug, Clone, Copy)]
-struct DisplayControl(u8);
-
-impl DisplayControl {
-    const DISPLAY_AND_PPU_ENABLE: u8 = 0b1000_0000;
-    const WINDOW_TILE_MAP_AREA: u8 = 0b0100_0000;
-    const WINDOW_ENABLE: u8 = 0b0010_0000;
-    const BACKGROUND_AND_WINDOW_TILE_DATA_AREA: u8 = 0b0001_0000;
-    const BACKGROUND_TILE_MAP_AREA: u8 = 0b0000_1000;
-    const SPRITE_SIZE: u8 = 0b0000_0100;
-    const SPRITE_ENABLE: u8 = 0b0000_0010;
-    const BACKGROUND_AND_WINDOW_ENABLE: u8 = 0b0000_0001;
-
-    const fn new() -> Self {
-        Self::from_bits(
-            Self::DISPLAY_AND_PPU_ENABLE
-                | Self::BACKGROUND_AND_WINDOW_TILE_DATA_AREA
-                | Self::BACKGROUND_AND_WINDOW_ENABLE,
-        )
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct DisplayStatus(u8);
-
-impl DisplayStatus {
-    const LYC: u8 = 0b0100_0000;
-    const MODE_2: u8 = 0b0010_0000;
-    const MODE_1: u8 = 0b0001_0000;
-    const MODE_0: u8 = 0b0000_1000;
-    const LYC_EQ_LY: u8 = 0b0000_0100;
-    const PPU_MODE: u8 = 0b0000_0011;
-    const UNUSED: u8 = 0b1000_0000;
-
-    const fn empty() -> Self {
-        Self::from_bits(0)
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits | Self::UNUSED)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
-    }
-}
-
-enum MonochromePalette {
-    White,
-    LightGray,
-    DarkGray,
-    Black,
-}
-
-impl From<MonochromePalette> for u8 {
-    fn from(palette: MonochromePalette) -> Self {
-        match palette {
-            MonochromePalette::White => 0b00,
-            MonochromePalette::LightGray => 0b01,
-            MonochromePalette::DarkGray => 0b10,
-            MonochromePalette::Black => 0b11,
-        }
-    }
-}
-
-impl TryFrom<u8> for MonochromePalette {
-    type Error = TryFromUintError;
-
-    fn try_from(byte: u8) -> Result<Self, Self::Error> {
-        match byte {
-            0b00 => Ok(Self::White),
-            0b01 => Ok(Self::LightGray),
-            0b10 => Ok(Self::DarkGray),
-            0b11 => Ok(Self::Black),
-            _ => Err(TryFromUintError(())),
-        }
-    }
+enum Mode {
+    HBlank = 0,
+    VBlank = 1,
+    Scan = 2,
+    Draw = 3,
 }
 
 #[derive(Debug, Clone)]
@@ -113,9 +33,20 @@ pub struct Ppu {
     // OAM
     sprite_ram: [u8; SPRITE_RAM_SIZE],
     // LCDC
-    control: DisplayControl,
+    enabled: bool,
+    window_area: bool,
+    window_enabled: bool,
+    tile_addressing_mode: bool,
+    bg_area: bool,
+    sprite_size: bool,
+    sprite_enabled: bool,
+    bg_and_window_enabled: bool,
     // STAT
-    status: DisplayStatus,
+    lyc_intr_select: bool,
+    mode2_intr_select: bool,
+    mode1_intr_select: bool,
+    mode0_intr_select: bool,
+    mode: Mode,
     // SCY
     scroll_y: u8,
     // SCX
@@ -143,8 +74,19 @@ impl Ppu {
         Self {
             video_ram: [0; VIDEO_RAM_SIZE],
             sprite_ram: [0; SPRITE_RAM_SIZE],
-            control: DisplayControl::new(),
-            status: DisplayStatus::empty(),
+            enabled: true,
+            window_area: false,
+            window_enabled: false,
+            tile_addressing_mode: true,
+            bg_area: false,
+            sprite_size: false,
+            sprite_enabled: false,
+            bg_and_window_enabled: true,
+            lyc_intr_select: false,
+            mode2_intr_select: false,
+            mode1_intr_select: false,
+            mode0_intr_select: false,
+            mode: Mode::HBlank,
             scroll_y: 0,
             scroll_x: 0,
             ly: 0,
@@ -169,15 +111,23 @@ impl Ppu {
     }
 
     pub const fn read_vram(&self, addr: u16) -> u8 {
+        if matches!(self.mode, Mode::Draw) {
+            return 0xFF;
+        }
+
         self.video_ram[addr as usize]
     }
 
     pub const fn write_vram(&mut self, addr: u16, data: u8) {
+        if matches!(self.mode, Mode::Draw) {
+            return;
+        }
+
         self.video_ram[addr as usize] = data;
     }
 
     pub fn read_sprite(&self, addr: u16) -> u8 {
-        if self.dma_running {
+        if self.dma_running || matches!(self.mode, Mode::Scan | Mode::Draw) {
             return 0xFF;
         }
 
@@ -189,7 +139,7 @@ impl Ppu {
     }
 
     pub const fn write_sprite(&mut self, addr: u16, data: u8) {
-        if self.dma_running {
+        if self.dma_running || matches!(self.mode, Mode::Scan | Mode::Draw) {
             return;
         }
 
@@ -208,8 +158,8 @@ impl Ppu {
 
     pub const fn read_display(&self, addr: u16) -> u8 {
         match addr {
-            MEM_LCDC => self.control.bits(),
-            MEM_STAT => self.status.bits(),
+            MEM_LCDC => self.read_lcdc(),
+            MEM_STAT => self.read_stat(),
             MEM_SCY => self.scroll_y,
             MEM_SCX => self.scroll_x,
             MEM_LY => self.ly,
@@ -225,8 +175,8 @@ impl Ppu {
 
     pub const fn write_display(&mut self, addr: u16, value: u8) {
         match addr {
-            MEM_LCDC => self.control = DisplayControl::from_bits(value),
-            MEM_STAT => self.status = DisplayStatus::from_bits(value),
+            MEM_LCDC => self.write_lcdc(value),
+            MEM_STAT => self.write_stat(value),
             MEM_SCY => self.scroll_y = value,
             MEM_SCX => self.scroll_x = value,
             MEM_LYC => self.lyc = value,
@@ -238,5 +188,75 @@ impl Ppu {
             // LY is read-only
             _ => {}
         }
+    }
+
+    pub const fn read_lcdc(&self) -> u8 {
+        let mut bits = 0;
+        if self.enabled {
+            bits |= 0x80;
+        }
+        if self.window_area {
+            bits |= 0x40;
+        }
+        if self.window_enabled {
+            bits |= 0x20;
+        }
+        if self.tile_addressing_mode {
+            bits |= 0x10;
+        }
+        if self.bg_area {
+            bits |= 0x08;
+        }
+        if self.sprite_size {
+            bits |= 0x04;
+        }
+        if self.sprite_enabled {
+            bits |= 0x02;
+        }
+        if self.bg_and_window_enabled {
+            bits |= 0x01;
+        }
+        bits
+    }
+
+    pub const fn write_lcdc(&mut self, value: u8) {
+        self.enabled = value & 0x80 != 0;
+        self.window_area = value & 0x40 != 0;
+        self.window_enabled = value & 0x20 != 0;
+        self.tile_addressing_mode = value & 0x10 != 0;
+        self.bg_area = value & 0x08 != 0;
+        self.sprite_size = value & 0x04 != 0;
+        self.sprite_enabled = value & 0x02 != 0;
+        self.bg_and_window_enabled = value & 0x01 != 0;
+    }
+
+    pub const fn read_stat(&self) -> u8 {
+        let mut bits = 0x80;
+        if self.lyc_intr_select {
+            bits |= 0x40;
+        }
+        if self.mode2_intr_select {
+            bits |= 0x20;
+        }
+        if self.mode1_intr_select {
+            bits |= 0x10;
+        }
+        if self.mode0_intr_select {
+            bits |= 0x08;
+        }
+        if self.ly == self.lyc {
+            bits |= 0x04;
+        }
+        if self.enabled {
+            bits |= self.mode as u8;
+        }
+        bits
+    }
+
+    pub const fn write_stat(&mut self, value: u8) {
+        self.lyc_intr_select = value & 0x40 != 0;
+        self.mode2_intr_select = value & 0x20 != 0;
+        self.mode1_intr_select = value & 0x10 != 0;
+        self.mode0_intr_select = value & 0x08 != 0;
     }
 }

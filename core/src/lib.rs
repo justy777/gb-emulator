@@ -15,7 +15,6 @@ pub mod hardware;
 
 mod apu;
 mod cpu;
-mod error;
 mod interrupt;
 mod joypad;
 mod ppu;
