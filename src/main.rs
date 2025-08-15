@@ -9,7 +9,7 @@ use std::{env, fs};
 mod debug;
 mod util;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let rom = fs::read(&args[1])?;
     let cartridge = Cartridge::new(rom)?;
@@ -28,6 +28,7 @@ fn main() -> anyhow::Result<()> {
     println!("RAM size: {}", DataUnit::from_bytes(metadata.ram_size()));
     println!("Destination code: {:#04X}", metadata.destination_code());
     println!("Version number: {}", metadata.version_number());
+    println!();
 
     metadata
         .verify_header_checksum()
