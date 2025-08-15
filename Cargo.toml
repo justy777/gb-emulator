@@ -9,6 +9,9 @@ repository.workspace = true
 categories.workspace = true
 keywords.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 gb_core = {path = "core"}
 
@@ -22,3 +25,11 @@ license = "MIT"
 repository = "https://github.com/justy777/gb-emulator"
 categories = ["emulators"]
 keywords = ["gb", "dmg"]
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cast_lossless = "allow"
+module_name_repetitions = "allow"
+option_if_let_else = "allow"
+verbose_bit_mask = "allow"
