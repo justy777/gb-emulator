@@ -3,6 +3,8 @@ use gb_core::{RegisterU8, RegisterU16};
 use std::cmp::min;
 use std::fmt::Display;
 use std::io::{Write, stdin, stdout};
+use std::num::ParseIntError;
+use std::str::FromStr;
 
 #[rustfmt::skip]
 const OPCODE_NAMES: [&str; 0x100] = [
@@ -125,12 +127,12 @@ impl Debugger {
 
             match words[0] {
                 "break" | "b" => {
-                    if let Some(addr) = parse_address(words[1]) {
+                    if let Ok(addr) = parse_numeric(words[1]) {
                         self.points.push(Point::Break(addr));
                     }
                 }
                 "catch" => {
-                    if let Some(opcode) = parse_value(words[1]) {
+                    if let Ok(opcode) = parse_numeric(words[1]) {
                         self.points.push(Point::Catch(opcode));
                     }
                 }
@@ -146,11 +148,11 @@ impl Debugger {
                 "info" | "i" => match words[1] {
                     "points" | "p" => self.print_points(),
                     "mem" => {
-                        if let Some(addr) = parse_address(words[2]) {
+                        if let Ok(addr) = parse_numeric(words[2]) {
                             print_memory(gb, addr);
                         }
                     }
-                    "registers" | "r" => print_registers(gb),
+                    "registers" | "reg" | "r" => print_registers(gb),
                     _ => println!("Unknown command: {}", words[1]),
                 },
                 "next" | "n" => {
@@ -158,7 +160,7 @@ impl Debugger {
                     println!("{:#06X}", gb.register_u16(RegisterU16::PC));
                 }
                 "watch" => {
-                    if let Some(addr) = parse_address(words[1]) {
+                    if let Ok(addr) = parse_numeric(words[1]) {
                         let value = gb.memory(addr);
                         self.points.push(Point::Watch {
                             addr,
@@ -213,25 +215,64 @@ impl Debugger {
     }
 }
 
-fn parse_address(input: &str) -> Option<u16> {
-    let input = input.trim_start_matches("0x");
-    u16::from_str_radix(input, 16).ok()
+trait FromStrRadix
+where
+    Self: Sized,
+{
+    fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError>;
 }
 
-fn parse_value(input: &str) -> Option<u8> {
-    let input = input.trim_start_matches("0x");
-    u8::from_str_radix(input, 16).ok()
+impl FromStrRadix for u8 {
+    fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError> {
+        Self::from_str_radix(s, radix)
+    }
+}
+
+impl FromStrRadix for u16 {
+    fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError> {
+        Self::from_str_radix(s, radix)
+    }
+}
+
+fn parse_numeric<T>(input: &str) -> Result<T, ParseIntError>
+where
+    T: FromStrRadix + FromStr<Err = ParseIntError>,
+{
+    let input = input.replace('_', "");
+    // Hex
+    if let Some(input) = ["$", "0x", "0X"]
+        .into_iter()
+        .find_map(|pat| input.strip_prefix(pat))
+    {
+        T::from_str_radix(input, 16)
+    }
+    // Octal
+    else if let Some(input) = ["&", "0o", "0O"]
+        .into_iter()
+        .find_map(|pat| input.strip_prefix(pat))
+    {
+        T::from_str_radix(input, 8)
+    }
+    // Binary
+    else if let Some(input) = ["%", "0b", "0B"]
+        .into_iter()
+        .find_map(|pat| input.strip_prefix(pat))
+    {
+        T::from_str_radix(input, 2)
+    } else {
+        input.parse::<T>()
+    }
 }
 
 fn print_registers(gb: &GameboyHardware) {
-    println!("A {:#04X}", gb.register_u8(RegisterU8::A));
-    println!("F {:#04X}", gb.register_u8(RegisterU8::F));
-    println!("B {:#04X}", gb.register_u8(RegisterU8::B));
-    println!("C {:#04X}", gb.register_u8(RegisterU8::C));
-    println!("D {:#04X}", gb.register_u8(RegisterU8::D));
-    println!("E {:#04X}", gb.register_u8(RegisterU8::E));
-    println!("H {:#04X}", gb.register_u8(RegisterU8::H));
-    println!("L {:#04X}", gb.register_u8(RegisterU8::L));
+    println!("A  {:#04X}", gb.register_u8(RegisterU8::A));
+    println!("F  {:#04X}", gb.register_u8(RegisterU8::F));
+    println!("B  {:#04X}", gb.register_u8(RegisterU8::B));
+    println!("C  {:#04X}", gb.register_u8(RegisterU8::C));
+    println!("D  {:#04X}", gb.register_u8(RegisterU8::D));
+    println!("E  {:#04X}", gb.register_u8(RegisterU8::E));
+    println!("H  {:#04X}", gb.register_u8(RegisterU8::H));
+    println!("L  {:#04X}", gb.register_u8(RegisterU8::L));
     println!("SP {:#06X}", gb.register_u16(RegisterU16::SP));
     println!("PC {:#06X}", gb.register_u16(RegisterU16::PC));
 }
@@ -248,6 +289,7 @@ fn disassemble(gb: &mut GameboyHardware) {
     for _ in 0..5 {
         let opcode = gb.memory(pc) as usize;
         let (name, len) = if opcode == 0xCB {
+            let opcode = gb.memory(pc + 1) as usize;
             (PREFIX_OPCODE_NAMES[opcode], 2)
         } else {
             (OPCODE_NAMES[opcode], OPCODE_LENGTHS[opcode])
