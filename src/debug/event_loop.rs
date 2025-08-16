@@ -29,7 +29,7 @@ fn run_blocking(mut target: GameBoyTarget) -> Result<ExitReason, Box<dyn std::er
         let words: Vec<&str> = input.split_whitespace().collect();
 
         match words[0] {
-            "break" | "b" => {
+            "break" => {
                 if let Ok(addr) = parse_numeric(words[1]) {
                     target.add_breakpoint(addr);
                 }
@@ -44,21 +44,22 @@ fn run_blocking(mut target: GameBoyTarget) -> Result<ExitReason, Box<dyn std::er
                 target.run();
             }
             "clear" => target.clear_breakpoints(),
-            "delete" | "del" | "d" => {
+            "delete" | "del" => {
                 if let Ok(idx) = words[1].parse::<usize>() {
                     target.remove_breakpoint(idx);
                 }
             }
             "disassemble" | "disass" => target.disassemble(5),
-            "exit" | "quit" | "q" => return Ok(ExitReason::Quit),
-            "info" | "i" => match words[1] {
-                "breakpoints" => target.print_breakpoints(),
-                "mem" => {
+            "exit" | "quit" => return Ok(ExitReason::Quit),
+            "info" => match words[1] {
+                "address" => {
                     if let Ok(addr) = parse_numeric(words[2]) {
                         target.print_addrs(addr, 16);
                     }
                 }
-                "registers" | "reg" | "r" => target.print_regs(),
+                "breakpoints" => target.print_breakpoints(),
+                "registers" | "regs" => target.print_regs(),
+                "stack" => target.print_stack(),
                 _ => println!("Unknown command: {}", words[1]),
             },
             "next" | "n" => {

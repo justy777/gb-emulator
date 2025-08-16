@@ -32,9 +32,9 @@ const OPCODE_NAMES: [&str; 0x100] = [
     "RET Z",        "RET",          "JP Z, u16",    "PREFIX CB",    "CALL Z, u16",  "CALL u16",     "ADC A, u8",    "RST 08",       // $C8
     "RET NC",       "POP DE",       "JP NC, u16",   "INVALID",      "CALL NC, u16", "PUSH DE",      "SUB u8",       "RST 10",       // $D0
     "RET C",        "RETI",         "JP C, u16",    "INVALID",      "CALL C, u16",  "INVALID",      "SBC A, u8",    "RST 18",       // $D8
-    "LDH (a8), A",  "POP HL",       "LD (C), A",    "INVALID",      "INVALID",      "PUSH HL",      "AND u8",       "RST 20",       // $E0
+    "LDH (u8), A",  "POP HL",       "LD (C), A",    "INVALID",      "INVALID",      "PUSH HL",      "AND u8",       "RST 20",       // $E0
     "ADD SP, i8",   "JP (HL)",      "LD (u16), A",  "INVALID",      "INVALID",      "INVALID",      "XOR u8",       "RST 28",       // $E8
-    "LDH A, (a8)",  "POP AF",       "LD A, (C)",    "DI",           "INVALID",      "PUSH AF",      "OR u8",        "RST 30",       // $F0
+    "LDH A, (u8)",  "POP AF",       "LD A, (C)",    "DI",           "INVALID",      "PUSH AF",      "OR u8",        "RST 30",       // $F0
     "LD HL, SP+i8", "LD SP, HL",    "LD A, (u16)",  "EI",           "INVALID",      "INVALID",      "CP u8",        "RST 38"        // $F8
 ];
 
@@ -106,8 +106,8 @@ enum Breakpoint {
 impl Display for Breakpoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Break(addr) => write!(f, "Break {addr:#06X}"),
-            Self::Catch(addr) => write!(f, "Catch {addr:#04x}"),
+            Self::Break(addr) => write!(f, "Break ${addr:04X}"),
+            Self::Catch(addr) => write!(f, "Catch ${addr:02x}"),
         }
     }
 }
@@ -165,24 +165,34 @@ impl GameBoyTarget {
     }
 
     pub(crate) fn print_regs(&self) {
-        println!("A  {:#04X}", self.core.register_u8(RegisterU8::A));
-        println!("F  {:#04X}", self.core.register_u8(RegisterU8::F));
-        println!("B  {:#04X}", self.core.register_u8(RegisterU8::B));
-        println!("C  {:#04X}", self.core.register_u8(RegisterU8::C));
-        println!("D  {:#04X}", self.core.register_u8(RegisterU8::D));
-        println!("E  {:#04X}", self.core.register_u8(RegisterU8::E));
-        println!("H  {:#04X}", self.core.register_u8(RegisterU8::H));
-        println!("L  {:#04X}", self.core.register_u8(RegisterU8::L));
-        println!("SP {:#06X}", self.core.register_u16(RegisterU16::SP));
-        println!("PC {:#06X}", self.core.register_u16(RegisterU16::PC));
+        println!("A  ${:02X}", self.core.register_u8(RegisterU8::A));
+        println!("F  ${:02X}", self.core.register_u8(RegisterU8::F));
+        println!("B  ${:02X}", self.core.register_u8(RegisterU8::B));
+        println!("C  ${:02X}", self.core.register_u8(RegisterU8::C));
+        println!("D  ${:02X}", self.core.register_u8(RegisterU8::D));
+        println!("E  ${:02X}", self.core.register_u8(RegisterU8::E));
+        println!("H  ${:02X}", self.core.register_u8(RegisterU8::H));
+        println!("L  ${:02X}", self.core.register_u8(RegisterU8::L));
+        println!("SP ${:04X}", self.core.register_u16(RegisterU16::SP));
+        println!("PC ${:04X}", self.core.register_u16(RegisterU16::PC));
+    }
+
+    pub(crate) fn print_stack(&mut self) {
+        println!("ADDR  VALUE");
+        let sp = self.core.register_u16(RegisterU16::SP);
+        for addr in sp..=0xFFFE {
+            let val = self.core.memory(addr);
+            println!("${addr:04X} ${val:02X}");
+        }
     }
 
     pub(crate) fn print_addrs(&mut self, start_addr: u16, length: usize) {
+        println!("ADDR  VALUE");
         #[allow(clippy::cast_possible_truncation)]
         let end = start_addr.saturating_add(length as u16);
-        for addr in start_addr..end {
+        for addr in start_addr..=end {
             let val = self.core.memory(addr);
-            println!("{addr:#06X} {val:#04X}");
+            println!("${addr:04X} ${val:02X}");
         }
     }
 
@@ -192,16 +202,25 @@ impl GameBoyTarget {
             let opcode = self.core.memory(pc) as usize;
             let (name, len) = if opcode == 0xCB {
                 let opcode = self.core.memory(pc + 1) as usize;
-                (PREFIX_OPCODE_NAMES[opcode], 2)
+                (String::from(PREFIX_OPCODE_NAMES[opcode]), 2)
             } else {
-                (OPCODE_NAMES[opcode], OPCODE_LENGTHS[opcode])
+                let mut name = String::from(OPCODE_NAMES[opcode]);
+                if name.contains("u8") || name.contains("i8") {
+                    let val = self.core.memory(pc + 1);
+                    let val = format!("${val:02X}");
+                    name = name.replace("u8", &val);
+                    name = name.replace("i8", &val);
+                }
+                if name.contains("u16") {
+                    let low = self.core.memory(pc + 1);
+                    let high = self.core.memory(pc + 2);
+                    let val = u16::from_le_bytes([low, high]);
+                    let val = format!("${val:04X}");
+                    name = name.replace("u16", &val);
+                }
+                (name, OPCODE_LENGTHS[opcode])
             };
-            print!("{pc:#06X} {name}");
-            for i in 0..len {
-                let arg = self.core.memory(pc + i);
-                print!(" {arg:#04X}");
-            }
-            println!();
+            println!("${pc:04X} {name}");
             pc += len;
         }
     }
