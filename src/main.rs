@@ -1,6 +1,7 @@
 //! gb-emulator is an original Game Boy (DMG) emulator written in Rust.
 
-use crate::debug::Debugger;
+use crate::debug::event_loop::event_loop;
+use crate::debug::target::GameBoyTarget;
 use crate::util::DataUnit;
 use gb_core::cartridge::Cartridge;
 use gb_core::hardware::GameboyHardware;
@@ -38,23 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .verify_global_checksum()
         .unwrap_or_else(|err| eprintln!("Warning: {err}"));
 
-    let mut debugger = Debugger::new();
-    let mut gameboy = GameboyHardware::new(cartridge);
+    let gb = GameboyHardware::new(cartridge);
+    let target = GameBoyTarget::new(gb);
 
-    let exit = debugger.debug(&mut gameboy)?;
-    if exit {
-        return Ok(());
-    }
+    event_loop(target);
 
-    loop {
-        if debugger.check_points(&mut gameboy) {
-            debugger.update_watchpoints(&mut gameboy);
-            let exit = debugger.debug(&mut gameboy)?;
-            if exit {
-                return Ok(());
-            }
-        }
-
-        gameboy.step();
-    }
+    Ok(())
 }
