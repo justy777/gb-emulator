@@ -177,13 +177,22 @@ impl GameBoyTarget {
         println!("PC ${:04X}", self.core.register_u16(RegisterU16::PC));
     }
 
-    pub(crate) fn print_stack(&mut self) {
-        println!("ADDR  VALUE");
-        let sp = self.core.register_u16(RegisterU16::SP);
-        for addr in sp..=0xFFFE {
-            let val = self.core.memory(addr);
-            println!("${addr:04X} ${val:02X}");
+    pub(crate) fn print_flags(&self) {
+        let val = self.core.register_u8(RegisterU8::F);
+        let mut flags = Vec::new();
+        if val & 0x80 != 0 {
+            flags.push("Z");
         }
+        if val & 0x40 != 0 {
+            flags.push("N");
+        }
+        if val & 0x20 != 0 {
+            flags.push("H");
+        }
+        if val & 0x10 != 0 {
+            flags.push("C");
+        }
+        println!("${val:02X} [{}]", flags.join(" "));
     }
 
     pub(crate) fn print_addrs(&mut self, start_addr: u16, length: usize) {
@@ -191,6 +200,15 @@ impl GameBoyTarget {
         #[allow(clippy::cast_possible_truncation)]
         let end = start_addr.saturating_add(length as u16);
         for addr in start_addr..=end {
+            let val = self.core.memory(addr);
+            println!("${addr:04X} ${val:02X}");
+        }
+    }
+
+    pub(crate) fn print_stack(&mut self) {
+        println!("ADDR  VALUE");
+        let sp = self.core.register_u16(RegisterU16::SP);
+        for addr in sp..=0xFFFE {
             let val = self.core.memory(addr);
             println!("${addr:04X} ${val:02X}");
         }

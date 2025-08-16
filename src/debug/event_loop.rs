@@ -58,6 +58,7 @@ fn run_blocking(mut target: GameBoyTarget) -> Result<ExitReason, Box<dyn std::er
                     }
                 }
                 "breakpoints" => target.print_breakpoints(),
+                "flags" => target.print_flags(),
                 "registers" | "regs" => target.print_regs(),
                 "stack" => target.print_stack(),
                 _ => println!("Unknown command: {}", words[1]),
