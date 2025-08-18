@@ -238,7 +238,18 @@ impl GameBoyTarget {
                 }
                 (name, OPCODE_LENGTHS[opcode])
             };
-            println!("${pc:04X} {name}");
+            print!("${pc:04X}  ");
+            for i in 0..3 {
+                if i < len {
+                    let val = self.core.memory(pc + i);
+                    print!(" ${val:02X}");
+                } else {
+                    print!("    ");
+                }
+            }
+            print!("   {name}");
+            println!();
+
             pc += len;
         }
     }
