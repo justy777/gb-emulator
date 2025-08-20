@@ -26,48 +26,62 @@ fn run_blocking(mut target: GameBoyTarget) -> Result<ExitReason, Box<dyn std::er
         let mut input = String::new();
         stdin().read_line(&mut input)?;
         let input = input.to_lowercase();
-        let words: Vec<&str> = input.split_whitespace().collect();
+        let words: Vec<String> = input.split_whitespace().map(str::to_lowercase).collect();
 
-        match words[0] {
-            "break" => {
-                if let Ok(addr) = parse_numeric(words[1]) {
-                    target.add_breakpoint(addr);
-                }
-            }
-            "catch" => {
-                if let Ok(opcode) = parse_numeric(words[1]) {
-                    target.add_catchpoint(opcode);
-                }
-            }
-            "continue" | "c" => {
-                target.continue_mode();
-                target.run();
-            }
-            "clear" => target.clear_breakpoints(),
-            "delete" | "del" => {
-                if let Ok(idx) = words[1].parse::<usize>() {
-                    target.remove_breakpoint(idx);
-                }
-            }
-            "disassemble" | "disass" => target.disassemble(5),
-            "exit" | "quit" => return Ok(ExitReason::Quit),
-            "info" => match words[1] {
-                "address" => {
-                    if let Ok(addr) = parse_numeric(words[2]) {
-                        target.print_addrs(addr, 16);
+        if let Some(command) = words.first() {
+            match command.as_str() {
+                "break" => {
+                    if let Some(num) = words.get(1)
+                        && let Ok(addr) = parse_numeric(num)
+                    {
+                        target.add_breakpoint(addr);
                     }
                 }
-                "breakpoints" => target.print_breakpoints(),
-                "flags" => target.print_flags(),
-                "registers" | "regs" => target.print_regs(),
-                "stack" => target.print_stack(),
-                _ => println!("Unknown command: {}", words[1]),
-            },
-            "next" | "n" => {
-                target.step_mode();
-                target.run();
+                "catch" => {
+                    if let Some(num) = words.get(1)
+                        && let Ok(opcode) = parse_numeric(num)
+                    {
+                        target.add_catchpoint(opcode);
+                    }
+                }
+                "continue" | "c" => {
+                    target.continue_mode();
+                    target.run();
+                }
+                "delete" | "del" => match words.get(1) {
+                    Some(num) => {
+                        if let Ok(idx) = parse_numeric(num) {
+                            target.remove_breakpoint(idx);
+                        }
+                    }
+                    None => target.clear_breakpoints(),
+                },
+                "disassemble" => target.disassemble(5),
+                "exit" | "quit" | "q" => return Ok(ExitReason::Quit),
+                "info" => {
+                    if let Some(sub) = words.get(1) {
+                        match sub.as_str() {
+                            "address" => {
+                                if let Some(num) = words.get(2)
+                                    && let Ok(addr) = parse_numeric(num)
+                                {
+                                    target.print_addrs(addr, 16);
+                                }
+                            }
+                            "breakpoints" | "breaks" => target.print_breakpoints(),
+                            "flags" => target.print_flags(),
+                            "registers" | "regs" => target.print_regs(),
+                            "stack" => target.print_stack(),
+                            c => println!("Undefined info command: {c}"),
+                        }
+                    }
+                }
+                "next" | "n" => {
+                    target.step_mode();
+                    target.run();
+                }
+                c => println!("Undefined command: {c}"),
             }
-            _ => println!("Unknown command: {}", words[0]),
         }
     }
 }
@@ -86,6 +100,12 @@ impl FromStrRadix for u8 {
 }
 
 impl FromStrRadix for u16 {
+    fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError> {
+        Self::from_str_radix(s, radix)
+    }
+}
+
+impl FromStrRadix for usize {
     fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError> {
         Self::from_str_radix(s, radix)
     }
