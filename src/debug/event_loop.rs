@@ -93,23 +93,19 @@ where
     fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError>;
 }
 
-impl FromStrRadix for u8 {
-    fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError> {
-        Self::from_str_radix(s, radix)
-    }
+macro_rules! from_str_radix_impl {
+    ($($int_ty:ty),*) => {
+        $(
+            impl FromStrRadix for $int_ty {
+                fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError> {
+                    Self::from_str_radix(s, radix)
+                }
+            }
+        )*
+    };
 }
 
-impl FromStrRadix for u16 {
-    fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError> {
-        Self::from_str_radix(s, radix)
-    }
-}
-
-impl FromStrRadix for usize {
-    fn from_str_radix(s: &str, radix: u32) -> Result<Self, ParseIntError> {
-        Self::from_str_radix(s, radix)
-    }
-}
+from_str_radix_impl! {isize, usize, i8, u8, i16, u16, i32, u32, i64, u64}
 
 fn parse_numeric<T>(input: &str) -> Result<T, ParseIntError>
 where
