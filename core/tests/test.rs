@@ -32,6 +32,7 @@ fn do_nothing() {}
   dmg_sound_11 = {"tests/roms/blargg/dmg_sound/11-regs after power.gb"},
   dmg_sound_12 = {"tests/roms/blargg/dmg_sound/12-wave write while on.gb"},
   instr_timing = {"tests/roms/blargg/instr_timing.gb"},
+  interrupt_time = {"tests/roms/blargg/dmg_intr_time/interrupt_time.gb"},
   mem_timing_01 = {"tests/roms/blargg/mem_timing-2/01-read_timing.gb"},
   mem_timing_02 = {"tests/roms/blargg/mem_timing-2/02-write_timing.gb"},
   mem_timing_03 = {"tests/roms/blargg/mem_timing-2/03-modify_timing.gb"},
