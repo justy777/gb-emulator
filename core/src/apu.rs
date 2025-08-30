@@ -45,6 +45,26 @@ const WAVE_RAM_END: u16 = 0xFF3F;
 
 const WAVE_RAM_SIZE: usize = 0x10;
 
+struct LengthTimer {
+    enabled: bool,
+    max_value: usize,
+    counter: usize,
+}
+
+impl LengthTimer {
+    const fn new(max_value: usize) -> Self {
+        Self {enabled: false, max_value, counter: max_value }
+    }
+
+    const fn load(&mut self, length: u8) {
+        self.counter = self.max_value - length as usize;
+    }
+
+    const fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 struct Sweep(u8);
 
@@ -88,9 +108,9 @@ impl DutyCycle {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct VolumeAndEnvelope(u8);
+struct Envelope(u8);
 
-impl VolumeAndEnvelope {
+impl Envelope {
     const INITIAL_VOLUME: u8 = 0b1111_0000;
     const ENVELOPE_DIRECTION: u8 = 0b0000_1000;
     const SWEEP_PACE: u8 = 0b0000_0111;
@@ -128,26 +148,6 @@ impl Period {
         let [low, _high] = self.0.to_le_bytes();
         let bits = u16::from_le_bytes([low, high]);
         Self(bits | Self::UNUSED)
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-struct Control(u8);
-
-impl Control {
-    const LENGTH_ENABLE: u8 = 0b0100_0000;
-    const UNUSED: u8 = 0b1011_1111;
-
-    const fn new() -> Self {
-        Self::from_bits(0)
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits | Self::UNUSED)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
     }
 }
 
@@ -251,10 +251,9 @@ struct Channel1 {
     enabled: bool,
     sweep: Sweep,
     duty_cycle: DutyCycle,
-    length_timer: u8,
-    volume_and_envelope: VolumeAndEnvelope,
+    length_timer: LengthTimer,
+    envelope: Envelope,
     period: Period,
-    control: Control,
 }
 
 impl Channel1 {
@@ -263,12 +262,9 @@ impl Channel1 {
             enabled: true,
             sweep: Sweep::empty(),
             duty_cycle: DutyCycle::from_bits(0b1000_0000),
-            length_timer: 0,
-            volume_and_envelope: VolumeAndEnvelope::from_bits(
-                VolumeAndEnvelope::INITIAL_VOLUME | 0b11,
-            ),
+            length_timer: LengthTimer::new(64),
+            envelope: Envelope::from_bits(Envelope::INITIAL_VOLUME | 0b11),
             period: Period::empty(),
-            control: Control::new(),
         }
     }
 
@@ -276,18 +272,17 @@ impl Channel1 {
         self.enabled = false;
         self.sweep = Sweep::from_bits(0);
         self.duty_cycle = DutyCycle::from_bits(0);
-        self.volume_and_envelope = VolumeAndEnvelope::from_bits(0);
-        self.control = Control::from_bits(0);
+        self.length_timer.set_enabled(false);
+        self.envelope = Envelope::from_bits(0);
     }
 }
 
 struct PulseChannel {
     enabled: bool,
     duty_cycle: DutyCycle,
-    length_timer: u8,
-    volume_and_envelope: VolumeAndEnvelope,
+    length_timer: LengthTimer,
+    envelope: Envelope,
     period: Period,
-    control: Control,
 }
 
 impl PulseChannel {
@@ -295,28 +290,26 @@ impl PulseChannel {
         Self {
             enabled: false,
             duty_cycle: DutyCycle::empty(),
-            length_timer: 0,
-            volume_and_envelope: VolumeAndEnvelope::empty(),
+            length_timer: LengthTimer::new(64),
+            envelope: Envelope::empty(),
             period: Period::empty(),
-            control: Control::new(),
         }
     }
 
     const fn disable(&mut self) {
         self.enabled = false;
         self.duty_cycle = DutyCycle::from_bits(0);
-        self.volume_and_envelope = VolumeAndEnvelope::from_bits(0);
-        self.control = Control::from_bits(0);
+        self.length_timer.set_enabled(false);
+        self.envelope = Envelope::from_bits(0);
     }
 }
 
 struct WaveChannel {
     enabled: bool,
     dac_enabled: bool,
-    length_timer: u8,
-    output_level: OutputLevel,
+    length_timer: LengthTimer,
+    volume: OutputLevel,
     period: Period,
-    control: Control,
 }
 
 impl WaveChannel {
@@ -324,45 +317,42 @@ impl WaveChannel {
         Self {
             enabled: false,
             dac_enabled: false,
-            length_timer: 0xFF,
-            output_level: OutputLevel::empty(),
+            length_timer: LengthTimer::new(256),
+            volume: OutputLevel::empty(),
             period: Period::empty(),
-            control: Control::new(),
         }
     }
 
     const fn disable(&mut self) {
         self.enabled = false;
         self.dac_enabled = false;
-        self.output_level = OutputLevel::from_bits(0);
-        self.control = Control::from_bits(0);
+        self.length_timer.set_enabled(false);
+        self.volume = OutputLevel::from_bits(0);
     }
 }
 
 struct NoiseChannel {
     enabled: bool,
-    length_timer: u8,
-    volume_and_envelope: VolumeAndEnvelope,
+    length_timer: LengthTimer,
+    envelope: Envelope,
     frequency_and_randomness: FrequencyAndRandomness,
-    control: Control,
 }
 
 impl NoiseChannel {
     const fn new() -> Self {
         Self {
             enabled: false,
-            length_timer: 0,
-            volume_and_envelope: VolumeAndEnvelope::empty(),
+            length_timer: LengthTimer::new(64),
+            envelope: Envelope::empty(),
             frequency_and_randomness: FrequencyAndRandomness::empty(),
-            control: Control::new(),
         }
     }
 
     const fn disable(&mut self) {
         self.enabled = false;
-        self.volume_and_envelope = VolumeAndEnvelope::from_bits(0);
+        self.length_timer.set_enabled(false);
+        self.envelope = Envelope::from_bits(0);
         self.frequency_and_randomness = FrequencyAndRandomness::from_bits(0);
-        self.control = Control::from_bits(0);
     }
 }
 
@@ -395,17 +385,17 @@ impl Apu {
         match addr {
             MEM_AUD1SWEEP => self.channel1.sweep.bits(),
             MEM_AUD1LEN => self.channel1.duty_cycle.bits(),
-            MEM_AUD1ENV => self.channel1.volume_and_envelope.bits(),
-            MEM_AUD1HIGH => self.channel1.control.bits(),
+            MEM_AUD1ENV => self.channel1.envelope.bits(),
+            MEM_AUD1HIGH => read_audhigh(self.channel1.length_timer.enabled),
             MEM_AUD2LEN => self.channel2.duty_cycle.bits(),
-            MEM_AUD2ENV => self.channel2.volume_and_envelope.bits(),
-            MEM_AUD2HIGH => self.channel2.control.bits(),
+            MEM_AUD2ENV => self.channel2.envelope.bits(),
+            MEM_AUD2HIGH => read_audhigh(self.channel2.length_timer.enabled),
             MEM_AUD3ENA => self.read_aud3ena(),
-            MEM_AUD3LEVEL => self.channel3.output_level.bits(),
-            MEM_AUD3HIGH => self.channel3.control.bits(),
-            MEM_AUD4ENV => self.channel4.volume_and_envelope.bits(),
+            MEM_AUD3LEVEL => self.channel3.volume.bits(),
+            MEM_AUD3HIGH => read_audhigh(self.channel3.length_timer.enabled),
+            MEM_AUD4ENV => self.channel4.envelope.bits(),
             MEM_AUD4POLY => self.channel4.frequency_and_randomness.bits(),
-            MEM_AUD4GO => self.channel4.control.bits(),
+            MEM_AUD4GO => read_audhigh(self.channel4.length_timer.enabled),
             MEM_AUDVOL => self.master_volume.bits(),
             MEM_AUDTERM => self.sound_panning.bits(),
             MEM_AUDENA => self.read_audena(),
@@ -427,43 +417,52 @@ impl Apu {
             MEM_AUD1SWEEP => self.channel1.sweep = Sweep::from_bits(value),
             MEM_AUD1LEN => {
                 self.channel1.duty_cycle = DutyCycle::from_bits(value);
-                self.channel1.length_timer = value & 0x3F;
+                let length = value & 0x3F;
+                self.channel1.length_timer.load(length);
             }
-            MEM_AUD1ENV => self.channel1.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_AUD1ENV => self.channel1.envelope = Envelope::from_bits(value),
             MEM_AUD1LOW => self.channel1.period = self.channel1.period.replace_low(value),
             MEM_AUD1HIGH => {
                 let _trigger = value & 0x80 != 0;
                 self.channel1.period = self.channel1.period.replace_high(value);
-                self.channel1.control = Control::from_bits(value);
+                let length_enabled = value & 0x40 != 0;
+                self.channel1.length_timer.set_enabled(length_enabled);
             }
             MEM_AUD2LEN => {
                 self.channel2.duty_cycle = DutyCycle::from_bits(value);
-                self.channel2.length_timer = value & 0x3F;
+                let length = value & 0x3F;
+                self.channel2.length_timer.load(length);
             }
-            MEM_AUD2ENV => self.channel2.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_AUD2ENV => self.channel2.envelope = Envelope::from_bits(value),
             MEM_AUD2LOW => self.channel2.period = self.channel2.period.replace_low(value),
             MEM_AUD2HIGH => {
                 let _trigger = value & 0x80 != 0;
                 self.channel2.period = self.channel2.period.replace_high(value);
-                self.channel2.control = Control::from_bits(value);
+                let length_enabled = value & 0x40 != 0;
+                self.channel2.length_timer.set_enabled(length_enabled);
             }
             MEM_AUD3ENA => self.channel3.dac_enabled = value & 0x80 != 0,
-            MEM_AUD3LEN => self.channel3.length_timer = value,
-            MEM_AUD3LEVEL => self.channel3.output_level = OutputLevel::from_bits(value),
+            MEM_AUD3LEN => self.channel3.length_timer.load(value),
+            MEM_AUD3LEVEL => self.channel3.volume = OutputLevel::from_bits(value),
             MEM_AUD3LOW => self.channel3.period = self.channel3.period.replace_low(value),
             MEM_AUD3HIGH => {
                 let _trigger = value & 0x80 != 0;
                 self.channel3.period = self.channel3.period.replace_high(value);
-                self.channel3.control = Control::from_bits(value);
+                let length_enabled = value & 0x40 != 0;
+                self.channel3.length_timer.set_enabled(length_enabled);
             }
-            MEM_AUD4LEN => self.channel4.length_timer = value & 0x3F,
-            MEM_AUD4ENV => self.channel4.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
+            MEM_AUD4LEN => {
+                let length = value & 0x3F;
+                self.channel4.length_timer.load(length);
+            },
+            MEM_AUD4ENV => self.channel4.envelope = Envelope::from_bits(value),
             MEM_AUD4POLY => {
                 self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
             }
             MEM_AUD4GO => {
                 let _trigger = value & 0x80 != 0;
-                self.channel4.control = Control::from_bits(value);
+                let length_enabled = value & 0x40 != 0;
+                self.channel4.length_timer.set_enabled(length_enabled);
             }
             MEM_AUDVOL => self.master_volume = MasterVolume::from_bits(value),
             MEM_AUDTERM => self.sound_panning = SoundPanning::from_bits(value),
@@ -518,4 +517,12 @@ impl Apu {
         self.channel3.disable();
         self.channel4.disable();
     }
+}
+
+const fn read_audhigh(length_enabled: bool) -> u8 {
+    let mut bits = 0xBF;
+    if length_enabled {
+        bits |= 0x40;
+    }
+    bits
 }
