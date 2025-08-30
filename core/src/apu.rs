@@ -43,7 +43,7 @@ const MEM_AUDENA: u16 = 0xFF26;
 const WAVE_RAM_START: u16 = 0xFF30;
 const WAVE_RAM_END: u16 = 0xFF3F;
 
-const WAVE_RAM_SIZE: usize = (WAVE_RAM_END as usize) - (WAVE_RAM_START as usize) + 1;
+const WAVE_RAM_SIZE: usize = 0x10;
 
 #[derive(Debug, Copy, Clone)]
 struct Sweep(u8);
@@ -139,26 +139,6 @@ impl Control {
     const UNUSED: u8 = 0b1011_1111;
 
     const fn new() -> Self {
-        Self::from_bits(0)
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits | Self::UNUSED)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-struct DacEnable(u8);
-
-impl DacEnable {
-    const ENABLE: u8 = 0b1000_0000;
-    const UNUSED: u8 = 0b0111_1111;
-
-    const fn empty() -> Self {
         Self::from_bits(0)
     }
 
@@ -332,7 +312,7 @@ impl PulseChannel {
 
 struct WaveChannel {
     enabled: bool,
-    dac_enable: DacEnable,
+    dac_enabled: bool,
     length_timer: u8,
     output_level: OutputLevel,
     period: Period,
@@ -343,7 +323,7 @@ impl WaveChannel {
     const fn new() -> Self {
         Self {
             enabled: false,
-            dac_enable: DacEnable::empty(),
+            dac_enabled: false,
             length_timer: 0xFF,
             output_level: OutputLevel::empty(),
             period: Period::empty(),
@@ -353,7 +333,7 @@ impl WaveChannel {
 
     const fn disable(&mut self) {
         self.enabled = false;
-        self.dac_enable = DacEnable::from_bits(0);
+        self.dac_enabled = false;
         self.output_level = OutputLevel::from_bits(0);
         self.control = Control::from_bits(0);
     }
@@ -420,7 +400,7 @@ impl Apu {
             MEM_AUD2LEN => self.channel2.duty_cycle.bits(),
             MEM_AUD2ENV => self.channel2.volume_and_envelope.bits(),
             MEM_AUD2HIGH => self.channel2.control.bits(),
-            MEM_AUD3ENA => self.channel3.dac_enable.bits(),
+            MEM_AUD3ENA => self.read_aud3ena(),
             MEM_AUD3LEVEL => self.channel3.output_level.bits(),
             MEM_AUD3HIGH => self.channel3.control.bits(),
             MEM_AUD4ENV => self.channel4.volume_and_envelope.bits(),
@@ -452,7 +432,7 @@ impl Apu {
             MEM_AUD1ENV => self.channel1.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
             MEM_AUD1LOW => self.channel1.period = self.channel1.period.replace_low(value),
             MEM_AUD1HIGH => {
-                let _trigger = value & 0x80 == 0x80;
+                let _trigger = value & 0x80 != 0;
                 self.channel1.period = self.channel1.period.replace_high(value);
                 self.channel1.control = Control::from_bits(value);
             }
@@ -463,16 +443,16 @@ impl Apu {
             MEM_AUD2ENV => self.channel2.volume_and_envelope = VolumeAndEnvelope::from_bits(value),
             MEM_AUD2LOW => self.channel2.period = self.channel2.period.replace_low(value),
             MEM_AUD2HIGH => {
-                let _trigger = value & 0x80 == 0x80;
+                let _trigger = value & 0x80 != 0;
                 self.channel2.period = self.channel2.period.replace_high(value);
                 self.channel2.control = Control::from_bits(value);
             }
-            MEM_AUD3ENA => self.channel3.dac_enable = DacEnable::from_bits(value),
+            MEM_AUD3ENA => self.channel3.dac_enabled = value & 0x80 != 0,
             MEM_AUD3LEN => self.channel3.length_timer = value,
             MEM_AUD3LEVEL => self.channel3.output_level = OutputLevel::from_bits(value),
             MEM_AUD3LOW => self.channel3.period = self.channel3.period.replace_low(value),
             MEM_AUD3HIGH => {
-                let _trigger = value & 0x80 == 0x80;
+                let _trigger = value & 0x80 != 0;
                 self.channel3.period = self.channel3.period.replace_high(value);
                 self.channel3.control = Control::from_bits(value);
             }
@@ -482,13 +462,13 @@ impl Apu {
                 self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
             }
             MEM_AUD4GO => {
-                let _trigger = value & 0x80 == 0x80;
+                let _trigger = value & 0x80 != 0;
                 self.channel4.control = Control::from_bits(value);
             }
             MEM_AUDVOL => self.master_volume = MasterVolume::from_bits(value),
             MEM_AUDTERM => self.sound_panning = SoundPanning::from_bits(value),
             MEM_AUDENA => {
-                self.enabled = value & 0x80 == 0x80;
+                self.enabled = value & 0x80 != 0;
                 if !self.enabled {
                     self.disable();
                 }
@@ -498,6 +478,14 @@ impl Apu {
             }
             _ => {}
         }
+    }
+
+    const fn read_aud3ena(&self) -> u8 {
+        let mut bits = 0x7F;
+        if self.channel3.dac_enabled {
+            bits |= 0x80;
+        }
+        bits
     }
 
     const fn read_audena(&self) -> u8 {
