@@ -48,16 +48,41 @@ const WAVE_RAM_SIZE: usize = 0x10;
 struct LengthTimer {
     enabled: bool,
     max_value: usize,
+    divider: usize,
     counter: usize,
 }
 
 impl LengthTimer {
     const fn new(max_value: usize) -> Self {
-        Self {enabled: false, max_value, counter: max_value }
+        Self {enabled: false, max_value, divider: 0, counter: max_value }
     }
 
     const fn load(&mut self, length: u8) {
         self.counter = self.max_value - length as usize;
+    }
+
+    const fn tick(&mut self) -> bool {
+        if !self.enabled || self.counter == 0 {
+            return false;
+        }
+
+        self.divider = self.divider.wrapping_add(1);
+        if self.divider % 2 == 0 {
+            self.counter -= 1;
+        }
+
+        if self.counter == 0 {
+            return true;
+        }
+
+        false
+    }
+
+    const fn trigger(&mut self) {
+        // Triggering sets the counter to max value if it has expired
+        if self.counter == 0 {
+            self.counter = self.max_value;
+        }
     }
 
     const fn set_enabled(&mut self, enabled: bool) {
@@ -268,12 +293,29 @@ impl Channel1 {
         }
     }
 
+    const fn tick(&mut self) {
+        if self.length_timer.tick() {
+            self.enabled = false;
+        }
+    }
+
+    const fn trigger(&mut self) {
+        if self.dac_enabled() {
+            self.enabled = true;
+        }
+        self.length_timer.trigger();
+    }
+
     const fn disable(&mut self) {
         self.enabled = false;
         self.sweep = Sweep::from_bits(0);
         self.duty_cycle = DutyCycle::from_bits(0);
         self.length_timer.set_enabled(false);
         self.envelope = Envelope::from_bits(0);
+    }
+
+    const fn dac_enabled(&self) -> bool {
+        self.envelope.bits() & 0xF8 != 0
     }
 }
 
@@ -296,11 +338,28 @@ impl PulseChannel {
         }
     }
 
+    const fn tick(&mut self) {
+        if self.length_timer.tick() {
+            self.enabled = false;
+        }
+    }
+
+    const fn trigger(&mut self) {
+        if self.dac_enabled() {
+            self.enabled = true;
+        }
+        self.length_timer.trigger();
+    }
+
     const fn disable(&mut self) {
         self.enabled = false;
         self.duty_cycle = DutyCycle::from_bits(0);
         self.length_timer.set_enabled(false);
         self.envelope = Envelope::from_bits(0);
+    }
+
+    const fn dac_enabled(&self) -> bool {
+        self.envelope.bits() & 0xF8 != 0
     }
 }
 
@@ -323,11 +382,35 @@ impl WaveChannel {
         }
     }
 
+    const fn tick(&mut self) {
+        if self.length_timer.tick() {
+            self.enabled = false;
+        }
+    }
+
+    const fn trigger(&mut self) {
+        if self.dac_enabled() {
+            self.enabled = true;
+        }
+        self.length_timer.trigger();
+    }
+
     const fn disable(&mut self) {
         self.enabled = false;
         self.dac_enabled = false;
         self.length_timer.set_enabled(false);
         self.volume = OutputLevel::from_bits(0);
+    }
+
+    const fn dac_enabled(&self) -> bool {
+        self.dac_enabled
+    }
+
+    const fn set_dac_enabled(&mut self, enabled: bool) {
+        self.dac_enabled = enabled;
+        if !enabled {
+            self.enabled = false;
+        }
     }
 }
 
@@ -348,11 +431,28 @@ impl NoiseChannel {
         }
     }
 
+    const fn tick(&mut self) {
+        if self.length_timer.tick() {
+            self.enabled = false;
+        }
+    }
+
+    const fn trigger(&mut self) {
+        if self.dac_enabled() {
+            self.enabled = true;
+        }
+        self.length_timer.trigger();
+    }
+
     const fn disable(&mut self) {
         self.enabled = false;
         self.length_timer.set_enabled(false);
         self.envelope = Envelope::from_bits(0);
         self.frequency_and_randomness = FrequencyAndRandomness::from_bits(0);
+    }
+
+    const fn dac_enabled(&self) -> bool {
+        self.envelope.bits() & 0xF8 != 0
     }
 }
 
@@ -379,6 +479,13 @@ impl Apu {
             sound_panning: SoundPanning::new(),
             wave_ram: [0xFF; WAVE_RAM_SIZE],
         }
+    }
+
+    pub const fn tick(&mut self) {
+        self.channel1.tick();
+        self.channel2.tick();
+        self.channel3.tick();
+        self.channel4.tick();
     }
 
     pub const fn read_audio(&self, addr: u16) -> u8 {
@@ -420,10 +527,18 @@ impl Apu {
                 let length = value & 0x3F;
                 self.channel1.length_timer.load(length);
             }
-            MEM_AUD1ENV => self.channel1.envelope = Envelope::from_bits(value),
+            MEM_AUD1ENV => {
+                self.channel1.envelope = Envelope::from_bits(value);
+                if !self.channel1.dac_enabled() {
+                    self.channel1.enabled = false;
+                }
+            },
             MEM_AUD1LOW => self.channel1.period = self.channel1.period.replace_low(value),
             MEM_AUD1HIGH => {
-                let _trigger = value & 0x80 != 0;
+                let triggered = value & 0x80 != 0;
+                if triggered {
+                    self.channel1.trigger();
+                }
                 self.channel1.period = self.channel1.period.replace_high(value);
                 let length_enabled = value & 0x40 != 0;
                 self.channel1.length_timer.set_enabled(length_enabled);
@@ -433,20 +548,34 @@ impl Apu {
                 let length = value & 0x3F;
                 self.channel2.length_timer.load(length);
             }
-            MEM_AUD2ENV => self.channel2.envelope = Envelope::from_bits(value),
+            MEM_AUD2ENV => {
+                self.channel2.envelope = Envelope::from_bits(value);
+                if !self.channel2.dac_enabled() {
+                    self.channel2.enabled = false;
+                }
+            },
             MEM_AUD2LOW => self.channel2.period = self.channel2.period.replace_low(value),
             MEM_AUD2HIGH => {
-                let _trigger = value & 0x80 != 0;
+                let triggered = value & 0x80 != 0;
+                if triggered {
+                    self.channel2.trigger();
+                }
                 self.channel2.period = self.channel2.period.replace_high(value);
                 let length_enabled = value & 0x40 != 0;
                 self.channel2.length_timer.set_enabled(length_enabled);
             }
-            MEM_AUD3ENA => self.channel3.dac_enabled = value & 0x80 != 0,
+            MEM_AUD3ENA => {
+                let enabled = value & 0x80 != 0;
+                self.channel3.set_dac_enabled(enabled);
+            },
             MEM_AUD3LEN => self.channel3.length_timer.load(value),
             MEM_AUD3LEVEL => self.channel3.volume = OutputLevel::from_bits(value),
             MEM_AUD3LOW => self.channel3.period = self.channel3.period.replace_low(value),
             MEM_AUD3HIGH => {
-                let _trigger = value & 0x80 != 0;
+                let triggered = value & 0x80 != 0;
+                if triggered {
+                    self.channel3.trigger();
+                }
                 self.channel3.period = self.channel3.period.replace_high(value);
                 let length_enabled = value & 0x40 != 0;
                 self.channel3.length_timer.set_enabled(length_enabled);
@@ -455,12 +584,20 @@ impl Apu {
                 let length = value & 0x3F;
                 self.channel4.length_timer.load(length);
             },
-            MEM_AUD4ENV => self.channel4.envelope = Envelope::from_bits(value),
+            MEM_AUD4ENV => {
+                self.channel4.envelope = Envelope::from_bits(value);
+                if !self.channel4.dac_enabled() {
+                    self.channel4.enabled = false;
+                }
+            },
             MEM_AUD4POLY => {
                 self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
             }
             MEM_AUD4GO => {
-                let _trigger = value & 0x80 != 0;
+                let triggered = value & 0x80 != 0;
+                if triggered {
+                    self.channel4.trigger();
+                }
                 let length_enabled = value & 0x40 != 0;
                 self.channel4.length_timer.set_enabled(length_enabled);
             }

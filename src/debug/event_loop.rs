@@ -76,7 +76,7 @@ fn run_blocking(mut target: GameBoyTarget) -> Result<ExitReason, Box<dyn std::er
                         }
                     }
                 }
-                "next" | "n" => {
+                "next" | "n" | "step" | "s" => {
                     target.step_mode();
                     target.run();
                 }
@@ -114,22 +114,22 @@ where
     let input = input.replace('_', "");
     // Hex
     if let Some(input) = ["$", "0x", "0X"]
-        .into_iter()
-        .find_map(|pat| input.strip_prefix(pat))
+        .iter()
+        .find_map(|&pat| input.strip_prefix(pat))
     {
         T::from_str_radix(input, 16)
     }
     // Octal
     else if let Some(input) = ["&", "0o", "0O"]
-        .into_iter()
-        .find_map(|pat| input.strip_prefix(pat))
+        .iter()
+        .find_map(|&pat| input.strip_prefix(pat))
     {
         T::from_str_radix(input, 8)
     }
     // Binary
     else if let Some(input) = ["%", "0b", "0B"]
-        .into_iter()
-        .find_map(|pat| input.strip_prefix(pat))
+        .iter()
+        .find_map(|&pat| input.strip_prefix(pat))
     {
         T::from_str_radix(input, 2)
     } else {

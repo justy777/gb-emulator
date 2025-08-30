@@ -59,6 +59,7 @@ pub struct Timer {
     // Used to delay overflow until the next cycle
     overflow: bool,
     after_overflow: bool,
+    apu_ticked: Option<()>,
 }
 
 impl Timer {
@@ -73,6 +74,7 @@ impl Timer {
             audio_signal: false,
             overflow: false,
             after_overflow: false,
+            apu_ticked: None,
         }
     }
 
@@ -97,7 +99,7 @@ impl Timer {
         }
     }
 
-    pub const fn increment_divider(&mut self, interrupt_flags: &mut InterruptFlags) {
+    pub const fn increment_divider(&mut self, interrupt_flags: &mut InterruptFlags) -> bool {
         self.after_overflow = false;
         self.divider = self.divider.wrapping_add(1);
 
@@ -110,6 +112,7 @@ impl Timer {
         }
 
         self.sync_signals();
+        self.apu_ticked.take().is_some()
     }
 
     const fn sync_signals(&mut self) {
@@ -126,10 +129,10 @@ impl Timer {
         let new_audio_signal = self.audio_bit();
 
         if self.audio_signal && !new_audio_signal {
-            // TODO: implement audio ticks
+            self.apu_ticked = Some(());
         }
 
-        self.audio_signal = new_tick_signal;
+        self.audio_signal = new_audio_signal;
     }
 
     const fn frequency_bit(&self) -> bool {

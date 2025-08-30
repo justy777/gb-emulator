@@ -214,7 +214,10 @@ impl BusInterface for AddressBus<'_> {
     }
 
     fn tick(&mut self) {
-        self.timer.increment_divider(self.interrupt_flags);
+        let apu_ticked = self.timer.increment_divider(self.interrupt_flags);
+        if apu_ticked {
+            self.apu.tick();
+        }
         let dma_running = self.sprite_dma_transfer();
         self.ppu.step(self.interrupt_flags, dma_running);
         self.serial_port.step(self.interrupt_flags);
