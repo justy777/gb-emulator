@@ -1,5 +1,3 @@
-use crate::cpu::Direct;
-
 // NR10
 const MEM_AUD1SWEEP: u16 = 0xFF10;
 // NR11
@@ -280,7 +278,7 @@ impl SoundPanning {
     }
 }
 
-struct Channel1 {
+struct PulseChannel {
     enabled: bool,
     divider: u8,
     sweep: Sweep,
@@ -291,16 +289,16 @@ struct Channel1 {
     sample_index: usize,
 }
 
-impl Channel1 {
-    const fn new() -> Self {
+impl PulseChannel {
+    const fn new(envelope_value: u8, duty_cycle: DutyCycle) -> Self {
         Self {
             enabled: true,
             divider: 0,
             sweep: Sweep::empty(),
             period_counter: PeriodCounter::new(),
-            duty_cycle: DutyCycle::OneHalf,
+            duty_cycle,
             length_timer: LengthTimer::new(64),
-            envelope: Envelope::from_bits(Envelope::INITIAL_VOLUME | 0b11),
+            envelope: Envelope::from_bits(envelope_value),
             sample_index: 0,
         }
     }
@@ -328,61 +326,6 @@ impl Channel1 {
     const fn disable(&mut self) {
         self.enabled = false;
         self.sweep = Sweep::from_bits(0);
-        self.duty_cycle = DutyCycle::OneEighth;
-        self.length_timer.set_enabled(false);
-        self.envelope = Envelope::from_bits(0);
-    }
-
-    const fn dac_enabled(&self) -> bool {
-        self.envelope.bits() & 0xF8 != 0
-    }
-}
-
-struct PulseChannel {
-    enabled: bool,
-    divider: u8,
-    period_counter: PeriodCounter,
-    duty_cycle: DutyCycle,
-    length_timer: LengthTimer,
-    envelope: Envelope,
-    sample_index: usize,
-}
-
-impl PulseChannel {
-    const fn new() -> Self {
-        Self {
-            enabled: false,
-            divider: 0,
-            period_counter: PeriodCounter::new(),
-            duty_cycle: DutyCycle::OneEighth,
-            length_timer: LengthTimer::new(64),
-            envelope: Envelope::empty(),
-            sample_index: 0,
-        }
-    }
-
-    const fn tick(&mut self) {
-        self.divider = self.divider.wrapping_add(1);
-
-        if self.period_counter.tick() {
-            self.sample_index = (self.sample_index + 1) % 8;
-        }
-
-        if self.divider % 2 == 0 && self.length_timer.tick() {
-            self.enabled = false;
-        }
-    }
-
-    const fn trigger(&mut self) {
-        if self.dac_enabled() {
-            self.enabled = true;
-        }
-        self.period_counter.trigger();
-        self.length_timer.trigger();
-    }
-
-    const fn disable(&mut self) {
-        self.enabled = false;
         self.duty_cycle = DutyCycle::OneEighth;
         self.length_timer.set_enabled(false);
         self.envelope = Envelope::from_bits(0);
@@ -507,7 +450,7 @@ impl NoiseChannel {
 
 pub struct Apu {
     enabled: bool,
-    channel1: Channel1,
+    channel1: PulseChannel,
     channel2: PulseChannel,
     channel3: WaveChannel,
     channel4: NoiseChannel,
@@ -520,8 +463,8 @@ impl Apu {
     pub const fn new() -> Self {
         Self {
             enabled: true,
-            channel1: Channel1::new(),
-            channel2: PulseChannel::new(),
+            channel1: PulseChannel::new(Envelope::INITIAL_VOLUME | 0b11, DutyCycle::OneHalf),
+            channel2: PulseChannel::new(0, DutyCycle::OneEighth),
             channel3: WaveChannel::new(),
             channel4: NoiseChannel::new(),
             master_volume: MasterVolume::new(),
