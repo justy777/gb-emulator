@@ -1,3 +1,5 @@
+use crate::cpu::Direct;
+
 // NR10
 const MEM_AUD1SWEEP: u16 = 0xFF10;
 // NR11
@@ -74,13 +76,12 @@ impl PeriodCounter {
 struct LengthTimer {
     enabled: bool,
     max_value: u16,
-    divider: u16,
     counter: u16,
 }
 
 impl LengthTimer {
     const fn new(max_value: u16) -> Self {
-        Self {enabled: false, max_value, divider: 0, counter: max_value }
+        Self {enabled: false, max_value, counter: max_value }
     }
 
     const fn load(&mut self, length: u8) {
@@ -92,11 +93,7 @@ impl LengthTimer {
             return false;
         }
 
-        self.divider = self.divider.wrapping_add(1);
-        if self.divider % 2 == 0 {
-            self.counter -= 1;
-        }
-
+        self.counter -= 1;
         if self.counter == 0 {
             return true;
         }
@@ -285,6 +282,7 @@ impl SoundPanning {
 
 struct Channel1 {
     enabled: bool,
+    divider: u8,
     sweep: Sweep,
     period_counter: PeriodCounter,
     duty_cycle: DutyCycle,
@@ -297,6 +295,7 @@ impl Channel1 {
     const fn new() -> Self {
         Self {
             enabled: true,
+            divider: 0,
             sweep: Sweep::empty(),
             period_counter: PeriodCounter::new(),
             duty_cycle: DutyCycle::OneHalf,
@@ -307,11 +306,13 @@ impl Channel1 {
     }
 
     const fn tick(&mut self) {
+        self.divider = self.divider.wrapping_add(1);
+
         if self.period_counter.tick() {
             self.sample_index = (self.sample_index + 1) % 8;
         }
 
-        if self.length_timer.tick() {
+        if self.divider % 2 == 0 && self.length_timer.tick() {
             self.enabled = false;
         }
     }
@@ -339,6 +340,7 @@ impl Channel1 {
 
 struct PulseChannel {
     enabled: bool,
+    divider: u8,
     period_counter: PeriodCounter,
     duty_cycle: DutyCycle,
     length_timer: LengthTimer,
@@ -350,6 +352,7 @@ impl PulseChannel {
     const fn new() -> Self {
         Self {
             enabled: false,
+            divider: 0,
             period_counter: PeriodCounter::new(),
             duty_cycle: DutyCycle::OneEighth,
             length_timer: LengthTimer::new(64),
@@ -359,11 +362,13 @@ impl PulseChannel {
     }
 
     const fn tick(&mut self) {
+        self.divider = self.divider.wrapping_add(1);
+
         if self.period_counter.tick() {
             self.sample_index = (self.sample_index + 1) % 8;
         }
 
-        if self.length_timer.tick() {
+        if self.divider % 2 == 0 && self.length_timer.tick() {
             self.enabled = false;
         }
     }
@@ -390,6 +395,7 @@ impl PulseChannel {
 
 struct WaveChannel {
     enabled: bool,
+    divider: u8,
     dac_enabled: bool,
     period_counter: PeriodCounter,
     length_timer: LengthTimer,
@@ -401,6 +407,7 @@ impl WaveChannel {
     const fn new() -> Self {
         Self {
             enabled: false,
+            divider: 0,
             dac_enabled: false,
             period_counter: PeriodCounter::new(),
             length_timer: LengthTimer::new(256),
@@ -410,9 +417,7 @@ impl WaveChannel {
     }
 
     const fn tick(&mut self) {
-        if self.length_timer.tick() {
-            self.enabled = false;
-        }
+        self.divider = self.divider.wrapping_add(1);
 
         let mut i = 0;
         while i < 2 {
@@ -420,6 +425,10 @@ impl WaveChannel {
                 self.sample_index = (self.sample_index + 1) % 32;
             }
             i += 1;
+        }
+
+        if self.divider % 2 == 0 && self.length_timer.tick() {
+            self.enabled = false;
         }
     }
 
@@ -452,6 +461,7 @@ impl WaveChannel {
 
 struct NoiseChannel {
     enabled: bool,
+    divider: u8,
     length_timer: LengthTimer,
     envelope: Envelope,
     frequency_and_randomness: FrequencyAndRandomness,
@@ -461,6 +471,7 @@ impl NoiseChannel {
     const fn new() -> Self {
         Self {
             enabled: false,
+            divider: 0,
             length_timer: LengthTimer::new(64),
             envelope: Envelope::empty(),
             frequency_and_randomness: FrequencyAndRandomness::empty(),
@@ -468,7 +479,9 @@ impl NoiseChannel {
     }
 
     const fn tick(&mut self) {
-        if self.length_timer.tick() {
+        self.divider = self.divider.wrapping_add(1);
+
+        if self.divider % 2 == 0 && self.length_timer.tick() {
             self.enabled = false;
         }
     }
