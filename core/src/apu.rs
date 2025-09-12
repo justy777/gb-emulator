@@ -540,8 +540,13 @@ impl Apu {
             MEM_AUD1HIGH => {
                 let [low, _high] = self.channel1.period_counter.period.to_le_bytes();
                 self.channel1.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
+
+                let prev_length_enabled = self.channel1.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
                 self.channel1.length_timer.set_enabled(length_enabled);
+                if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel1.length_timer.tick() {
+                    self.channel1.enabled = false;
+                }
 
                 let triggered = value & 0x80 != 0;
                 if triggered {
@@ -566,8 +571,13 @@ impl Apu {
             MEM_AUD2HIGH => {
                 let [low, _high] = self.channel2.period_counter.period.to_le_bytes();
                 self.channel2.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
+
+                let prev_length_enabled = self.channel2.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
                 self.channel2.length_timer.set_enabled(length_enabled);
+                if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel2.length_timer.tick() {
+                    self.channel2.enabled = false;
+                }
 
                 let triggered = value & 0x80 != 0;
                 if triggered {
@@ -590,8 +600,13 @@ impl Apu {
             MEM_AUD3HIGH => {
                 let [low, _high] = self.channel3.period_counter.period.to_le_bytes();
                 self.channel3.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
+
+                let prev_length_enabled = self.channel3.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
                 self.channel3.length_timer.set_enabled(length_enabled);
+                if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel3.length_timer.tick() {
+                    self.channel3.enabled = false;
+                }
 
                 let triggered = value & 0x80 != 0;
                 if triggered {
@@ -612,8 +627,12 @@ impl Apu {
                 self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
             }
             MEM_AUD4GO => {
+                let prev_length_enabled = self.channel4.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
                 self.channel4.length_timer.set_enabled(length_enabled);
+                if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel4.length_timer.tick() {
+                    self.channel4.enabled = false;
+                }
 
                 let triggered = value & 0x80 != 0;
                 if triggered {
