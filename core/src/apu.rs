@@ -99,10 +99,14 @@ impl LengthTimer {
         false
     }
 
-    const fn trigger(&mut self) {
+    const fn trigger(&mut self, divider: u8) {
         // Triggering sets the counter to max value if it has expired
         if self.counter == 0 {
             self.counter = self.max_value;
+            // Obscure behaviour: If triggered on even clock timer while enabled is decremented by 1
+            if self.enabled && divider % 2 == 0 {
+                self.counter -= 1;
+            }
         }
     }
 
@@ -311,12 +315,12 @@ impl PulseChannel {
         }
     }
 
-    const fn trigger(&mut self) {
+    const fn trigger(&mut self, divider: u8) {
         if self.dac_enabled() {
             self.enabled = true;
         }
         self.period_counter.trigger();
-        self.length_timer.trigger();
+        self.length_timer.trigger(divider);
     }
 
     const fn disable(&mut self) {
@@ -367,12 +371,12 @@ impl WaveChannel {
         }
     }
 
-    const fn trigger(&mut self) {
+    const fn trigger(&mut self, divider: u8) {
         if self.dac_enabled() {
             self.enabled = true;
         }
         self.period_counter.trigger();
-        self.length_timer.trigger();
+        self.length_timer.trigger(divider);
     }
 
     const fn disable(&mut self) {
@@ -417,11 +421,11 @@ impl NoiseChannel {
         }
     }
 
-    const fn trigger(&mut self) {
+    const fn trigger(&mut self, divider: u8) {
         if self.dac_enabled() {
             self.enabled = true;
         }
-        self.length_timer.trigger();
+        self.length_timer.trigger(divider);
     }
 
     const fn disable(&mut self) {
@@ -544,13 +548,14 @@ impl Apu {
                 let prev_length_enabled = self.channel1.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
                 self.channel1.length_timer.set_enabled(length_enabled);
+                // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
                 if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel1.length_timer.tick() {
                     self.channel1.enabled = false;
                 }
 
                 let triggered = value & 0x80 != 0;
                 if triggered {
-                    self.channel1.trigger();
+                    self.channel1.trigger(self.divider);
                 }
             }
             MEM_AUD2LEN => {
@@ -575,13 +580,14 @@ impl Apu {
                 let prev_length_enabled = self.channel2.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
                 self.channel2.length_timer.set_enabled(length_enabled);
+                // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
                 if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel2.length_timer.tick() {
                     self.channel2.enabled = false;
                 }
 
                 let triggered = value & 0x80 != 0;
                 if triggered {
-                    self.channel2.trigger();
+                    self.channel2.trigger(self.divider);
                 }
             }
             MEM_AUD3ENA => {
@@ -604,13 +610,14 @@ impl Apu {
                 let prev_length_enabled = self.channel3.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
                 self.channel3.length_timer.set_enabled(length_enabled);
+                // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
                 if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel3.length_timer.tick() {
                     self.channel3.enabled = false;
                 }
 
                 let triggered = value & 0x80 != 0;
                 if triggered {
-                    self.channel3.trigger();
+                    self.channel3.trigger(self.divider);
                 }
             }
             MEM_AUD4LEN => {
@@ -630,13 +637,14 @@ impl Apu {
                 let prev_length_enabled = self.channel4.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
                 self.channel4.length_timer.set_enabled(length_enabled);
+                // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
                 if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel4.length_timer.tick() {
                     self.channel4.enabled = false;
                 }
 
                 let triggered = value & 0x80 != 0;
                 if triggered {
-                    self.channel4.trigger();
+                    self.channel4.trigger(self.divider);
                 }
             }
             MEM_AUDVOL => self.master_volume = MasterVolume::from_bits(value),
