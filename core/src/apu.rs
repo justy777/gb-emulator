@@ -53,7 +53,10 @@ struct PeriodCounter {
 
 impl PeriodCounter {
     const fn new() -> Self {
-        Self {period: 0, counter: 2048}
+        Self {
+            period: 0,
+            counter: 2048,
+        }
     }
 
     const fn tick(&mut self) -> bool {
@@ -79,7 +82,11 @@ struct LengthTimer {
 
 impl LengthTimer {
     const fn new(max_value: u16) -> Self {
-        Self {enabled: false, max_value, counter: max_value }
+        Self {
+            enabled: false,
+            max_value,
+            counter: max_value,
+        }
     }
 
     const fn load(&mut self, length: u8) {
@@ -293,9 +300,9 @@ struct PulseChannel {
 }
 
 impl PulseChannel {
-    const fn new(envelope_value: u8, duty_cycle: DutyCycle) -> Self {
+    const fn new(enabled: bool, envelope_value: u8, duty_cycle: DutyCycle) -> Self {
         Self {
-            enabled: true,
+            enabled,
             sweep: Sweep::empty(),
             period_counter: PeriodCounter::new(),
             duty_cycle,
@@ -457,8 +464,8 @@ impl Apu {
         Self {
             enabled: true,
             divider: 0,
-            channel1: PulseChannel::new(Envelope::INITIAL_VOLUME | 0b11, DutyCycle::OneHalf),
-            channel2: PulseChannel::new(0, DutyCycle::OneEighth),
+            channel1: PulseChannel::new(true, Envelope::INITIAL_VOLUME | 0b11, DutyCycle::OneHalf),
+            channel2: PulseChannel::new(false, 0, DutyCycle::OneEighth),
             channel3: WaveChannel::new(),
             channel4: NoiseChannel::new(),
             master_volume: MasterVolume::new(),
@@ -487,14 +494,14 @@ impl Apu {
                 let mut bits = 0x3F;
                 bits |= (self.channel1.duty_cycle as u8) << 6;
                 bits
-            },
+            }
             MEM_AUD1ENV => self.channel1.envelope.bits(),
             MEM_AUD1HIGH => read_audhigh(self.channel1.length_timer.enabled),
             MEM_AUD2LEN => {
                 let mut bits = 0x3F;
                 bits |= (self.channel2.duty_cycle as u8) << 6;
                 bits
-            },
+            }
             MEM_AUD2ENV => self.channel2.envelope.bits(),
             MEM_AUD2HIGH => read_audhigh(self.channel2.length_timer.enabled),
             MEM_AUD3ENA => self.read_aud3ena(),
@@ -502,7 +509,7 @@ impl Apu {
                 let mut bits = 0x9F;
                 bits |= (self.channel3.volume as u8) << 5;
                 bits
-            },
+            }
             MEM_AUD3HIGH => read_audhigh(self.channel3.length_timer.enabled),
             MEM_AUD4ENV => self.channel4.envelope.bits(),
             MEM_AUD4POLY => self.channel4.frequency_and_randomness.bits(),
@@ -536,11 +543,11 @@ impl Apu {
                 if !self.channel1.dac_enabled() {
                     self.channel1.enabled = false;
                 }
-            },
+            }
             MEM_AUD1LOW => {
                 let [_low, high] = self.channel1.period_counter.period.to_le_bytes();
                 self.channel1.period_counter.period = u16::from_le_bytes([value, high]);
-            },
+            }
             MEM_AUD1HIGH => {
                 let [low, _high] = self.channel1.period_counter.period.to_le_bytes();
                 self.channel1.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
@@ -549,7 +556,11 @@ impl Apu {
                 let length_enabled = value & 0x40 != 0;
                 self.channel1.length_timer.set_enabled(length_enabled);
                 // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
-                if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel1.length_timer.tick() {
+                if !prev_length_enabled
+                    && length_enabled
+                    && self.divider % 2 == 0
+                    && self.channel1.length_timer.tick()
+                {
                     self.channel1.enabled = false;
                 }
 
@@ -568,11 +579,11 @@ impl Apu {
                 if !self.channel2.dac_enabled() {
                     self.channel2.enabled = false;
                 }
-            },
+            }
             MEM_AUD2LOW => {
                 let [_low, high] = self.channel2.period_counter.period.to_le_bytes();
                 self.channel2.period_counter.period = u16::from_le_bytes([value, high]);
-            },
+            }
             MEM_AUD2HIGH => {
                 let [low, _high] = self.channel2.period_counter.period.to_le_bytes();
                 self.channel2.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
@@ -581,7 +592,11 @@ impl Apu {
                 let length_enabled = value & 0x40 != 0;
                 self.channel2.length_timer.set_enabled(length_enabled);
                 // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
-                if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel2.length_timer.tick() {
+                if !prev_length_enabled
+                    && length_enabled
+                    && self.divider % 2 == 0
+                    && self.channel2.length_timer.tick()
+                {
                     self.channel2.enabled = false;
                 }
 
@@ -593,16 +608,16 @@ impl Apu {
             MEM_AUD3ENA => {
                 let enabled = value & 0x80 != 0;
                 self.channel3.set_dac_enabled(enabled);
-            },
+            }
             MEM_AUD3LEN => self.channel3.length_timer.load(value),
             MEM_AUD3LEVEL => {
                 let level = (value & 0x60) >> 5;
                 self.channel3.volume = OutputLevel::from(level);
-            },
+            }
             MEM_AUD3LOW => {
                 let [_low, high] = self.channel3.period_counter.period.to_le_bytes();
                 self.channel3.period_counter.period = u16::from_le_bytes([value, high]);
-            },
+            }
             MEM_AUD3HIGH => {
                 let [low, _high] = self.channel3.period_counter.period.to_le_bytes();
                 self.channel3.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
@@ -611,7 +626,11 @@ impl Apu {
                 let length_enabled = value & 0x40 != 0;
                 self.channel3.length_timer.set_enabled(length_enabled);
                 // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
-                if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel3.length_timer.tick() {
+                if !prev_length_enabled
+                    && length_enabled
+                    && self.divider % 2 == 0
+                    && self.channel3.length_timer.tick()
+                {
                     self.channel3.enabled = false;
                 }
 
@@ -623,13 +642,13 @@ impl Apu {
             MEM_AUD4LEN => {
                 let length = value & 0x3F;
                 self.channel4.length_timer.load(length);
-            },
+            }
             MEM_AUD4ENV => {
                 self.channel4.envelope = Envelope::from_bits(value);
                 if !self.channel4.dac_enabled() {
                     self.channel4.enabled = false;
                 }
-            },
+            }
             MEM_AUD4POLY => {
                 self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
             }
@@ -638,7 +657,11 @@ impl Apu {
                 let length_enabled = value & 0x40 != 0;
                 self.channel4.length_timer.set_enabled(length_enabled);
                 // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
-                if !prev_length_enabled && length_enabled && self.divider % 2 == 0 && self.channel4.length_timer.tick() {
+                if !prev_length_enabled
+                    && length_enabled
+                    && self.divider % 2 == 0
+                    && self.channel4.length_timer.tick()
+                {
                     self.channel4.enabled = false;
                 }
 
