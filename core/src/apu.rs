@@ -73,6 +73,71 @@ impl PeriodCounter {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+enum SweepDirection {
+    Increase = 0b0,
+    Decrease = 0b1,
+}
+
+impl From<bool> for SweepDirection {
+    fn from(value: bool) -> Self {
+        if value {
+            Self::Decrease
+        } else {
+            Self::Increase
+        }
+    }
+}
+
+#[derive(Debug)]
+struct SweepTimer {
+    enabled: bool,
+    counter: u8,
+    pace: u8,
+    direction: SweepDirection,
+    shift: u8,
+    period: u16,
+}
+
+impl SweepTimer {
+    const fn new() -> Self {
+        Self {
+            enabled: false,
+            counter: 0,
+            pace: 0,
+            direction: SweepDirection::Increase,
+            shift: 0,
+            period: 0,
+        }
+    }
+    const fn tick(&mut self) -> bool {
+        if !self.enabled {
+            return false;
+        }
+
+        self.counter -= 1;
+        if self.counter == 0 {
+            self.counter = if self.pace > 0 { self.pace } else { 8 };
+            return true;
+        }
+        false
+    }
+
+    const fn trigger(&mut self, period: u16) {
+        self.enabled = self.pace > 0 || self.shift > 0;
+        self.period = period;
+        self.counter = if self.pace > 0 { self.pace } else { 8 };
+    }
+
+    const fn next_period(&self) -> u16 {
+        let delta = self.period >> self.shift;
+        match self.direction {
+            SweepDirection::Increase => self.period + delta,
+            SweepDirection::Decrease => self.period - delta,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct LengthTimer {
     enabled: bool,
@@ -119,28 +184,6 @@ impl LengthTimer {
 
     const fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-struct Sweep(u8);
-
-impl Sweep {
-    const PACE: u8 = 0b0111_0000;
-    const DIRECTION: u8 = 0b0000_1000;
-    const INDIVIDUAL_STEP: u8 = 0b0000_0111;
-    const UNUSED: u8 = 0b1000_0000;
-
-    const fn empty() -> Self {
-        Self::from_bits(0)
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits | Self::UNUSED)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
     }
 }
 
@@ -291,7 +334,7 @@ impl SoundPanning {
 
 struct PulseChannel {
     enabled: bool,
-    sweep: Sweep,
+    sweep: SweepTimer,
     period_counter: PeriodCounter,
     duty_cycle: DutyCycle,
     length_timer: LengthTimer,
@@ -303,7 +346,7 @@ impl PulseChannel {
     const fn new(enabled: bool, envelope_value: u8, duty_cycle: DutyCycle) -> Self {
         Self {
             enabled,
-            sweep: Sweep::empty(),
+            sweep: SweepTimer::new(),
             period_counter: PeriodCounter::new(),
             duty_cycle,
             length_timer: LengthTimer::new(64),
@@ -317,6 +360,20 @@ impl PulseChannel {
             self.sample_index = (self.sample_index + 1) % 8;
         }
 
+        if divider % 4 == 2 && self.sweep.tick() {
+            let period = self.sweep.next_period();
+            if period > 2047 {
+                self.enabled = false;
+            } else {
+                self.period_counter.period = period;
+                self.sweep.period = period;
+
+                if self.sweep.next_period() > 2047 {
+                    self.enabled = false;
+                }
+            }
+        }
+
         if divider % 2 == 0 && self.length_timer.tick() {
             self.enabled = false;
         }
@@ -327,12 +384,17 @@ impl PulseChannel {
             self.enabled = true;
         }
         self.period_counter.trigger();
+        self.sweep.trigger(self.period_counter.period);
+        if self.sweep.shift > 0 && self.sweep.next_period() > 2047 {
+            self.enabled = false;
+        }
+
         self.length_timer.trigger(divider);
     }
 
     const fn disable(&mut self) {
         self.enabled = false;
-        self.sweep = Sweep::from_bits(0);
+        self.sweep = SweepTimer::new();
         self.duty_cycle = DutyCycle::OneEighth;
         self.length_timer.set_enabled(false);
         self.envelope = Envelope::from_bits(0);
@@ -489,7 +551,13 @@ impl Apu {
 
     pub const fn read_audio(&self, addr: u16) -> u8 {
         match addr {
-            MEM_AUD1SWEEP => self.channel1.sweep.bits(),
+            MEM_AUD1SWEEP => {
+                let mut bits = 0x80;
+                bits |= self.channel1.sweep.pace << 4;
+                bits |= (self.channel1.sweep.direction as u8) << 3;
+                bits |= self.channel1.sweep.shift;
+                bits
+            }
             MEM_AUD1LEN => {
                 let mut bits = 0x3F;
                 bits |= (self.channel1.duty_cycle as u8) << 6;
@@ -532,7 +600,11 @@ impl Apu {
         }
 
         match addr {
-            MEM_AUD1SWEEP => self.channel1.sweep = Sweep::from_bits(value),
+            MEM_AUD1SWEEP => {
+                self.channel1.sweep.pace = (value & 0x70) >> 4;
+                self.channel1.sweep.direction = SweepDirection::from((value & 0x08) != 0);
+                self.channel1.sweep.shift = value & 0x07;
+            }
             MEM_AUD1LEN => {
                 self.channel1.duty_cycle = DutyCycle::from(value >> 6);
                 let length = value & 0x3F;
@@ -545,12 +617,12 @@ impl Apu {
                 }
             }
             MEM_AUD1LOW => {
-                let [_low, high] = self.channel1.period_counter.period.to_le_bytes();
-                self.channel1.period_counter.period = u16::from_le_bytes([value, high]);
+                self.channel1.period_counter.period &= 0x700;
+                self.channel1.period_counter.period |= value as u16;
             }
             MEM_AUD1HIGH => {
-                let [low, _high] = self.channel1.period_counter.period.to_le_bytes();
-                self.channel1.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
+                self.channel1.period_counter.period &= 0xFF;
+                self.channel1.period_counter.period |= (value as u16 & 0x07) << 8;
 
                 let prev_length_enabled = self.channel1.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
@@ -581,12 +653,12 @@ impl Apu {
                 }
             }
             MEM_AUD2LOW => {
-                let [_low, high] = self.channel2.period_counter.period.to_le_bytes();
-                self.channel2.period_counter.period = u16::from_le_bytes([value, high]);
+                self.channel2.period_counter.period &= 0x700;
+                self.channel2.period_counter.period |= value as u16;
             }
             MEM_AUD2HIGH => {
-                let [low, _high] = self.channel2.period_counter.period.to_le_bytes();
-                self.channel2.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
+                self.channel2.period_counter.period &= 0xFF;
+                self.channel2.period_counter.period |= (value as u16 & 0x07) << 8;
 
                 let prev_length_enabled = self.channel2.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
@@ -615,12 +687,12 @@ impl Apu {
                 self.channel3.volume = OutputLevel::from(level);
             }
             MEM_AUD3LOW => {
-                let [_low, high] = self.channel3.period_counter.period.to_le_bytes();
-                self.channel3.period_counter.period = u16::from_le_bytes([value, high]);
+                self.channel3.period_counter.period &= 0x700;
+                self.channel3.period_counter.period |= value as u16;
             }
             MEM_AUD3HIGH => {
-                let [low, _high] = self.channel3.period_counter.period.to_le_bytes();
-                self.channel3.period_counter.period = u16::from_le_bytes([low, value & 0x07]);
+                self.channel3.period_counter.period &= 0xFF;
+                self.channel3.period_counter.period |= (value as u16 & 0x07) << 8;
 
                 let prev_length_enabled = self.channel3.length_timer.enabled;
                 let length_enabled = value & 0x40 != 0;
