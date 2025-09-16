@@ -97,6 +97,7 @@ struct SweepTimer {
     direction: SweepDirection,
     shift: u8,
     period: u16,
+    negate_mode: bool,
 }
 
 impl SweepTimer {
@@ -108,6 +109,7 @@ impl SweepTimer {
             direction: SweepDirection::Increase,
             shift: 0,
             period: 0,
+            negate_mode: false,
         }
     }
     const fn tick(&mut self) -> bool {
@@ -118,7 +120,7 @@ impl SweepTimer {
         self.counter -= 1;
         if self.counter == 0 {
             self.counter = if self.pace > 0 { self.pace } else { 8 };
-            return true;
+            return self.pace > 0;
         }
         false
     }
@@ -127,9 +129,11 @@ impl SweepTimer {
         self.enabled = self.pace > 0 || self.shift > 0;
         self.period = period;
         self.counter = if self.pace > 0 { self.pace } else { 8 };
+        self.negate_mode = false;
     }
 
-    const fn next_period(&self) -> u16 {
+    const fn next_period(&mut self) -> u16 {
+        self.negate_mode = matches!(self.direction, SweepDirection::Decrease);
         let delta = self.period >> self.shift;
         match self.direction {
             SweepDirection::Increase => self.period + delta,
@@ -364,7 +368,7 @@ impl PulseChannel {
             let period = self.sweep.next_period();
             if period > 2047 {
                 self.enabled = false;
-            } else {
+            } else if self.sweep.shift > 0 {
                 self.period_counter.period = period;
                 self.sweep.period = period;
 
@@ -617,6 +621,12 @@ impl Apu {
                 self.channel1.sweep.pace = (value & 0x70) >> 4;
                 self.channel1.sweep.direction = SweepDirection::from((value & 0x08) != 0);
                 self.channel1.sweep.shift = value & 0x07;
+
+                if self.channel1.sweep.negate_mode
+                    && matches!(self.channel1.sweep.direction, SweepDirection::Increase)
+                {
+                    self.channel1.enabled = false;
+                }
             }
             MEM_AUD1LEN => {
                 self.channel1.duty_cycle = DutyCycle::from(value >> 6);
