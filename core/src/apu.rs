@@ -392,10 +392,13 @@ impl PulseChannel {
         self.length_timer.trigger(frame);
     }
 
-    const fn disable(&mut self) {
+    const fn power_on(&mut self) {
+        self.duty_cycle = DutyCycle::OneEighth;
+    }
+
+    const fn power_off(&mut self) {
         self.enabled = false;
         self.sweep = SweepTimer::new();
-        self.duty_cycle = DutyCycle::OneEighth;
         self.length_timer.set_enabled(false);
         self.envelope = Envelope::from_bits(0);
         self.period_counter.period = 0;
@@ -449,7 +452,7 @@ impl WaveChannel {
         self.length_timer.trigger(frame);
     }
 
-    const fn disable(&mut self) {
+    const fn power_off(&mut self) {
         self.enabled = false;
         self.dac_enabled = false;
         self.length_timer.set_enabled(false);
@@ -499,7 +502,7 @@ impl NoiseChannel {
         self.length_timer.trigger(frame);
     }
 
-    const fn disable(&mut self) {
+    const fn power_off(&mut self) {
         self.enabled = false;
         self.length_timer.set_enabled(false);
         self.envelope = Envelope::from_bits(0);
@@ -597,7 +600,15 @@ impl Apu {
 
     pub fn write_audio(&mut self, addr: u16, value: u8) {
         // Cannot write to most registers while off
-        if !self.enabled && addr < MEM_AUDENA {
+        // DMG specific: length counters are still writable when power is off
+        if !self.enabled
+            && addr != MEM_AUDENA
+            && addr < WAVE_RAM_START
+            && addr != MEM_AUD1LEN
+            && addr != MEM_AUD2LEN
+            && addr != MEM_AUD3LEN
+            && addr != MEM_AUD4LEN
+        {
             return;
         }
 
@@ -750,7 +761,11 @@ impl Apu {
                 let prev_enabled = self.enabled;
                 self.enabled = value & 0x80 != 0;
                 if prev_enabled && !self.enabled {
-                    self.disable();
+                    self.power_off();
+                }
+
+                if !prev_enabled && self.enabled {
+                    self.power_on();
                 }
             }
             WAVE_RAM_START..=WAVE_RAM_END => {
@@ -788,16 +803,23 @@ impl Apu {
         bits
     }
 
-    const fn disable(&mut self) {
-        self.enabled = false;
+    const fn power_on(&mut self) {
+        self.enabled = true;
         self.frame = 7;
+
+        self.channel1.power_on();
+        self.channel2.power_on();
+    }
+
+    const fn power_off(&mut self) {
+        self.enabled = false;
         self.master_volume = MasterVolume::from_bits(0);
         self.sound_panning = SoundPanning::from_bits(0);
 
-        self.channel1.disable();
-        self.channel2.disable();
-        self.channel3.disable();
-        self.channel4.disable();
+        self.channel1.power_off();
+        self.channel2.power_off();
+        self.channel3.power_off();
+        self.channel4.power_off();
     }
 }
 
