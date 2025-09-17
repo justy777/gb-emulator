@@ -1,3 +1,5 @@
+use std::cmp::{max, min};
+
 // NR10
 const MEM_AUD1SWEEP: u16 = 0xFF10;
 // NR11
@@ -216,23 +218,70 @@ impl From<u8> for DutyCycle {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct Envelope(u8);
+enum EnvelopeDirection {
+    Decrease = 0b0,
+    Increase = 0b1,
+}
 
-impl Envelope {
-    const INITIAL_VOLUME: u8 = 0b1111_0000;
-    const ENVELOPE_DIRECTION: u8 = 0b0000_1000;
-    const SWEEP_PACE: u8 = 0b0000_0111;
+impl From<bool> for EnvelopeDirection {
+    fn from(value: bool) -> Self {
+        if value {
+            Self::Increase
+        } else {
+            Self::Decrease
+        }
+    }
+}
 
-    const fn empty() -> Self {
-        Self::from_bits(0)
+#[derive(Debug, Clone)]
+struct EnvelopeTimer {
+    volume: u8,
+    direction: EnvelopeDirection,
+    pace: u8,
+    initial_volume: u8,
+    configured_direction: EnvelopeDirection,
+    configured_pace: u8,
+    counter: u8,
+}
+
+impl EnvelopeTimer {
+    const fn new(volume: u8, direction: EnvelopeDirection, pace: u8) -> Self {
+        Self {
+            volume,
+            direction,
+            pace,
+            initial_volume: volume,
+            configured_direction: direction,
+            configured_pace: pace,
+            counter: pace,
+        }
     }
 
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits)
+    fn tick(&mut self) {
+        if self.pace == 0 {
+            return;
+        }
+
+        self.counter -= 1;
+        if self.counter == 0 {
+            self.counter = self.pace;
+            self.volume = match self.direction {
+                EnvelopeDirection::Decrease => min(self.volume.saturating_sub(1), 0),
+                EnvelopeDirection::Increase => max(self.volume.saturating_add(1), 15),
+            };
+        }
     }
 
-    const fn bits(self) -> u8 {
-        self.0
+    const fn trigger(&mut self, frame: u8) {
+        self.volume = self.initial_volume;
+        self.direction = self.configured_direction;
+        self.pace = self.configured_pace;
+
+        self.counter = self.pace;
+
+        if frame == 6 {
+            self.counter += 1;
+        }
     }
 }
 
@@ -318,24 +367,24 @@ struct PulseChannel {
     period_counter: PeriodCounter,
     duty_cycle: DutyCycle,
     length_timer: LengthTimer,
-    envelope: Envelope,
+    envelope: EnvelopeTimer,
     sample_index: usize,
 }
 
 impl PulseChannel {
-    const fn new(enabled: bool, envelope_value: u8, duty_cycle: DutyCycle) -> Self {
+    const fn new(enabled: bool, envelope_timer: EnvelopeTimer, duty_cycle: DutyCycle) -> Self {
         Self {
             enabled,
             sweep: SweepTimer::new(),
             period_counter: PeriodCounter::new(),
             duty_cycle,
             length_timer: LengthTimer::new(64),
-            envelope: Envelope::from_bits(envelope_value),
+            envelope: envelope_timer,
             sample_index: 0,
         }
     }
 
-    const fn tick(&mut self, frame: u8) {
+    fn tick(&mut self, frame: u8) {
         if self.period_counter.tick() {
             self.sample_index = (self.sample_index + 1) % 8;
         }
@@ -357,6 +406,10 @@ impl PulseChannel {
         if frame % 2 == 0 && self.length_timer.tick() {
             self.enabled = false;
         }
+
+        if frame == 7 {
+            self.envelope.tick();
+        }
     }
 
     const fn trigger(&mut self, frame: u8) {
@@ -369,6 +422,7 @@ impl PulseChannel {
             self.enabled = false;
         }
 
+        self.envelope.trigger(frame);
         self.length_timer.trigger(frame);
     }
 
@@ -380,12 +434,13 @@ impl PulseChannel {
         self.enabled = false;
         self.sweep = SweepTimer::new();
         self.length_timer.set_enabled(false);
-        self.envelope = Envelope::from_bits(0);
+        self.envelope = EnvelopeTimer::new(0, EnvelopeDirection::Decrease, 0);
+        self.period_counter.period = 0;
         self.period_counter.period = 0;
     }
 
     const fn dac_enabled(&self) -> bool {
-        self.envelope.bits() & 0xF8 != 0
+        self.envelope.initial_volume > 0 || self.envelope.configured_direction as u8 > 0
     }
 }
 
@@ -455,7 +510,7 @@ impl WaveChannel {
 struct NoiseChannel {
     enabled: bool,
     length_timer: LengthTimer,
-    envelope: Envelope,
+    envelope: EnvelopeTimer,
     frequency_and_randomness: FrequencyAndRandomness,
 }
 
@@ -464,14 +519,18 @@ impl NoiseChannel {
         Self {
             enabled: false,
             length_timer: LengthTimer::new(64),
-            envelope: Envelope::empty(),
+            envelope: EnvelopeTimer::new(0, EnvelopeDirection::Decrease, 0),
             frequency_and_randomness: FrequencyAndRandomness::empty(),
         }
     }
 
-    const fn tick(&mut self, frame: u8) {
+    fn tick(&mut self, frame: u8) {
         if frame % 2 == 0 && self.length_timer.tick() {
             self.enabled = false;
+        }
+
+        if frame == 7 {
+            self.envelope.tick();
         }
     }
 
@@ -479,18 +538,19 @@ impl NoiseChannel {
         if self.dac_enabled() {
             self.enabled = true;
         }
+        self.envelope.trigger(frame);
         self.length_timer.trigger(frame);
     }
 
     const fn power_off(&mut self) {
         self.enabled = false;
         self.length_timer.set_enabled(false);
-        self.envelope = Envelope::from_bits(0);
+        self.envelope = EnvelopeTimer::new(0, EnvelopeDirection::Decrease, 0);
         self.frequency_and_randomness = FrequencyAndRandomness::from_bits(0);
     }
 
     const fn dac_enabled(&self) -> bool {
-        self.envelope.bits() & 0xF8 != 0
+        self.envelope.initial_volume > 0 || self.envelope.configured_direction as u8 > 0
     }
 }
 
@@ -508,20 +568,24 @@ pub struct Apu {
 
 impl Apu {
     pub const fn new() -> Self {
+        let envelope_timer1 = EnvelopeTimer::new(15, EnvelopeDirection::Decrease, 3);
+        let envelope_timer2 = EnvelopeTimer::new(0, EnvelopeDirection::Decrease, 0);
+        let pan_left = [true; 4];
+        let pan_right = [true, true, false, false];
         Self {
             enabled: true,
             frame: 0,
-            channel1: PulseChannel::new(true, Envelope::INITIAL_VOLUME | 0b11, DutyCycle::OneHalf),
-            channel2: PulseChannel::new(false, 0, DutyCycle::OneEighth),
+            channel1: PulseChannel::new(true, envelope_timer1, DutyCycle::OneHalf),
+            channel2: PulseChannel::new(false, envelope_timer2, DutyCycle::OneEighth),
             channel3: WaveChannel::new(),
             channel4: NoiseChannel::new(),
             master_volume: MasterVolume::new(7, 7),
-            panning: Panning::new([true; 4], [true, true, false, false]),
+            panning: Panning::new(pan_left, pan_right),
             wave_ram: [0xFF; WAVE_RAM_SIZE],
         }
     }
 
-    pub const fn tick(&mut self) {
+    pub fn tick(&mut self) {
         if !self.enabled {
             return;
         }
@@ -557,17 +621,17 @@ impl Apu {
         match addr {
             MEM_AUD1SWEEP => self.read_aud1sweep(),
             MEM_AUD1LEN => self.read_aud1len(),
-            MEM_AUD1ENV => self.channel1.envelope.bits(),
+            MEM_AUD1ENV => self.read_aud1env(),
             MEM_AUD1HIGH => self.read_aud1high(),
             MEM_AUD2LEN => self.read_aud2len(),
-            MEM_AUD2ENV => self.channel2.envelope.bits(),
+            MEM_AUD2ENV => self.read_aud2env(),
             MEM_AUD2HIGH => self.read_aud2high(),
             MEM_AUD3ENA => self.read_aud3ena(),
             MEM_AUD3LEVEL => self.read_aud3level(),
             MEM_AUD3HIGH => self.read_aud3high(),
-            MEM_AUD4ENV => self.channel4.envelope.bits(),
+            MEM_AUD4ENV => self.read_aud4env(),
             MEM_AUD4POLY => self.channel4.frequency_and_randomness.bits(),
-            MEM_AUD4GO => self.read_aud4high(),
+            MEM_AUD4GO => self.read_aud4go(),
             MEM_AUDVOL => self.read_audvol(),
             MEM_AUDTERM => self.read_audterm(),
             MEM_AUDENA => self.read_audena(),
@@ -593,6 +657,14 @@ impl Apu {
         bits
     }
 
+    const fn read_aud1env(&self) -> u8 {
+        let mut bits = 0;
+        bits |= self.channel1.envelope.initial_volume << 4;
+        bits |= (self.channel1.envelope.configured_direction as u8) << 3;
+        bits |= self.channel1.envelope.configured_pace;
+        bits
+    }
+
     const fn read_aud1high(&self) -> u8 {
         let mut bits = 0xBF;
         if self.channel1.length_timer.enabled {
@@ -604,6 +676,14 @@ impl Apu {
     const fn read_aud2len(&self) -> u8 {
         let mut bits = 0x3F;
         bits |= (self.channel2.duty_cycle as u8) << 6;
+        bits
+    }
+
+    const fn read_aud2env(&self) -> u8 {
+        let mut bits = 0;
+        bits |= self.channel2.envelope.initial_volume << 4;
+        bits |= (self.channel2.envelope.configured_direction as u8) << 3;
+        bits |= self.channel2.envelope.configured_pace;
         bits
     }
 
@@ -637,7 +717,15 @@ impl Apu {
         bits
     }
 
-    const fn read_aud4high(&self) -> u8 {
+    const fn read_aud4env(&self) -> u8 {
+        let mut bits = 0;
+        bits |= self.channel4.envelope.initial_volume << 4;
+        bits |= (self.channel4.envelope.configured_direction as u8) << 3;
+        bits |= self.channel4.envelope.configured_pace;
+        bits
+    }
+
+    const fn read_aud4go(&self) -> u8 {
         let mut bits = 0xBF;
         if self.channel4.length_timer.enabled {
             bits |= 0x40;
@@ -768,8 +856,11 @@ impl Apu {
         self.channel1.length_timer.load(length);
     }
 
-    const fn write_aud1env(&mut self, value: u8) {
-        self.channel1.envelope = Envelope::from_bits(value);
+    fn write_aud1env(&mut self, value: u8) {
+        self.channel1.envelope.initial_volume = value >> 4;
+        let direction = value & 0x08 != 0;
+        self.channel1.envelope.configured_direction = EnvelopeDirection::from(direction);
+        self.channel1.envelope.configured_pace = value & 0x07;
         if !self.channel1.dac_enabled() {
             self.channel1.enabled = false;
         }
@@ -808,8 +899,11 @@ impl Apu {
         self.channel2.length_timer.load(length);
     }
 
-    const fn write_aud2env(&mut self, value: u8) {
-        self.channel2.envelope = Envelope::from_bits(value);
+    fn write_aud2env(&mut self, value: u8) {
+        self.channel2.envelope.initial_volume = value >> 4;
+        let direction = value & 0x08 != 0;
+        self.channel2.envelope.configured_direction = EnvelopeDirection::from(direction);
+        self.channel2.envelope.configured_pace = value & 0x07;
         if !self.channel2.dac_enabled() {
             self.channel2.enabled = false;
         }
@@ -884,8 +978,11 @@ impl Apu {
         self.channel4.length_timer.load(length);
     }
 
-    const fn write_aud4env(&mut self, value: u8) {
-        self.channel4.envelope = Envelope::from_bits(value);
+    fn write_aud4env(&mut self, value: u8) {
+        self.channel4.envelope.initial_volume = value >> 4;
+        let direction = value & 0x08 != 0;
+        self.channel4.envelope.configured_direction = EnvelopeDirection::from(direction);
+        self.channel4.envelope.configured_pace = value & 0x07;
         if !self.channel4.dac_enabled() {
             self.channel4.enabled = false;
         }
