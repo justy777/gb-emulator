@@ -558,39 +558,40 @@ impl Apu {
         self.channel4.tick(self.frame);
     }
 
+    const fn power_on(&mut self) {
+        self.enabled = true;
+        self.frame = 7;
+
+        self.channel1.power_on();
+        self.channel2.power_on();
+    }
+
+    const fn power_off(&mut self) {
+        self.enabled = false;
+        self.master_volume = MasterVolume::from_bits(0);
+        self.sound_panning = SoundPanning::from_bits(0);
+
+        self.channel1.power_off();
+        self.channel2.power_off();
+        self.channel3.power_off();
+        self.channel4.power_off();
+    }
+
     pub const fn read_audio(&self, addr: u16) -> u8 {
         match addr {
-            MEM_AUD1SWEEP => {
-                let mut bits = 0x80;
-                bits |= self.channel1.sweep.pace << 4;
-                bits |= (self.channel1.sweep.direction as u8) << 3;
-                bits |= self.channel1.sweep.shift;
-                bits
-            }
-            MEM_AUD1LEN => {
-                let mut bits = 0x3F;
-                bits |= (self.channel1.duty_cycle as u8) << 6;
-                bits
-            }
+            MEM_AUD1SWEEP => self.read_aud1sweep(),
+            MEM_AUD1LEN => self.read_aud1len(),
             MEM_AUD1ENV => self.channel1.envelope.bits(),
-            MEM_AUD1HIGH => read_audhigh(self.channel1.length_timer.enabled),
-            MEM_AUD2LEN => {
-                let mut bits = 0x3F;
-                bits |= (self.channel2.duty_cycle as u8) << 6;
-                bits
-            }
+            MEM_AUD1HIGH => self.read_aud1high(),
+            MEM_AUD2LEN => self.read_aud2len(),
             MEM_AUD2ENV => self.channel2.envelope.bits(),
-            MEM_AUD2HIGH => read_audhigh(self.channel2.length_timer.enabled),
+            MEM_AUD2HIGH => self.read_aud2high(),
             MEM_AUD3ENA => self.read_aud3ena(),
-            MEM_AUD3LEVEL => {
-                let mut bits = 0x9F;
-                bits |= (self.channel3.volume as u8) << 5;
-                bits
-            }
-            MEM_AUD3HIGH => read_audhigh(self.channel3.length_timer.enabled),
+            MEM_AUD3LEVEL => self.read_aud3level(),
+            MEM_AUD3HIGH => self.read_aud3high(),
             MEM_AUD4ENV => self.channel4.envelope.bits(),
             MEM_AUD4POLY => self.channel4.frequency_and_randomness.bits(),
-            MEM_AUD4GO => read_audhigh(self.channel4.length_timer.enabled),
+            MEM_AUD4GO => self.read_aud4high(),
             MEM_AUDVOL => self.master_volume.bits(),
             MEM_AUDTERM => self.sound_panning.bits(),
             MEM_AUDENA => self.read_audena(),
@@ -602,193 +603,68 @@ impl Apu {
         }
     }
 
-    pub fn write_audio(&mut self, addr: u16, value: u8) {
-        // Cannot write to most registers while off
-        // DMG specific: length counters are still writable when power is off
-        if !self.enabled
-            && addr != MEM_AUDENA
-            && addr < WAVE_RAM_START
-            && addr != MEM_AUD1LEN
-            && addr != MEM_AUD2LEN
-            && addr != MEM_AUD3LEN
-            && addr != MEM_AUD4LEN
-        {
-            return;
+    const fn read_aud1sweep(&self) -> u8 {
+        let mut bits = 0x80;
+        bits |= self.channel1.sweep.pace << 4;
+        bits |= (self.channel1.sweep.direction as u8) << 3;
+        bits |= self.channel1.sweep.shift;
+        bits
+    }
+
+    const fn read_aud1len(&self) -> u8 {
+        let mut bits = 0x3F;
+        bits |= (self.channel1.duty_cycle as u8) << 6;
+        bits
+    }
+
+    const fn read_aud1high(&self) -> u8 {
+        let mut bits = 0xBF;
+        if self.channel1.length_timer.enabled {
+            bits |= 0x40;
         }
+        bits
+    }
 
-        match addr {
-            MEM_AUD1SWEEP => {
-                self.channel1.sweep.pace = (value & 0x70) >> 4;
-                self.channel1.sweep.direction = SweepDirection::from((value & 0x08) != 0);
-                self.channel1.sweep.shift = value & 0x07;
+    const fn read_aud2len(&self) -> u8 {
+        let mut bits = 0x3F;
+        bits |= (self.channel2.duty_cycle as u8) << 6;
+        bits
+    }
 
-                if self.channel1.sweep.negate_mode
-                    && matches!(self.channel1.sweep.direction, SweepDirection::Increase)
-                {
-                    self.channel1.enabled = false;
-                }
-            }
-            MEM_AUD1LEN => {
-                self.channel1.duty_cycle = DutyCycle::from(value >> 6);
-                let length = value & 0x3F;
-                self.channel1.length_timer.load(length);
-            }
-            MEM_AUD1ENV => {
-                self.channel1.envelope = Envelope::from_bits(value);
-                if !self.channel1.dac_enabled() {
-                    self.channel1.enabled = false;
-                }
-            }
-            MEM_AUD1LOW => {
-                self.channel1.period_counter.period &= 0x700;
-                self.channel1.period_counter.period |= value as u16;
-            }
-            MEM_AUD1HIGH => {
-                self.channel1.period_counter.period &= 0xFF;
-                self.channel1.period_counter.period |= (value as u16 & 0x07) << 8;
-
-                let prev_length_enabled = self.channel1.length_timer.enabled;
-                let length_enabled = value & 0x40 != 0;
-                self.channel1.length_timer.set_enabled(length_enabled);
-                // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
-                if !prev_length_enabled
-                    && length_enabled
-                    && self.frame % 2 == 0
-                    && self.channel1.length_timer.tick()
-                {
-                    self.channel1.enabled = false;
-                }
-
-                let triggered = value & 0x80 != 0;
-                if triggered {
-                    self.channel1.trigger(self.frame);
-                }
-            }
-            MEM_AUD2LEN => {
-                self.channel2.duty_cycle = DutyCycle::from(value >> 6);
-                let length = value & 0x3F;
-                self.channel2.length_timer.load(length);
-            }
-            MEM_AUD2ENV => {
-                self.channel2.envelope = Envelope::from_bits(value);
-                if !self.channel2.dac_enabled() {
-                    self.channel2.enabled = false;
-                }
-            }
-            MEM_AUD2LOW => {
-                self.channel2.period_counter.period &= 0x700;
-                self.channel2.period_counter.period |= value as u16;
-            }
-            MEM_AUD2HIGH => {
-                self.channel2.period_counter.period &= 0xFF;
-                self.channel2.period_counter.period |= (value as u16 & 0x07) << 8;
-
-                let prev_length_enabled = self.channel2.length_timer.enabled;
-                let length_enabled = value & 0x40 != 0;
-                self.channel2.length_timer.set_enabled(length_enabled);
-                // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
-                if !prev_length_enabled
-                    && length_enabled
-                    && self.frame % 2 == 0
-                    && self.channel2.length_timer.tick()
-                {
-                    self.channel2.enabled = false;
-                }
-
-                let triggered = value & 0x80 != 0;
-                if triggered {
-                    self.channel2.trigger(self.frame);
-                }
-            }
-            MEM_AUD3ENA => {
-                let enabled = value & 0x80 != 0;
-                self.channel3.set_dac_enabled(enabled);
-            }
-            MEM_AUD3LEN => self.channel3.length_timer.load(value),
-            MEM_AUD3LEVEL => {
-                let level = (value & 0x60) >> 5;
-                self.channel3.volume = OutputLevel::from(level);
-            }
-            MEM_AUD3LOW => {
-                self.channel3.period_counter.period &= 0x700;
-                self.channel3.period_counter.period |= value as u16;
-            }
-            MEM_AUD3HIGH => {
-                self.channel3.period_counter.period &= 0xFF;
-                self.channel3.period_counter.period |= (value as u16 & 0x07) << 8;
-
-                let prev_length_enabled = self.channel3.length_timer.enabled;
-                let length_enabled = value & 0x40 != 0;
-                self.channel3.length_timer.set_enabled(length_enabled);
-                // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
-                if !prev_length_enabled
-                    && length_enabled
-                    && self.frame % 2 == 0
-                    && self.channel3.length_timer.tick()
-                {
-                    self.channel3.enabled = false;
-                }
-
-                let triggered = value & 0x80 != 0;
-                if triggered {
-                    self.channel3.trigger(self.frame);
-                }
-            }
-            MEM_AUD4LEN => {
-                let length = value & 0x3F;
-                self.channel4.length_timer.load(length);
-            }
-            MEM_AUD4ENV => {
-                self.channel4.envelope = Envelope::from_bits(value);
-                if !self.channel4.dac_enabled() {
-                    self.channel4.enabled = false;
-                }
-            }
-            MEM_AUD4POLY => {
-                self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
-            }
-            MEM_AUD4GO => {
-                let prev_length_enabled = self.channel4.length_timer.enabled;
-                let length_enabled = value & 0x40 != 0;
-                self.channel4.length_timer.set_enabled(length_enabled);
-                // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
-                if !prev_length_enabled
-                    && length_enabled
-                    && self.frame % 2 == 0
-                    && self.channel4.length_timer.tick()
-                {
-                    self.channel4.enabled = false;
-                }
-
-                let triggered = value & 0x80 != 0;
-                if triggered {
-                    self.channel4.trigger(self.frame);
-                }
-            }
-            MEM_AUDVOL => self.master_volume = MasterVolume::from_bits(value),
-            MEM_AUDTERM => self.sound_panning = SoundPanning::from_bits(value),
-            MEM_AUDENA => {
-                let prev_enabled = self.enabled;
-                self.enabled = value & 0x80 != 0;
-                if prev_enabled && !self.enabled {
-                    self.power_off();
-                }
-
-                if !prev_enabled && self.enabled {
-                    self.power_on();
-                }
-            }
-            WAVE_RAM_START..=WAVE_RAM_END => {
-                self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
-            }
-            _ => {}
+    const fn read_aud2high(&self) -> u8 {
+        let mut bits = 0xBF;
+        if self.channel2.length_timer.enabled {
+            bits |= 0x40;
         }
+        bits
     }
 
     const fn read_aud3ena(&self) -> u8 {
         let mut bits = 0x7F;
         if self.channel3.dac_enabled {
             bits |= 0x80;
+        }
+        bits
+    }
+
+    const fn read_aud3level(&self) -> u8 {
+        let mut bits = 0x9F;
+        bits |= (self.channel3.volume as u8) << 5;
+        bits
+    }
+
+    const fn read_aud3high(&self) -> u8 {
+        let mut bits = 0xBF;
+        if self.channel3.length_timer.enabled {
+            bits |= 0x40;
+        }
+        bits
+    }
+
+    const fn read_aud4high(&self) -> u8 {
+        let mut bits = 0xBF;
+        if self.channel4.length_timer.enabled {
+            bits |= 0x40;
         }
         bits
     }
@@ -813,30 +689,222 @@ impl Apu {
         bits
     }
 
-    const fn power_on(&mut self) {
-        self.enabled = true;
-        self.frame = 7;
+    pub fn write_audio(&mut self, addr: u16, value: u8) {
+        // Cannot write to most registers while off
+        // DMG specific: length counters are still writable when power is off
+        if !self.enabled
+            && addr != MEM_AUDENA
+            && addr < WAVE_RAM_START
+            && addr != MEM_AUD1LEN
+            && addr != MEM_AUD2LEN
+            && addr != MEM_AUD3LEN
+            && addr != MEM_AUD4LEN
+        {
+            return;
+        }
 
-        self.channel1.power_on();
-        self.channel2.power_on();
+        match addr {
+            MEM_AUD1SWEEP => self.write_aud1sweep(value),
+            MEM_AUD1LEN => self.write_aud1len(value),
+            MEM_AUD1ENV => self.write_aud1env(value),
+            MEM_AUD1LOW => self.write_aud1low(value),
+            MEM_AUD1HIGH => self.write_aud1high(value),
+            MEM_AUD2LEN => self.write_aud2len(value),
+            MEM_AUD2ENV => self.write_aud2env(value),
+            MEM_AUD2LOW => self.write_aud2low(value),
+            MEM_AUD2HIGH => self.write_aud2high(value),
+            MEM_AUD3ENA => self.write_aud3ena(value),
+            MEM_AUD3LEN => self.channel3.length_timer.load(value),
+            MEM_AUD3LEVEL => self.write_aud3level(value),
+            MEM_AUD3LOW => self.write_aud3low(value),
+            MEM_AUD3HIGH => self.write_aud3high(value),
+            MEM_AUD4LEN => self.write_aud4len(value),
+            MEM_AUD4ENV => self.write_aud4env(value),
+            MEM_AUD4POLY => self.write_aud4poly(value),
+            MEM_AUD4GO => self.write_aud4go(value),
+            MEM_AUDVOL => self.master_volume = MasterVolume::from_bits(value),
+            MEM_AUDTERM => self.sound_panning = SoundPanning::from_bits(value),
+            MEM_AUDENA => self.write_audena(value),
+            WAVE_RAM_START..=WAVE_RAM_END => {
+                self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
+            }
+            _ => {}
+        }
     }
 
-    const fn power_off(&mut self) {
-        self.enabled = false;
-        self.master_volume = MasterVolume::from_bits(0);
-        self.sound_panning = SoundPanning::from_bits(0);
+    fn write_aud1sweep(&mut self, value: u8) {
+        self.channel1.sweep.pace = (value & 0x70) >> 4;
+        self.channel1.sweep.direction = SweepDirection::from((value & 0x08) != 0);
+        self.channel1.sweep.shift = value & 0x07;
 
-        self.channel1.power_off();
-        self.channel2.power_off();
-        self.channel3.power_off();
-        self.channel4.power_off();
+        if self.channel1.sweep.negate_mode
+            && matches!(self.channel1.sweep.direction, SweepDirection::Increase)
+        {
+            self.channel1.enabled = false;
+        }
     }
-}
 
-const fn read_audhigh(length_enabled: bool) -> u8 {
-    let mut bits = 0xBF;
-    if length_enabled {
-        bits |= 0x40;
+    fn write_aud1len(&mut self, value: u8) {
+        self.channel1.duty_cycle = DutyCycle::from(value >> 6);
+        let length = value & 0x3F;
+        self.channel1.length_timer.load(length);
     }
-    bits
+
+    const fn write_aud1env(&mut self, value: u8) {
+        self.channel1.envelope = Envelope::from_bits(value);
+        if !self.channel1.dac_enabled() {
+            self.channel1.enabled = false;
+        }
+    }
+
+    const fn write_aud1low(&mut self, value: u8) {
+        self.channel1.period_counter.period &= 0x700;
+        self.channel1.period_counter.period |= value as u16;
+    }
+
+    const fn write_aud1high(&mut self, value: u8) {
+        self.channel1.period_counter.period &= 0xFF;
+        self.channel1.period_counter.period |= (value as u16 & 0x07) << 8;
+
+        let prev_length_enabled = self.channel1.length_timer.enabled;
+        let length_enabled = value & 0x40 != 0;
+        self.channel1.length_timer.set_enabled(length_enabled);
+        // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
+        if !prev_length_enabled
+            && length_enabled
+            && self.frame % 2 == 0
+            && self.channel1.length_timer.tick()
+        {
+            self.channel1.enabled = false;
+        }
+
+        let triggered = value & 0x80 != 0;
+        if triggered {
+            self.channel1.trigger(self.frame);
+        }
+    }
+
+    fn write_aud2len(&mut self, value: u8) {
+        self.channel2.duty_cycle = DutyCycle::from(value >> 6);
+        let length = value & 0x3F;
+        self.channel2.length_timer.load(length);
+    }
+
+    const fn write_aud2env(&mut self, value: u8) {
+        self.channel2.envelope = Envelope::from_bits(value);
+        if !self.channel2.dac_enabled() {
+            self.channel2.enabled = false;
+        }
+    }
+
+    const fn write_aud2low(&mut self, value: u8) {
+        self.channel2.period_counter.period &= 0x700;
+        self.channel2.period_counter.period |= value as u16;
+    }
+
+    const fn write_aud2high(&mut self, value: u8) {
+        self.channel2.period_counter.period &= 0xFF;
+        self.channel2.period_counter.period |= (value as u16 & 0x07) << 8;
+
+        let prev_length_enabled = self.channel2.length_timer.enabled;
+        let length_enabled = value & 0x40 != 0;
+        self.channel2.length_timer.set_enabled(length_enabled);
+        // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
+        if !prev_length_enabled
+            && length_enabled
+            && self.frame % 2 == 0
+            && self.channel2.length_timer.tick()
+        {
+            self.channel2.enabled = false;
+        }
+
+        let triggered = value & 0x80 != 0;
+        if triggered {
+            self.channel2.trigger(self.frame);
+        }
+    }
+
+    const fn write_aud3ena(&mut self, value: u8) {
+        let enabled = value & 0x80 != 0;
+        self.channel3.set_dac_enabled(enabled);
+    }
+
+    fn write_aud3level(&mut self, value: u8) {
+        let level = (value & 0x60) >> 5;
+        self.channel3.volume = OutputLevel::from(level);
+    }
+
+    const fn write_aud3low(&mut self, value: u8) {
+        self.channel3.period_counter.period &= 0x700;
+        self.channel3.period_counter.period |= value as u16;
+    }
+
+    const fn write_aud3high(&mut self, value: u8) {
+        self.channel3.period_counter.period &= 0xFF;
+        self.channel3.period_counter.period |= (value as u16 & 0x07) << 8;
+
+        let prev_length_enabled = self.channel3.length_timer.enabled;
+        let length_enabled = value & 0x40 != 0;
+        self.channel3.length_timer.set_enabled(length_enabled);
+        // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
+        if !prev_length_enabled
+            && length_enabled
+            && self.frame % 2 == 0
+            && self.channel3.length_timer.tick()
+        {
+            self.channel3.enabled = false;
+        }
+
+        let triggered = value & 0x80 != 0;
+        if triggered {
+            self.channel3.trigger(self.frame);
+        }
+    }
+
+    const fn write_aud4len(&mut self, value: u8) {
+        let length = value & 0x3F;
+        self.channel4.length_timer.load(length);
+    }
+
+    const fn write_aud4env(&mut self, value: u8) {
+        self.channel4.envelope = Envelope::from_bits(value);
+        if !self.channel4.dac_enabled() {
+            self.channel4.enabled = false;
+        }
+    }
+
+    const fn write_aud4poly(&mut self, value: u8) {
+        self.channel4.frequency_and_randomness = FrequencyAndRandomness::from_bits(value);
+    }
+
+    const fn write_aud4go(&mut self, value: u8) {
+        let prev_length_enabled = self.channel4.length_timer.enabled;
+        let length_enabled = value & 0x40 != 0;
+        self.channel4.length_timer.set_enabled(length_enabled);
+        // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
+        if !prev_length_enabled
+            && length_enabled
+            && self.frame % 2 == 0
+            && self.channel4.length_timer.tick()
+        {
+            self.channel4.enabled = false;
+        }
+
+        let triggered = value & 0x80 != 0;
+        if triggered {
+            self.channel4.trigger(self.frame);
+        }
+    }
+
+    const fn write_audena(&mut self, value: u8) {
+        let prev_enabled = self.enabled;
+        self.enabled = value & 0x80 != 0;
+        if prev_enabled && !self.enabled {
+            self.power_off();
+        }
+
+        if !prev_enabled && self.enabled {
+            self.power_on();
+        }
+    }
 }
