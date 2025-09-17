@@ -42,8 +42,8 @@ const MEM_AUDVOL: u16 = 0xFF24;
 const MEM_AUDTERM: u16 = 0xFF25;
 // NR52
 const MEM_AUDENA: u16 = 0xFF26;
-const WAVE_RAM_START: u16 = 0xFF30;
-const WAVE_RAM_END: u16 = 0xFF3F;
+const MEM_AUD3WAVE_START: u16 = 0xFF30;
+const MEM_AUD3WAVE_END: u16 = 0xFF3F;
 
 const WAVE_RAM_SIZE: usize = 0x10;
 
@@ -293,7 +293,7 @@ enum OutputLevel {
     Full = 0b01,
     // 50%
     Half = 0b10,
-    // 25 %
+    // 25%
     Quarter = 0b11,
 }
 
@@ -450,6 +450,7 @@ struct WaveChannel {
     period_counter: PeriodCounter,
     length_timer: LengthTimer,
     volume: OutputLevel,
+    wave_ram: [u8; WAVE_RAM_SIZE],
     sample_index: usize,
 }
 
@@ -461,6 +462,7 @@ impl WaveChannel {
             period_counter: PeriodCounter::new(),
             length_timer: LengthTimer::new(256),
             volume: OutputLevel::Mute,
+            wave_ram: [0xFF; WAVE_RAM_SIZE],
             sample_index: 0,
         }
     }
@@ -563,7 +565,6 @@ pub struct Apu {
     channel4: NoiseChannel,
     master_volume: MasterVolume,
     panning: Panning,
-    wave_ram: [u8; WAVE_RAM_SIZE],
 }
 
 impl Apu {
@@ -581,7 +582,6 @@ impl Apu {
             channel4: NoiseChannel::new(),
             master_volume: MasterVolume::new(7, 7),
             panning: Panning::new(pan_left, pan_right),
-            wave_ram: [0xFF; WAVE_RAM_SIZE],
         }
     }
 
@@ -635,7 +635,9 @@ impl Apu {
             MEM_AUDVOL => self.read_audvol(),
             MEM_AUDTERM => self.read_audterm(),
             MEM_AUDENA => self.read_audena(),
-            WAVE_RAM_START..=WAVE_RAM_END => self.wave_ram[(addr - WAVE_RAM_START) as usize],
+            MEM_AUD3WAVE_START..=MEM_AUD3WAVE_END => {
+                self.channel3.wave_ram[(addr - MEM_AUD3WAVE_START) as usize]
+            }
             _ => {
                 // AUD1LOW, AUD2LOW, AUD3LEN, AUD3LOW, AUD4LEN are write-only
                 0xFF
@@ -800,7 +802,7 @@ impl Apu {
         // DMG specific: length counters are still writable when power is off
         if !self.enabled
             && addr != MEM_AUDENA
-            && addr < WAVE_RAM_START
+            && addr < MEM_AUD3WAVE_START
             && addr != MEM_AUD1LEN
             && addr != MEM_AUD2LEN
             && addr != MEM_AUD3LEN
@@ -831,8 +833,8 @@ impl Apu {
             MEM_AUDVOL => self.write_audvol(value),
             MEM_AUDTERM => self.write_audterm(value),
             MEM_AUDENA => self.write_audena(value),
-            WAVE_RAM_START..=WAVE_RAM_END => {
-                self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
+            MEM_AUD3WAVE_START..=MEM_AUD3WAVE_END => {
+                self.channel3.wave_ram[(addr - MEM_AUD3WAVE_START) as usize] = value;
             }
             _ => {}
         }
