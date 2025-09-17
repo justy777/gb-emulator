@@ -281,58 +281,34 @@ impl FrequencyAndRandomness {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct MasterVolume(u8);
+#[derive(Debug, Clone)]
+struct MasterVolume {
+    vin_left: bool,
+    left_volume: u8,
+    vin_right: bool,
+    right_volume: u8,
+}
 
 impl MasterVolume {
-    const VIN_LEFT: u8 = 0b1000_0000;
-    const LEFT_VOLUME: u8 = 0b0111_0000;
-    const VIN_RIGHT: u8 = 0b0000_1000;
-    const RIGHT_VOLUME: u8 = 0b0000_0111;
-
-    const fn new() -> Self {
-        Self::from_bits(Self::LEFT_VOLUME | Self::RIGHT_VOLUME)
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
+    const fn new(left_volume: u8, right_volume: u8) -> Self {
+        Self {
+            vin_left: false,
+            left_volume,
+            vin_right: false,
+            right_volume,
+        }
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct SoundPanning(u8);
+#[derive(Debug, Clone)]
+struct Panning {
+    left: [bool; 4],
+    right: [bool; 4],
+}
 
-impl SoundPanning {
-    const CHANNEL_4_LEFT: u8 = 0b1000_0000;
-    const CHANNEL_3_LEFT: u8 = 0b0100_0000;
-    const CHANNEL_2_LEFT: u8 = 0b0010_0000;
-    const CHANNEL_1_LEFT: u8 = 0b0001_0000;
-    const CHANNEL_4_RIGHT: u8 = 0b0000_1000;
-    const CHANNEL_3_RIGHT: u8 = 0b0000_0100;
-    const CHANNEL_2_RIGHT: u8 = 0b0000_0010;
-    const CHANNEL_1_RIGHT: u8 = 0b0000_0001;
-
-    const fn new() -> Self {
-        Self::from_bits(
-            Self::CHANNEL_4_LEFT
-                | Self::CHANNEL_3_LEFT
-                | Self::CHANNEL_2_LEFT
-                | Self::CHANNEL_1_LEFT
-                | Self::CHANNEL_2_RIGHT
-                | Self::CHANNEL_1_RIGHT,
-        )
-    }
-
-    const fn from_bits(bits: u8) -> Self {
-        Self(bits)
-    }
-
-    const fn bits(self) -> u8 {
-        self.0
+impl Panning {
+    const fn new(left: [bool; 4], right: [bool; 4]) -> Self {
+        Self { left, right }
     }
 }
 
@@ -526,7 +502,7 @@ pub struct Apu {
     channel3: WaveChannel,
     channel4: NoiseChannel,
     master_volume: MasterVolume,
-    sound_panning: SoundPanning,
+    panning: Panning,
     wave_ram: [u8; WAVE_RAM_SIZE],
 }
 
@@ -539,8 +515,8 @@ impl Apu {
             channel2: PulseChannel::new(false, 0, DutyCycle::OneEighth),
             channel3: WaveChannel::new(),
             channel4: NoiseChannel::new(),
-            master_volume: MasterVolume::new(),
-            sound_panning: SoundPanning::new(),
+            master_volume: MasterVolume::new(7, 7),
+            panning: Panning::new([true; 4], [true, true, false, false]),
             wave_ram: [0xFF; WAVE_RAM_SIZE],
         }
     }
@@ -568,8 +544,8 @@ impl Apu {
 
     const fn power_off(&mut self) {
         self.enabled = false;
-        self.master_volume = MasterVolume::from_bits(0);
-        self.sound_panning = SoundPanning::from_bits(0);
+        self.master_volume = MasterVolume::new(0, 0);
+        self.panning = Panning::new([false; 4], [false; 4]);
 
         self.channel1.power_off();
         self.channel2.power_off();
@@ -592,8 +568,8 @@ impl Apu {
             MEM_AUD4ENV => self.channel4.envelope.bits(),
             MEM_AUD4POLY => self.channel4.frequency_and_randomness.bits(),
             MEM_AUD4GO => self.read_aud4high(),
-            MEM_AUDVOL => self.master_volume.bits(),
-            MEM_AUDTERM => self.sound_panning.bits(),
+            MEM_AUDVOL => self.read_audvol(),
+            MEM_AUDTERM => self.read_audterm(),
             MEM_AUDENA => self.read_audena(),
             WAVE_RAM_START..=WAVE_RAM_END => self.wave_ram[(addr - WAVE_RAM_START) as usize],
             _ => {
@@ -669,6 +645,48 @@ impl Apu {
         bits
     }
 
+    const fn read_audvol(&self) -> u8 {
+        let mut bits = 0;
+        if self.master_volume.vin_left {
+            bits |= 0x80;
+        }
+        bits |= self.master_volume.left_volume << 4;
+        if self.master_volume.vin_right {
+            bits |= 0x08;
+        }
+        bits |= self.master_volume.right_volume;
+        bits
+    }
+
+    const fn read_audterm(&self) -> u8 {
+        let mut bits = 0;
+        if self.panning.left[3] {
+            bits |= 0x80;
+        }
+        if self.panning.left[2] {
+            bits |= 0x40;
+        }
+        if self.panning.left[1] {
+            bits |= 0x20;
+        }
+        if self.panning.left[0] {
+            bits |= 0x10;
+        }
+        if self.panning.right[3] {
+            bits |= 0x08;
+        }
+        if self.panning.right[2] {
+            bits |= 0x04;
+        }
+        if self.panning.right[1] {
+            bits |= 0x02;
+        }
+        if self.panning.right[0] {
+            bits |= 0x01;
+        }
+        bits
+    }
+
     const fn read_audena(&self) -> u8 {
         let mut bits = 0x70;
         if self.enabled {
@@ -722,8 +740,8 @@ impl Apu {
             MEM_AUD4ENV => self.write_aud4env(value),
             MEM_AUD4POLY => self.write_aud4poly(value),
             MEM_AUD4GO => self.write_aud4go(value),
-            MEM_AUDVOL => self.master_volume = MasterVolume::from_bits(value),
-            MEM_AUDTERM => self.sound_panning = SoundPanning::from_bits(value),
+            MEM_AUDVOL => self.write_audvol(value),
+            MEM_AUDTERM => self.write_audterm(value),
             MEM_AUDENA => self.write_audena(value),
             WAVE_RAM_START..=WAVE_RAM_END => {
                 self.wave_ram[(addr - WAVE_RAM_START) as usize] = value;
@@ -894,6 +912,24 @@ impl Apu {
         if triggered {
             self.channel4.trigger(self.frame);
         }
+    }
+
+    const fn write_audvol(&mut self, value: u8) {
+        self.master_volume.vin_left = value & 0x80 != 0;
+        self.master_volume.left_volume = (value & 0x70) >> 4;
+        self.master_volume.vin_right = value & 0x08 != 0;
+        self.master_volume.right_volume = value & 0x07;
+    }
+
+    const fn write_audterm(&mut self, value: u8) {
+        self.panning.left[3] = value & 0x80 != 0;
+        self.panning.left[2] = value & 0x40 != 0;
+        self.panning.left[1] = value & 0x20 != 0;
+        self.panning.left[0] = value & 0x10 != 0;
+        self.panning.right[3] = value & 0x08 != 0;
+        self.panning.right[2] = value & 0x04 != 0;
+        self.panning.right[1] = value & 0x02 != 0;
+        self.panning.right[0] = value & 0x01 != 0;
     }
 
     const fn write_audena(&mut self, value: u8) {
