@@ -426,16 +426,12 @@ impl PulseChannel {
         self.length_timer.trigger(frame);
     }
 
-    const fn power_on(&mut self) {
-        self.duty_cycle = DutyCycle::OneEighth;
-    }
-
     const fn power_off(&mut self) {
         self.enabled = false;
+        self.duty_cycle = DutyCycle::OneEighth;
         self.sweep = SweepTimer::new();
         self.length_timer.set_enabled(false);
         self.envelope = EnvelopeTimer::new(0, EnvelopeDirection::Decrease, 0);
-        self.period_counter.period = 0;
         self.period_counter.period = 0;
     }
 
@@ -598,16 +594,9 @@ impl Apu {
         self.channel4.tick(self.frame);
     }
 
-    const fn power_on(&mut self) {
-        self.enabled = true;
-        self.frame = 7;
-
-        self.channel1.power_on();
-        self.channel2.power_on();
-    }
-
     const fn power_off(&mut self) {
         self.enabled = false;
+        self.frame = 7;
         self.master_volume = MasterVolume::new(0, 0);
         self.panning = Panning::new([false; 4], [false; 4]);
 
@@ -852,7 +841,11 @@ impl Apu {
         }
     }
 
-    fn write_aud1len(&mut self, value: u8) {
+    fn write_aud1len(&mut self, mut value: u8) {
+        if !self.enabled {
+            value &= 0x3F;
+        }
+
         self.channel1.duty_cycle = DutyCycle::from(value >> 6);
         let length = value & 0x3F;
         self.channel1.length_timer.load(length);
@@ -895,7 +888,11 @@ impl Apu {
         }
     }
 
-    fn write_aud2len(&mut self, value: u8) {
+    fn write_aud2len(&mut self, mut value: u8) {
+        if !self.enabled {
+            value &= 0x3F;
+        }
+
         self.channel2.duty_cycle = DutyCycle::from(value >> 6);
         let length = value & 0x3F;
         self.channel2.length_timer.load(length);
@@ -1036,10 +1033,6 @@ impl Apu {
         self.enabled = value & 0x80 != 0;
         if prev_enabled && !self.enabled {
             self.power_off();
-        }
-
-        if !prev_enabled && self.enabled {
-            self.power_on();
         }
     }
 }
