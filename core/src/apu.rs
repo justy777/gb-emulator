@@ -187,10 +187,6 @@ impl LengthTimer {
             }
         }
     }
-
-    const fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -368,7 +364,7 @@ struct PulseChannel {
     duty_cycle: DutyCycle,
     length_timer: LengthTimer,
     envelope: EnvelopeTimer,
-    sample_index: usize,
+    phase_position: usize,
 }
 
 impl PulseChannel {
@@ -380,15 +376,17 @@ impl PulseChannel {
             duty_cycle,
             length_timer: LengthTimer::new(64),
             envelope: envelope_timer,
-            sample_index: 0,
+            phase_position: 0,
         }
     }
 
-    fn tick(&mut self, frame: u8) {
+    const fn tick_clock(&mut self) {
         if self.period_counter.tick() {
-            self.sample_index = (self.sample_index + 1) % 8;
+            self.phase_position = (self.phase_position + 1) % 8;
         }
+    }
 
+    fn tick_divider(&mut self, frame: u8) {
         if frame % 4 == 2 && self.sweep.tick() {
             let period = self.sweep.next_period();
             if period > 2047 {
@@ -430,9 +428,10 @@ impl PulseChannel {
         self.enabled = false;
         self.duty_cycle = DutyCycle::OneEighth;
         self.sweep = SweepTimer::new();
-        self.length_timer.set_enabled(false);
+        self.length_timer.enabled = false;
         self.envelope = EnvelopeTimer::new(0, EnvelopeDirection::Decrease, 0);
         self.period_counter.period = 0;
+        self.phase_position = 0;
     }
 
     const fn dac_enabled(&self) -> bool {
@@ -459,19 +458,17 @@ impl WaveChannel {
             length_timer: LengthTimer::new(256),
             volume: OutputLevel::Mute,
             wave_ram: [0xFF; WAVE_RAM_SIZE],
-            sample_index: 0,
+            sample_index: 1,
         }
     }
 
-    const fn tick(&mut self, frame: u8) {
-        let mut i = 0;
-        while i < 2 {
-            if self.period_counter.tick() {
-                self.sample_index = (self.sample_index + 1) % 32;
-            }
-            i += 1;
+    const fn tick_clock(&mut self) {
+        if self.period_counter.tick() {
+            self.sample_index = (self.sample_index + 1) % 32;
         }
+    }
 
+    const fn tick_divider(&mut self, frame: u8) {
         if frame % 2 == 0 && self.length_timer.tick() {
             self.enabled = false;
         }
@@ -488,9 +485,10 @@ impl WaveChannel {
     const fn power_off(&mut self) {
         self.enabled = false;
         self.dac_enabled = false;
-        self.length_timer.set_enabled(false);
+        self.length_timer.enabled = false;
         self.volume = OutputLevel::Mute;
         self.period_counter.period = 0;
+        self.sample_index = 1;
     }
 
     const fn dac_enabled(&self) -> bool {
@@ -522,7 +520,7 @@ impl NoiseChannel {
         }
     }
 
-    fn tick(&mut self, frame: u8) {
+    fn tick_divider(&mut self, frame: u8) {
         if frame % 2 == 0 && self.length_timer.tick() {
             self.enabled = false;
         }
@@ -542,7 +540,7 @@ impl NoiseChannel {
 
     const fn power_off(&mut self) {
         self.enabled = false;
-        self.length_timer.set_enabled(false);
+        self.length_timer.enabled = false;
         self.envelope = EnvelopeTimer::new(0, EnvelopeDirection::Decrease, 0);
         self.frequency_and_randomness = FrequencyAndRandomness::from_bits(0);
     }
@@ -581,17 +579,29 @@ impl Apu {
         }
     }
 
-    pub fn tick(&mut self) {
+    // Ticks every M-cycle
+    pub const fn tick_clock(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
+        self.channel1.tick_clock();
+        self.channel2.tick_clock();
+        self.channel3.tick_clock();
+    }
+
+    // Ticks for one divider cycle (512 Hz)
+    pub fn tick_divider(&mut self) {
         if !self.enabled {
             return;
         }
 
         self.frame = (self.frame + 1) % 8;
 
-        self.channel1.tick(self.frame);
-        self.channel2.tick(self.frame);
-        self.channel3.tick(self.frame);
-        self.channel4.tick(self.frame);
+        self.channel1.tick_divider(self.frame);
+        self.channel2.tick_divider(self.frame);
+        self.channel3.tick_divider(self.frame);
+        self.channel4.tick_divider(self.frame);
     }
 
     const fn power_off(&mut self) {
@@ -624,9 +634,7 @@ impl Apu {
             MEM_AUDVOL => self.read_audvol(),
             MEM_AUDTERM => self.read_audterm(),
             MEM_AUDENA => self.read_audena(),
-            MEM_AUD3WAVE_START..=MEM_AUD3WAVE_END => {
-                self.channel3.wave_ram[(addr - MEM_AUD3WAVE_START) as usize]
-            }
+            MEM_AUD3WAVE_START..=MEM_AUD3WAVE_END => self.read_aud3wave(addr - MEM_AUD3WAVE_START),
             _ => {
                 // AUD1LOW, AUD2LOW, AUD3LEN, AUD3LOW, AUD4LEN are write-only
                 0xFF
@@ -786,6 +794,15 @@ impl Apu {
         bits
     }
 
+    const fn read_aud3wave(&self, index: u16) -> u8 {
+        // Obscure behaviour allows reading wave while channel 3 is on (DMG)
+        if self.channel3.enabled {
+            return 0xFF;
+        }
+
+        self.channel3.wave_ram[index as usize]
+    }
+
     pub fn write_audio(&mut self, addr: u16, value: u8) {
         // Cannot write to most registers while off
         // DMG specific: length counters are still writable when power is off
@@ -823,7 +840,7 @@ impl Apu {
             MEM_AUDTERM => self.write_audterm(value),
             MEM_AUDENA => self.write_audena(value),
             MEM_AUD3WAVE_START..=MEM_AUD3WAVE_END => {
-                self.channel3.wave_ram[(addr - MEM_AUD3WAVE_START) as usize] = value;
+                self.write_aud3wave(addr - MEM_AUD3WAVE_START, value);
             }
             _ => {}
         }
@@ -872,7 +889,7 @@ impl Apu {
 
         let prev_length_enabled = self.channel1.length_timer.enabled;
         let length_enabled = value & 0x40 != 0;
-        self.channel1.length_timer.set_enabled(length_enabled);
+        self.channel1.length_timer.enabled = length_enabled;
         // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
         if !prev_length_enabled
             && length_enabled
@@ -919,7 +936,7 @@ impl Apu {
 
         let prev_length_enabled = self.channel2.length_timer.enabled;
         let length_enabled = value & 0x40 != 0;
-        self.channel2.length_timer.set_enabled(length_enabled);
+        self.channel2.length_timer.enabled = length_enabled;
         // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
         if !prev_length_enabled
             && length_enabled
@@ -956,7 +973,7 @@ impl Apu {
 
         let prev_length_enabled = self.channel3.length_timer.enabled;
         let length_enabled = value & 0x40 != 0;
-        self.channel3.length_timer.set_enabled(length_enabled);
+        self.channel3.length_timer.enabled = length_enabled;
         // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
         if !prev_length_enabled
             && length_enabled
@@ -994,7 +1011,7 @@ impl Apu {
     const fn write_aud4go(&mut self, value: u8) {
         let prev_length_enabled = self.channel4.length_timer.enabled;
         let length_enabled = value & 0x40 != 0;
-        self.channel4.length_timer.set_enabled(length_enabled);
+        self.channel4.length_timer.enabled = length_enabled;
         // Obscure behaviour: if the length timer is enabled on an even clock it gets ticked
         if !prev_length_enabled
             && length_enabled
@@ -1034,5 +1051,13 @@ impl Apu {
         if prev_enabled && !self.enabled {
             self.power_off();
         }
+    }
+
+    const fn write_aud3wave(&mut self, index: u16, value: u8) {
+        if self.channel3.enabled {
+            return;
+        }
+
+        self.channel3.wave_ram[index as usize] = value;
     }
 }
